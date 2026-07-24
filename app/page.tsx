@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type FortuneTheme = "love" | "work" | "money" | "today";
 
@@ -11,6 +11,16 @@ type FortuneResult = {
   advice: string;
   lucky: string;
 };
+
+declare global {
+  interface Window {
+    gtag?: (
+      command: "event",
+      eventName: string,
+      params?: Record<string, string | number | boolean>,
+    ) => void;
+  }
+}
 
 const copy = {
   site: "Raven Oracle",
@@ -82,6 +92,10 @@ function buildFortune(theme: FortuneTheme, name: string, concern: string): Fortu
   };
 }
 
+function trackEvent(eventName: string, params?: Record<string, string | number | boolean>) {
+  window.gtag?.("event", eventName, params);
+}
+
 export default function Home() {
   const [theme, setTheme] = useState<FortuneTheme>("today");
   const [name, setName] = useState("");
@@ -89,9 +103,20 @@ export default function Home() {
   const [submitted, setSubmitted] = useState(false);
   const result = useMemo(() => buildFortune(theme, name, concern), [theme, name, concern]);
 
+  useEffect(() => {
+    trackEvent("coming_soon_text_reading_view");
+  }, []);
+
   function submitFortune(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitted(true);
+    trackEvent("free_fortune_submit", {
+      fortune_theme: theme,
+      has_name: name.trim().length > 0,
+      has_concern: concern.trim().length > 0,
+      concern_length: concern.trim().length,
+      fortune_score: result.score,
+    });
   }
 
   return (
@@ -112,7 +137,11 @@ export default function Home() {
               </label>
               <label className="flex flex-col gap-2">
                 <span className="text-sm font-semibold">{copy.theme}</span>
-                <select className="rounded border border-[#cbbfac] bg-white px-3 py-3 outline-none focus:border-[#746844]" value={theme} onChange={(event) => setTheme(event.target.value as FortuneTheme)}>
+                <select className="rounded border border-[#cbbfac] bg-white px-3 py-3 outline-none focus:border-[#746844]" value={theme} onChange={(event) => {
+                  const nextTheme = event.target.value as FortuneTheme;
+                  setTheme(nextTheme);
+                  trackEvent("fortune_theme_select", { fortune_theme: nextTheme, source: "select" });
+                }}>
                   {themeOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
                 </select>
               </label>
@@ -126,7 +155,10 @@ export default function Home() {
 
           <div className="grid gap-3 sm:grid-cols-3">
             {themeOptions.map((option) => (
-              <button key={option.id} className={`rounded border p-3 text-left transition ${theme === option.id ? "border-[#222820] bg-[#eef1e8]" : "border-[#d7cabc] bg-[#fffaf2]"}`} onClick={() => setTheme(option.id)} type="button">
+              <button key={option.id} className={`rounded border p-3 text-left transition ${theme === option.id ? "border-[#222820] bg-[#eef1e8]" : "border-[#d7cabc] bg-[#fffaf2]"}`} onClick={() => {
+                setTheme(option.id);
+                trackEvent("fortune_theme_select", { fortune_theme: option.id, source: "card" });
+              }} type="button">
                 <p className="font-semibold">{option.label}</p>
                 <p className="mt-1 text-sm leading-6 text-[#66645d]">{option.description}</p>
               </button>
