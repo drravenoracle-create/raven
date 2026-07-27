@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type FortuneTheme = "love" | "work" | "money" | "today";
@@ -124,7 +125,7 @@ export default function Home() {
       <section className="mx-auto grid min-h-screen w-full max-w-6xl gap-6 px-5 py-6 lg:grid-cols-[1fr_0.82fr]">
         <div className="flex flex-col gap-5">
           <header className="border-b border-[#d7cabc] pb-5">
-            <p className="text-sm font-semibold uppercase text-[#6c5f3d]">{copy.site}</p>
+            <nav className="mb-4 flex flex-wrap gap-3 text-sm font-semibold text-[#596d51]"><span className="uppercase text-[#6c5f3d]">{copy.site}</span><Link href="/blog/">ブログ</Link><Link href="/admin/" rel="nofollow">管理</Link></nav>
             <h1 className="mt-2 text-4xl font-semibold leading-tight sm:text-5xl">{copy.heroTitle}</h1>
             <p className="mt-3 max-w-2xl text-base leading-7 text-[#5e625c]">{copy.heroText}</p>
           </header>

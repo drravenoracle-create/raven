@@ -10,23 +10,21 @@ type RavenRequest = {
   }>;
 };
 
-type GeminiCandidate = {
-  content?: {
-    parts?: Array<{
+type OpenAIResponse = {
+  output_text?: string;
+  output?: Array<{
+    content?: Array<{
+      type?: string;
       text?: string;
     }>;
-  };
-};
-
-type GeminiResponse = {
-  candidates?: GeminiCandidate[];
+  }>;
   error?: {
     message?: string;
   };
 };
 
-const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta";
-const DEFAULT_MODEL = "gemini-3.6-flash";
+const OPENAI_ENDPOINT = "https://api.openai.com/v1/responses";
+const DEFAULT_MODEL = "gpt-4.1-mini";
 
 function jsonResponse(body: unknown, status = 200) {
   return Response.json(body, {
@@ -79,10 +77,12 @@ function buildPrompt(payload: RavenRequest) {
   ].join("\n");
 }
 
-function extractText(data: GeminiResponse) {
+function extractText(data: OpenAIResponse) {
+  if (data.output_text?.trim()) return data.output_text.trim();
+
   return (
-    data.candidates
-      ?.flatMap((candidate) => candidate.content?.parts ?? [])
+    data.output
+      ?.flatMap((item) => item.content ?? [])
       .map((part) => part.text)
       .filter(Boolean)
       .join("\n")
@@ -91,12 +91,12 @@ function extractText(data: GeminiResponse) {
 }
 
 export async function POST(request: Request) {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
     return jsonResponse(
       {
-        error: "GEMINI_API_KEY is not configured.",
+        error: "OPENAI_API_KEY is not configured.",
       },
       503,
     );
@@ -122,43 +122,35 @@ export async function POST(request: Request) {
     return jsonResponse({ error: "message is required for chat mode." }, 400);
   }
 
-  const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
-  const url = `${GEMINI_ENDPOINT}/models/${encodeURIComponent(model)}:generateContent`;
-
-  const geminiResponse = await fetch(url, {
+  const model = process.env.OPENAI_MODEL || DEFAULT_MODEL;
+  const openAIResponse = await fetch(OPENAI_ENDPOINT, {
     method: "POST",
     headers: {
+      Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "x-goog-api-key": apiKey,
     },
     body: JSON.stringify({
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: buildPrompt(payload) }],
-        },
-      ],
-      generationConfig: {
-        maxOutputTokens: payload.mode === "chat" ? 360 : 520,
-      },
+      model,
+      input: buildPrompt(payload),
+      max_output_tokens: payload.mode === "chat" ? 360 : 520,
     }),
   });
 
-  const data = (await geminiResponse.json()) as GeminiResponse;
+  const data = (await openAIResponse.json()) as OpenAIResponse;
 
-  if (!geminiResponse.ok) {
+  if (!openAIResponse.ok) {
     return jsonResponse(
       {
-        error: data.error?.message || "Gemini request failed.",
+        error: data.error?.message || "OpenAI request failed.",
       },
-      geminiResponse.status,
+      openAIResponse.status,
     );
   }
 
   const text = extractText(data);
 
   if (!text) {
-    return jsonResponse({ error: "Gemini returned an empty response." }, 502);
+    return jsonResponse({ error: "OpenAI returned an empty response." }, 502);
   }
 
   return jsonResponse({

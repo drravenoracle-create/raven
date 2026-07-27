@@ -1,7 +1,6 @@
 # Raven Oracle Review Site
 
-レイヴン個人サイト用のコードレビュー / 文章レビューサイトです。
-鑑定文、投稿文、返信文などを貼り付けて、トーン、意図、圧の強さ、次に取る行動を確認できます。
+レイヴン個人サイト用のコードレビュー / 文章レビューサイトです。鑑定文、投稿文、返信文などを貼り付けて、トーン、意図、圧の強さ、次に取る行動を確認できます。
 
 このプロジェクトは Fortune Studio 公式サイト本体から切り離し、レイヴン用の個人プロジェクトとして管理します。
 
@@ -34,9 +33,10 @@ This project does not use `wrangler.jsonc`.
 
 Copy `.env.example` to `.env.local` for local development.
 
-- `GEMINI_API_KEY`: Gemini API key used by the server-side review API.
-- `GEMINI_MODEL`: Gemini model name. Defaults to `gemini-3.6-flash`.
+- `OPENAI_API_KEY`: OpenAI API key used by the server-side review API.
+- `OPENAI_MODEL`: OpenAI model name. Defaults to `gpt-4.1-mini`.
 - `RAVEN_PERSONA_ID`: Persona id. Defaults to `raven-oracle`.
+- `NEXT_PUBLIC_GA_MEASUREMENT_ID`: GA4 measurement id used by client analytics.
 
 No personal information should be sent to analytics tools from this review site.
 
