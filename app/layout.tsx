@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -13,13 +13,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Raven Oracle テキスト鑑定",
+  title: "レイヴン・オラクル テキスト鑑定",
   description:
-    "Raven Oracle向けのAIテキスト鑑定と時間制チャット。ヒアリングシートに基づくpersona設定をOpenAI APIに反映します。",
+    "レイヴン・オラクルのAIテキスト鑑定と時間制チャット。文章の温度、意図、リスク、次の一手を整理します。",
   openGraph: {
-    title: "Raven Oracle テキスト鑑定",
+    title: "レイヴン・オラクル テキスト鑑定",
     description:
-      "文章の温度、意図、リスク、次の一手をRaven Oracleのpersonaで整理します。",
+      "文章の温度、意図、リスク、次の一手をレイヴン・オラクルの視点で整理します。",
     type: "website",
   },
   icons: {
@@ -35,12 +35,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {children}
       </body>
     </html>
   );
 }
-
