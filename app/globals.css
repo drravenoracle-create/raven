@@ -58,19 +58,3 @@ a {
   border-color: #596d51;
   box-shadow: 0 0 0 3px rgba(89, 109, 81, 0.16);
 }
-
-.raven-article {
-  display: grid;
-  gap: 1.25rem;
-  line-height: 1.9;
-}
-
-.raven-article h2 {
-  margin-top: 1rem;
-  font-size: 1.65rem;
-  font-weight: 650;
-}
-
-.raven-article p {
-  color: #3f4b3d;
-}

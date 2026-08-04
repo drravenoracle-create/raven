@@ -6,14 +6,14 @@ import { useState } from "react";
 type Slide = { heading: string; body: string };
 
 const ideas = [
-  "今日の流れを整えるAI占いの使い方",
-  "返信を待つ時間に心を守る3つの視点",
-  "仕事運が揺れる日に見直したい小さな習慣",
+  "返信前の文章を整える3つの視点",
+  "時間制チャットで相談を絞る流れ",
+  "相手に伝わる文面にするための小さな確認",
 ];
 
 export default function SnsAdminPage() {
   const [topic, setTopic] = useState(ideas[0]);
-  const [goal, setGoal] = useState("無料占いへの誘導");
+  const [goal, setGoal] = useState("テキスト鑑定への案内");
   const [tone, setTone] = useState("静かで知的");
   const [slides, setSlides] = useState<Slide[]>([]);
   const [caption, setCaption] = useState("");
@@ -22,13 +22,13 @@ export default function SnsAdminPage() {
   function generateSlides() {
     const generated = [
       { heading: topic, body: "今の気持ちを責めずに、まず一文で整理します。" },
-      { heading: "問いを短くする", body: "知りたいことを絞るほど、占い結果を行動に移しやすくなります。" },
-      { heading: "結果を固定しない", body: "占いは未来の断定ではなく、選択肢を見直すための補助線です。" },
-      { heading: "小さく動く", body: "大きな決断の前に、今日できる小さな開運行動を選びます。" },
-      { heading: "Raven Oracle", body: "無料AI占いで、今日の流れと注意点を確認できます。" },
+      { heading: "意図を見る", body: "何を伝えたいのか、相手に何を返してほしいのかを分けます。" },
+      { heading: "圧を下げる", body: "正しさが強すぎる時は、要望と気持ちを別の文にします。" },
+      { heading: "次の一手", body: "送る、待つ、保留する。行動を一つだけ選びます。" },
+      { heading: "Raven Oracle", body: "テキスト鑑定と時間制チャットで、文面を落ち着いて整えます。" },
     ];
     setSlides(generated);
-    setCaption(`${topic}\n\n${tone}なトーンで、迷いを短く整えるための投稿です。\n\n${goal}として、Raven Oracleの無料AI占いへ案内します。\n\n#AI占い #今日の運勢 #RavenOracle #開運`);
+    setCaption(`${topic}\n\n${tone}なトーンで、送信前の迷いを短く整えるための投稿です。\n\n${goal}として、Raven Oracleのテキスト鑑定へ案内します。\n\n#RavenOracle #文章鑑定 #相談整理 #返信前チェック`);
     setStatus("スライド案を生成しました。内容を確認してから投稿準備してください。");
   }
 
@@ -78,7 +78,7 @@ export default function SnsAdminPage() {
         <section className="mt-8 grid gap-6 lg:grid-cols-[360px_1fr]">
           <aside className="rounded border border-[#d7cabc] bg-[#fffaf2] p-5">
             <label className="grid gap-2 text-sm font-semibold">投稿テーマ<textarea className="admin-field min-h-24" value={topic} onChange={(event) => setTopic(event.target.value)} /></label>
-            <label className="mt-3 grid gap-2 text-sm font-semibold">目的<select className="admin-field" value={goal} onChange={(event) => setGoal(event.target.value)}><option>無料占いへの誘導</option><option>ブログへの誘導</option><option>AIテキスト鑑定の事前認知</option></select></label>
+            <label className="mt-3 grid gap-2 text-sm font-semibold">目的<select className="admin-field" value={goal} onChange={(event) => setGoal(event.target.value)}><option>テキスト鑑定への案内</option><option>時間制チャットへの案内</option><option>運用メモへの案内</option></select></label>
             <label className="mt-3 grid gap-2 text-sm font-semibold">トーン<select className="admin-field" value={tone} onChange={(event) => setTone(event.target.value)}><option>静かで知的</option><option>やさしく寄り添う</option><option>短く実用的</option></select></label>
             <div className="mt-4 flex flex-wrap gap-2">
               <button className="rounded border border-[#d7cabc] px-4 py-2 font-semibold" type="button" onClick={() => setTopic(ideas[Math.floor(Math.random() * ideas.length)])}>テーマ提案</button>
