@@ -48,7 +48,10 @@ jobs:
       - name: Install renderer dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y awscli ffmpeg fonts-noto-cjk
+          sudo apt-get install -y ffmpeg fonts-noto-cjk unzip
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip -q awscliv2.zip
+          sudo ./aws/install
 
       - name: Download source from R2
         run: |
