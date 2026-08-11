@@ -14,9 +14,10 @@ Flow:
 Required GitHub repository secrets:
 
 - `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN`
+- `R2_ACCESS_KEY_ID`
+- `R2_SECRET_ACCESS_KEY`
 
-The token needs permission to read and write R2 objects for the Raven account.
+Create these from Cloudflare R2 API Tokens. The key needs Object Read & Write permission for `raven-oracle-media`.
 
 Manual workflow inputs:
 

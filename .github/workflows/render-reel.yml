@@ -31,7 +31,9 @@ jobs:
     timeout-minutes: 15
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
       R2_BUCKET: raven-oracle-media
       INPUT_KEY: ${{ inputs.input_key }}
       OUTPUT_KEY: ${{ inputs.output_key }}
@@ -46,11 +48,11 @@ jobs:
       - name: Install renderer dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-noto-cjk
+          sudo apt-get install -y awscli ffmpeg fonts-noto-cjk
 
       - name: Download source from R2
         run: |
-          npx wrangler@4 r2 object get "$R2_BUCKET/$INPUT_KEY" --file input.mp4 --remote
+          aws s3 cp "s3://$R2_BUCKET/$INPUT_KEY" input.mp4 --endpoint-url "https://$CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com"
 
       - name: Render telop reel
         run: |
@@ -63,7 +65,7 @@ jobs:
 
       - name: Upload rendered reel to R2
         run: |
-          npx wrangler@4 r2 object put "$R2_BUCKET/$OUTPUT_KEY" --file output.mp4 --content-type video/mp4 --remote
+          aws s3 cp output.mp4 "s3://$R2_BUCKET/$OUTPUT_KEY" --content-type video/mp4 --endpoint-url "https://$CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com"
 
       - name: Summary
         run: |
