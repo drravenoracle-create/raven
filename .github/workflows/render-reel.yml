@@ -1,0 +1,71 @@
+name: Render Reel
+
+on:
+  workflow_dispatch:
+    inputs:
+      input_key:
+        description: "R2 input object key"
+        required: true
+        type: string
+      output_key:
+        description: "R2 output object key"
+        required: true
+        type: string
+      title:
+        description: "Main telop text"
+        required: true
+        type: string
+      subtitle:
+        description: "Sub telop text"
+        required: true
+        type: string
+      brand:
+        description: "Brand footer text"
+        required: false
+        default: "Raven Blackwood"
+        type: string
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      R2_BUCKET: raven-oracle-media
+      INPUT_KEY: ${{ inputs.input_key }}
+      OUTPUT_KEY: ${{ inputs.output_key }}
+      REEL_TITLE: ${{ inputs.title }}
+      REEL_SUBTITLE: ${{ inputs.subtitle }}
+      REEL_BRAND: ${{ inputs.brand }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install renderer dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-cjk
+
+      - name: Download source from R2
+        run: |
+          npx wrangler@4 r2 object get "$R2_BUCKET/$INPUT_KEY" --file input.mp4 --remote
+
+      - name: Render telop reel
+        run: |
+          node scripts/render-reel.mjs \
+            --input input.mp4 \
+            --output output.mp4 \
+            --title "$REEL_TITLE" \
+            --subtitle "$REEL_SUBTITLE" \
+            --brand "$REEL_BRAND"
+
+      - name: Upload rendered reel to R2
+        run: |
+          npx wrangler@4 r2 object put "$R2_BUCKET/$OUTPUT_KEY" --file output.mp4 --content-type video/mp4 --remote
+
+      - name: Summary
+        run: |
+          echo "Rendered Reel uploaded to R2:" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$OUTPUT_KEY\`" >> "$GITHUB_STEP_SUMMARY"
