@@ -35,9 +35,9 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Title,Noto Sans CJK JP,116,&H00FFFFFF,&H00FFFFFF,&HAA000000,&H99000000,-1,0,0,0,100,100,0,0,3,5,0,5,44,44,0,1
-Style: Sub,Noto Sans CJK JP,66,&H00FFFFFF,&H00FFFFFF,&HAA000000,&H88000000,0,0,0,0,100,100,0,0,3,4,0,5,56,56,0,1
-Style: Cta,Noto Sans CJK JP,70,&H00FFFFFF,&H00FFFFFF,&H88000000,&HAA000000,-1,0,0,0,100,100,0,0,3,4,0,2,56,56,330,1
+Style: Title,Noto Sans CJK JP,150,&H00FFFFFF,&H00FFFFFF,&HAA000000,&H99000000,-1,0,0,0,100,100,0,0,3,6,0,5,28,28,0,1
+Style: Sub,Noto Sans CJK JP,88,&H00FFFFFF,&H00FFFFFF,&HAA000000,&H88000000,0,0,0,0,100,100,0,0,3,5,0,5,36,36,0,1
+Style: Cta,Noto Sans CJK JP,92,&H00FFFFFF,&H00FFFFFF,&H88000000,&HAA000000,-1,0,0,0,100,100,0,0,3,5,0,2,36,36,330,1
 Style: Brand,Noto Sans CJK JP,42,&H00FFFFFF,&H00FFFFFF,&H66000000,&H00000000,-1,0,0,0,100,100,0,0,1,2,0,2,80,80,180,1
 
 [Events]
