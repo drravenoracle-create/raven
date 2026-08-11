@@ -24,6 +24,11 @@ on:
         required: false
         default: "Raven Blackwood"
         type: string
+      cta:
+        description: "Final call-to-action text"
+        required: false
+        default: "詳しい鑑定はプロフィールから"
+        type: string
 
 jobs:
   render:
@@ -40,6 +45,7 @@ jobs:
       REEL_TITLE: ${{ inputs.title }}
       REEL_SUBTITLE: ${{ inputs.subtitle }}
       REEL_BRAND: ${{ inputs.brand }}
+      REEL_CTA: ${{ inputs.cta }}
 
     steps:
       - name: Checkout
@@ -67,7 +73,8 @@ jobs:
             --output output.mp4 \
             --title "$REEL_TITLE" \
             --subtitle "$REEL_SUBTITLE" \
-            --brand "$REEL_BRAND"
+            --brand "$REEL_BRAND" \
+            --cta "$REEL_CTA"
 
       - name: Upload rendered reel to R2
         run: |
