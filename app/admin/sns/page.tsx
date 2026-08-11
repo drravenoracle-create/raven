@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 type Slide = { heading: string; body: string };
 type SnsPost = { id: string; title: string; status: string; platform: string; post_type: string; scheduled_at?: string; created_at?: string };
 type SnsSettings = { automation_level?: number; emergency_stop_all?: number; schedule_json?: string };
+type UploadedMedia = { assetId: string; url: string; fileName: string; sizeBytes: number; mimeType: string };
 
 const ideas = [
   "返信前の文章を整える3つの視点",
@@ -23,6 +24,8 @@ export default function SnsAdminPage() {
   const [posts, setPosts] = useState<SnsPost[]>([]);
   const [scheduledAt, setScheduledAt] = useState("");
   const [settings, setSettings] = useState<SnsSettings | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [uploadedMedia, setUploadedMedia] = useState<UploadedMedia | null>(null);
   const [duplicateCandidate, setDuplicateCandidate] = useState<{ id: string; title?: string; created_at?: string; score?: number } | null>(null);
   const postCounts = {
     draft: posts.filter((post) => post.status === "draft").length,
@@ -79,21 +82,24 @@ export default function SnsAdminPage() {
   }
 
   async function saveDraft(nextStatus = "draft", allowDuplicate = false) {
+    const hasVideo = Boolean(uploadedMedia);
     const response = await fetch("/api/sns/posts", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         tenant_id: "raven-oracle",
         platform: "instagram",
-        post_type: "carousel",
+        post_type: hasVideo ? "reel" : "carousel",
         title: topic,
         theme: topic,
-        category: "文章鑑定",
+        category: hasVideo ? "完成済み動画" : "文章鑑定",
         character: "Raven Blackwood",
         purpose: goal,
         cta: "必要なら、Raven Blackwoodのテキスト鑑定で一緒に整理します。",
         caption,
         script: slides.map((slide, index) => `${index + 1}. ${slide.heading}: ${slide.body}`).join("\n"),
+        media_type: hasVideo ? "video" : "",
+        media_url: uploadedMedia?.url || "",
         status: nextStatus,
         scheduled_at: scheduledAt,
         allow_duplicate: allowDuplicate,
@@ -110,6 +116,40 @@ export default function SnsAdminPage() {
     setDuplicateCandidate(null);
     setStatus(nextStatus === "scheduled" ? "予約投稿として保存しました。" : "下書き保存しました。");
     await loadPosts();
+  }
+
+  async function uploadCompletedVideo() {
+    if (!videoFile) {
+      setStatus("MP4ファイルを選択してください。");
+      return;
+    }
+    if (videoFile.type !== "video/mp4") {
+      setStatus("アップロードできるのはMP4のみです。");
+      return;
+    }
+    const form = new FormData();
+    form.append("file", videoFile);
+    form.append("source", "uploaded");
+    form.append("category", "sns-ready-video");
+    form.append("mood", "ready");
+    form.append("license_type", "owned");
+    form.append("tags", "sns,ready,mp4,no-processing");
+    setStatus("MP4をR2へアップロードしています。");
+    const response = await fetch("/api/reel-engine/assets", { method: "POST", body: form });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setStatus(payload.error || "MP4アップロードに失敗しました。");
+      return;
+    }
+    const url = `/api/reel-engine/assets?assetId=${encodeURIComponent(payload.assetId)}`;
+    setUploadedMedia({ assetId: payload.assetId, url, fileName: videoFile.name, sizeBytes: payload.sizeBytes || videoFile.size, mimeType: payload.mimeType || videoFile.type });
+    setStatus("MP4をアップロードしました。予約保存すると、この動画を無加工で投稿予約します。");
+  }
+
+  function clearUploadedVideo() {
+    setVideoFile(null);
+    setUploadedMedia(null);
+    setStatus("動画選択を解除しました。");
   }
 
   async function publishPost(id: string) {
@@ -181,6 +221,19 @@ export default function SnsAdminPage() {
             <label className="mt-3 grid gap-2 text-sm font-semibold">目的<select className="admin-field" value={goal} onChange={(event) => setGoal(event.target.value)}><option>テキスト鑑定への案内</option><option>時間制チャットへの案内</option><option>運用メモへの案内</option></select></label>
             <label className="mt-3 grid gap-2 text-sm font-semibold">トーン<select className="admin-field" value={tone} onChange={(event) => setTone(event.target.value)}><option>静かで知的</option><option>やさしく寄り添う</option><option>短く実用的</option></select></label>
             <label className="mt-3 grid gap-2 text-sm font-semibold">予約日時<input className="admin-field" type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} /></label>
+            <div className="mt-4 rounded border border-[#d7cabc] bg-white p-3">
+              <label className="grid gap-2 text-sm font-semibold">完成済みMP4<input className="admin-field" type="file" accept="video/mp4" onChange={(event) => setVideoFile(event.target.files?.[0] || null)} /></label>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button className="rounded border border-[#d7cabc] px-4 py-2 text-sm font-semibold" type="button" onClick={uploadCompletedVideo}>MP4アップロード</button>
+                {uploadedMedia ? <button className="rounded border border-[#d7cabc] px-4 py-2 text-sm font-semibold" type="button" onClick={clearUploadedVideo}>解除</button> : null}
+              </div>
+              {uploadedMedia ? <div className="mt-3 text-xs leading-5 text-[#5e625c]">
+                <p className="font-semibold text-[#20241f]">{uploadedMedia.fileName}</p>
+                <p>{uploadedMedia.mimeType} / {formatBytes(uploadedMedia.sizeBytes)}</p>
+                <p className="break-all">{uploadedMedia.url}</p>
+                <video className="mt-3 aspect-[9/16] max-h-72 rounded border border-[#d7cabc] bg-black" src={uploadedMedia.url} controls playsInline />
+              </div> : <p className="mt-3 text-xs leading-5 text-[#5e625c]">アップロード済み動画がある場合、投稿種別はReel、動画URLはR2プレビューURLとして保存します。動画への加工は行いません。</p>}
+            </div>
             <div className="mt-4 flex flex-wrap gap-2">
               <button className="rounded border border-[#d7cabc] px-4 py-2 font-semibold" type="button" onClick={() => setTopic(ideas[Math.floor(Math.random() * ideas.length)])}>テーマ提案</button>
               <button className="rounded bg-[#222820] px-4 py-2 font-semibold text-[#fff8ed]" type="button" onClick={generateSlides}>生成</button>
@@ -248,6 +301,18 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, x: number, y: number,
 
 function Metric({ label, value }: { label: string; value: number }) {
   return <div className="rounded border border-[#d7cabc] bg-[#fffaf2] p-4"><p className="text-sm font-semibold text-[#6c5f3d]">{label}</p><p className="mt-2 text-3xl font-semibold">{value}</p></div>;
+}
+
+function formatBytes(value: number) {
+  if (!value) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let size = value;
+  let index = 0;
+  while (size >= 1024 && index < units.length - 1) {
+    size /= 1024;
+    index += 1;
+  }
+  return `${size.toFixed(index ? 1 : 0)} ${units[index]}`;
 }
 
 function PostList({ title, posts, onPublish }: { title: string; posts: SnsPost[]; onPublish: (id: string) => Promise<void> }) {
