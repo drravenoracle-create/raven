@@ -181,8 +181,8 @@ async function createSnsPost(request: Request, env: Env) {
   const id = crypto.randomUUID();
   await env.DB.prepare(
     `INSERT INTO sns_posts
-      (id, tenant_id, platform, post_type, title, theme, category, character, purpose, cta, caption, hashtags, script, status, scheduled_at, ai_generated)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, tenant_id, platform, post_type, title, theme, category, character, purpose, cta, caption, hashtags, script, media_type, media_url, thumbnail_url, status, scheduled_at, ai_generated)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -198,6 +198,9 @@ async function createSnsPost(request: Request, env: Env) {
       draft.caption,
       toJsonText(body.hashtags, 500) || "#レイヴンブラックウッド #文章鑑定 #相談整理",
       draft.script,
+      toJsonText(body.media_type ?? body.mediaType, 40),
+      toJsonText(body.media_url ?? body.mediaUrl, 1000),
+      toJsonText(body.thumbnail_url ?? body.thumbnailUrl, 1000),
       toJsonText(body.status, 40) || "draft",
       toJsonText(body.scheduled_at ?? body.scheduledAt, 80),
       1,
@@ -225,10 +228,65 @@ async function updateSnsStatus(request: Request, env: Env) {
   return json({ ok: true });
 }
 
+function parseMediaUrls(post: Record<string, unknown>) {
+  const raw = String(post.media_url || post.thumbnail_url || "").trim();
+  if (!raw) return [];
+  if (raw.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 10);
+    } catch {}
+  }
+  return raw
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 10);
+}
+
+async function publishInstagramContainer(env: Env, post: Record<string, unknown>, creationId: string, providerMode: string) {
+  const tenantId = String(post.tenant_id || TENANT_ID);
+  const id = String(post.id || "");
+  const platform = String(post.platform || "instagram");
+  const publishResponse = await fetch(`https://graph.facebook.com/v26.0/${env.INSTAGRAM_ACCOUNT_ID}/media_publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      creation_id: creationId,
+      access_token: env.INSTAGRAM_ACCESS_TOKEN,
+    }),
+  });
+  const publishBody = (await publishResponse.json().catch(() => ({}))) as { id?: string; error?: unknown };
+  if (!publishResponse.ok || !publishBody.id) {
+    await env.DB.prepare(
+      "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?, ?)",
+    )
+      .bind(crypto.randomUUID(), tenantId, id, platform, publishResponse.status, JSON.stringify(publishBody), "Instagram media publish failed")
+      .run();
+    await env.DB.prepare("UPDATE sns_posts SET status = 'failed', retry_count = retry_count + 1, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
+      .bind(tenantId, id)
+      .run();
+    return { ok: false, error: "Instagram media publish failed", details: publishBody };
+  }
+  const externalId = publishBody.id;
+  await env.DB.prepare(
+    "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body) VALUES (?, ?, ?, ?, 'publish', 'success', ?, ?)",
+  )
+    .bind(crypto.randomUUID(), tenantId, id, platform, 200, JSON.stringify({ mode: providerMode || "instagram", externalId }))
+    .run();
+  await env.DB.prepare(
+    "UPDATE sns_posts SET status = 'published', published_at = CURRENT_TIMESTAMP, external_post_id = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?",
+  )
+    .bind(externalId, tenantId, id)
+    .run();
+  return { ok: true, externalId };
+}
+
 async function publishSnsPost(env: Env, post: Record<string, unknown>) {
   const tenantId = String(post.tenant_id || TENANT_ID);
   const id = String(post.id || "");
   const platform = String(post.platform || "instagram");
+  const postType = String(post.post_type || "image");
   const providerMode = env.SNS_PROVIDER_MODE || "";
   if (!env.INSTAGRAM_ACCESS_TOKEN || !env.INSTAGRAM_ACCOUNT_ID) {
     await env.DB.prepare(
@@ -250,8 +308,8 @@ async function publishSnsPost(env: Env, post: Record<string, unknown>) {
     return { ok: false, error: "Mock provider failure" };
   }
   const caption = String(post.caption || post.title || "").slice(0, 2200);
-  const mediaUrl = String(post.media_url || post.thumbnail_url || "");
-  if (!mediaUrl) {
+  const mediaUrls = parseMediaUrls(post);
+  if (!mediaUrls.length) {
     await env.DB.prepare(
       "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?)",
     )
@@ -262,14 +320,53 @@ async function publishSnsPost(env: Env, post: Record<string, unknown>) {
       .run();
     return { ok: false, error: "Instagram投稿には公開アクセス可能な画像URLが必要です" };
   }
+
+  if (postType === "carousel" && mediaUrls.length >= 2) {
+    const childIds: string[] = [];
+    for (const mediaUrl of mediaUrls) {
+      const childResponse = await fetch(`https://graph.facebook.com/v26.0/${env.INSTAGRAM_ACCOUNT_ID}/media`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ image_url: mediaUrl, is_carousel_item: "true", access_token: env.INSTAGRAM_ACCESS_TOKEN }),
+      });
+      const childBody = (await childResponse.json().catch(() => ({}))) as { id?: string; error?: unknown };
+      if (!childResponse.ok || !childBody.id) {
+        await env.DB.prepare(
+          "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?, ?)",
+        )
+          .bind(crypto.randomUUID(), tenantId, id, platform, childResponse.status, JSON.stringify(childBody), "Instagram carousel child creation failed")
+          .run();
+        await env.DB.prepare("UPDATE sns_posts SET status = 'failed', retry_count = retry_count + 1, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
+          .bind(tenantId, id)
+          .run();
+        return { ok: false, error: "Instagram carousel child creation failed", details: childBody };
+      }
+      childIds.push(childBody.id);
+    }
+    const carouselResponse = await fetch(`https://graph.facebook.com/v26.0/${env.INSTAGRAM_ACCOUNT_ID}/media`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ media_type: "CAROUSEL", children: childIds.join(","), caption, access_token: env.INSTAGRAM_ACCESS_TOKEN }),
+    });
+    const carouselBody = (await carouselResponse.json().catch(() => ({}))) as { id?: string; error?: unknown };
+    if (!carouselResponse.ok || !carouselBody.id) {
+      await env.DB.prepare(
+        "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?, ?)",
+      )
+        .bind(crypto.randomUUID(), tenantId, id, platform, carouselResponse.status, JSON.stringify(carouselBody), "Instagram carousel container creation failed")
+        .run();
+      await env.DB.prepare("UPDATE sns_posts SET status = 'failed', retry_count = retry_count + 1, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
+        .bind(tenantId, id)
+        .run();
+      return { ok: false, error: "Instagram carousel container creation failed", details: carouselBody };
+    }
+    return publishInstagramContainer(env, post, carouselBody.id, providerMode || "instagram_carousel");
+  }
+
   const createResponse = await fetch(`https://graph.facebook.com/v26.0/${env.INSTAGRAM_ACCOUNT_ID}/media`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      image_url: mediaUrl,
-      caption,
-      access_token: env.INSTAGRAM_ACCESS_TOKEN,
-    }),
+    body: new URLSearchParams({ image_url: mediaUrls[0], caption, access_token: env.INSTAGRAM_ACCESS_TOKEN }),
   });
   const createBody = (await createResponse.json().catch(() => ({}))) as { id?: string; error?: unknown };
   if (!createResponse.ok || !createBody.id) {
@@ -283,38 +380,7 @@ async function publishSnsPost(env: Env, post: Record<string, unknown>) {
       .run();
     return { ok: false, error: "Instagram media container creation failed", details: createBody };
   }
-  const publishResponse = await fetch(`https://graph.facebook.com/v26.0/${env.INSTAGRAM_ACCOUNT_ID}/media_publish`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      creation_id: createBody.id,
-      access_token: env.INSTAGRAM_ACCESS_TOKEN,
-    }),
-  });
-  const publishBody = (await publishResponse.json().catch(() => ({}))) as { id?: string; error?: unknown };
-  if (!publishResponse.ok || !publishBody.id) {
-    await env.DB.prepare(
-      "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?, ?)",
-    )
-      .bind(crypto.randomUUID(), tenantId, id, platform, publishResponse.status, JSON.stringify(publishBody), "Instagram media publish failed")
-      .run();
-    await env.DB.prepare("UPDATE sns_posts SET status = 'failed', retry_count = retry_count + 1, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
-      .bind(tenantId, id)
-      .run();
-    return { ok: false, error: "Instagram media publish failed", details: publishBody };
-  }
-  const externalId = publishBody.id;
-  await env.DB.prepare(
-    "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body) VALUES (?, ?, ?, ?, 'publish', 'success', ?, ?)",
-  )
-    .bind(crypto.randomUUID(), tenantId, id, platform, 200, JSON.stringify({ mode: providerMode || "mock_success", externalId }))
-    .run();
-  await env.DB.prepare(
-    "UPDATE sns_posts SET status = 'published', published_at = CURRENT_TIMESTAMP, external_post_id = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?",
-  )
-    .bind(externalId, tenantId, id)
-    .run();
-  return { ok: true, externalId };
+  return publishInstagramContainer(env, post, createBody.id, providerMode || "instagram");
 }
 
 async function publishSnsNow(request: Request, env: Env) {
