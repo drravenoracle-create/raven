@@ -112,7 +112,8 @@ export async function POST(request: Request) {
       return `${index + 1}. ${name}: ${meaning}`;
     }).join("\n");
   }
-  const theme = clean(body.theme, 180) || "\u8fd4\u4fe1\u524d\u306e\u6587\u7ae0\u3092\u6574\u3048\u308b3\u3064\u306e\u8996\u70b9";
+
+  const theme = clean(body.theme, 180) || "返信前の文章を整える3つの視点";
   const cta = clean(body.cta, 240) || "必要なら、レイヴン・ブラックウッドのテキスト鑑定で一緒に整理します。";
   const captionBase = clean(body.caption, 2200) || `${theme}\n\n送る前に、気持ち・目的・相手に伝えたいことを分けて見直します。\n\n${cta}\n\n#レイヴンブラックウッド #文章鑑定 #相談整理`;
   const caption = selectedCardPayload ? clean(`${captionBase}\n\n今日のカード\n${selectedCardPayload}`, 2200) : captionBase;
@@ -139,7 +140,7 @@ export async function POST(request: Request) {
 
   if (duplicate && !allowDuplicate) {
     return Response.json({
-      error: `\u76f4\u8fd1${DUPLICATE_LOOKBACK_DAYS}\u65e5\u4ee5\u5185\u306eSNS\u6295\u7a3f\u3068\u5185\u5bb9\u304c\u8fd1\u3044\u305f\u3081\u4fdd\u5b58\u3092\u6b62\u3081\u307e\u3057\u305f\u3002`,
+      error: `直近${DUPLICATE_LOOKBACK_DAYS}日以内のSNS投稿と内容が近いため保存を止めました。`,
       duplicate: true,
       duplicatePost: {
         id: duplicate.candidate.id,
@@ -163,9 +164,9 @@ export async function POST(request: Request) {
       clean(body.post_type ?? body.postType, 40) || "carousel",
       title,
       theme,
-      clean(body.category, 120) || "SNS\u6295\u7a3f",
+      clean(body.category, 120) || "SNS投稿",
       clean(body.character, 120) || "レイヴン・ブラックウッド",
-      clean(body.purpose, 180) || "\u30c6\u30ad\u30b9\u30c8\u9451\u5b9a\u3078\u306e\u6848\u5185",
+      clean(body.purpose, 180) || "テキスト鑑定への案内",
       cta,
       caption,
       clean(body.hashtags, 500) || "#レイヴンブラックウッド #文章鑑定 #相談整理",

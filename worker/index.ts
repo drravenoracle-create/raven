@@ -155,12 +155,12 @@ async function listSnsPosts(request: Request, env: Env) {
 function buildSnsDraft(input: Record<string, unknown>) {
   const theme = toJsonText(input.theme, 180) || "返信前の文章を整える3つの視点";
   const purpose = toJsonText(input.purpose, 180) || "テキスト鑑定への案内";
-  const character = toJsonText(input.character, 120) || "Raven Blackwood";
-  const cta = toJsonText(input.cta, 240) || "必要なら、Raven Blackwoodのテキスト鑑定で一緒に整理できます。";
+  const character = toJsonText(input.character, 120) || "レイヴン・ブラックウッド";
+  const cta = toJsonText(input.cta, 240) || "必要なら、レイヴン・ブラックウッドのテキスト鑑定で一緒に整理できます。";
   const title = toJsonText(input.title, 180) || theme;
   const caption =
     toJsonText(input.caption, 2200) ||
-    `${theme}\n\n送る前に、気持ち、目的、相手に求めることを一度分けてみてください。\n\n${cta}\n\n#RavenOracle #RavenBlackwood #文章鑑定 #相談整理 #返信前チェック`;
+    `${theme}\n\n送る前に、気持ち、目的、相手に求めることを一度分けてみてください。\n\n${cta}\n\n#レイヴンブラックウッド #文章鑑定 #相談整理 #返信前チェック`;
   const script =
     toJsonText(input.script, 4000) ||
     `0-3秒: ${theme}\n3-10秒: まず気持ちと目的を分けます。\n10-22秒: 相手に何を求めているかを一文にします。\n22-27秒: 送る、待つ、保留するを選びます。\n27-30秒: ${cta}`;
@@ -196,7 +196,7 @@ async function createSnsPost(request: Request, env: Env) {
       draft.purpose,
       draft.cta,
       draft.caption,
-      toJsonText(body.hashtags, 500) || "#RavenOracle #RavenBlackwood #文章鑑定 #相談整理",
+      toJsonText(body.hashtags, 500) || "#レイヴンブラックウッド #文章鑑定 #相談整理",
       draft.script,
       toJsonText(body.status, 40) || "draft",
       toJsonText(body.scheduled_at ?? body.scheduledAt, 80),
@@ -333,12 +333,54 @@ async function publishSnsNow(request: Request, env: Env) {
   return json(await publishSnsPost(env, post));
 }
 
+async function createDueDailySnsPost(env: Env, scheduleJson: unknown) {
+  const { date, time } = jstParts();
+  const schedule = parseSnsSchedule(scheduleJson);
+  const window = schedule.windows.find((item) => time >= item.start && time <= item.end);
+  if (!window) return 0;
+
+  const idempotencyKey = `daily-sns:${TENANT_ID}:${date}:${window.start}`;
+  const existing = await env.DB.prepare("SELECT id FROM sns_posts WHERE tenant_id = ? AND duplicate_warning = ? LIMIT 1")
+    .bind(TENANT_ID, idempotencyKey)
+    .first<{ id: string }>();
+  if (existing) return 0;
+
+  const id = crypto.randomUUID();
+  const title = `今日のレイヴン・ブラックウッド鑑定メモ ${date}`;
+  const theme = time < "07:00" ? "夜明け前に整える、今日の判断" : "午後に見直す、迷いのほどき方";
+  const cta = "詳しく整理したい時は、レイヴン・ブラックウッドのAIテキスト鑑定へ。";
+  const caption = `${theme}\n\n急いで答えを決める前に、気持ち・状況・本当に知りたいことを分けて見直します。\n\n${cta}\n\n#レイヴンブラックウッド #占い #文章鑑定 #相談整理`;
+
+  await env.DB.prepare(
+    `INSERT INTO sns_posts
+      (id, tenant_id, platform, post_type, title, theme, category, character, purpose, cta, caption, hashtags, script, media_type, media_url, thumbnail_url, status, scheduled_at, ai_generated, duplicate_warning)
+      VALUES (?, ?, 'instagram', 'image', ?, ?, '自動投稿', 'レイヴン・ブラックウッド', 'AIテキスト鑑定への案内', ?, ?, ?, ?, 'image', ?, ?, 'scheduled', ?, 1, ?)`,
+  )
+    .bind(
+      id,
+      TENANT_ID,
+      title,
+      theme,
+      cta,
+      caption,
+      "#レイヴンブラックウッド #占い #文章鑑定 #相談整理",
+      `0-5秒: ${theme}\n5-15秒: 迷いを気持ち、状況、問いに分ける\n15-25秒: 今日決めることと保留することを分ける\n25-30秒: ${cta}`,
+      "https://raven.fortunestudios.jp/raven-blackwood-cover.png",
+      "https://raven.fortunestudios.jp/raven-blackwood-cover.png",
+      new Date().toISOString(),
+      idempotencyKey,
+    )
+    .run();
+  return 1;
+}
+
 async function publishDueSnsPosts(env: Env) {
   if (!env.DB) return 0;
   const settings = await env.DB.prepare("SELECT automation_level, emergency_stop_all, schedule_json FROM sns_automation_settings WHERE tenant_id = ? LIMIT 1").bind(TENANT_ID).first<{ automation_level?: number; emergency_stop_all?: number; schedule_json?: string }>();
   if (settings?.emergency_stop_all) return 0;
   if (!settings?.automation_level) return 0;
   if (!isInSnsPublishWindow(settings.schedule_json)) return 0;
+  await createDueDailySnsPost(env, settings.schedule_json);
   const result = await env.DB.prepare(
     "SELECT * FROM sns_posts WHERE tenant_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL AND datetime(scheduled_at) <= datetime('now') AND retry_count < 3 LIMIT 10",
   )
@@ -382,8 +424,8 @@ function buildDailyHomepageArticle(date: string) {
     "## 予約までの道筋を整える",
     "SNSで興味を持っても、次に何をすればよいか分からなければ、相談者はそこで止まります。プロフィール、鑑定メニュー、注意事項、予約ボタンが同じ場所にあるだけで、行動の迷いはかなり減ります。",
     "占い師側にとっても、毎回同じ説明を繰り返す負担が減ります。事前に読んでほしいことをページに置けるからです。",
-    "## Raven Oracleでの考え方",
-    "Raven Oracleでは、ホームページを単なる看板ではなく、相談者が自分のペースで確かめるための静かな受付として考えます。SNSで出会い、ブログで理解し、必要な人だけが鑑定へ進む。",
+    "## レイヴン・ブラックウッドでの考え方",
+    "レイヴン・ブラックウッドでは、ホームページを単なる看板ではなく、相談者が自分のペースで確かめるための静かな受付として考えます。SNSで出会い、ブログで理解し、必要な人だけが鑑定へ進む。",
     "その流れが整うほど、占い師の言葉は一度きりの投稿ではなく、長く働く案内になります。",
   ].join("\n\n");
   return {
@@ -392,7 +434,7 @@ function buildDailyHomepageArticle(date: string) {
     description: "占い師がホームページを持つことで、信頼情報、予約導線、ブログ資産をどう整えられるかを解説します。",
     body,
     category: "占い師がホームページを持つメリット",
-    tags: ["占い師", "ホームページ", "集客", "Raven Oracle", "Fortune Studio"],
+    tags: ["占い師", "ホームページ", "集客", "レイヴン・ブラックウッド", "Fortune Studio"],
     keyMessage: "ホームページは占い師の情報を一か所に整え、相談者が安心して判断するための拠点になる。",
   };
 }
@@ -428,10 +470,10 @@ async function createDueDailyBlogDraft(env: Env, autoPublish: boolean) {
       JSON.stringify(["占い師 集客", "占い師 ブログ", "予約導線"]),
       "占い師としてホームページを持つ実務的な利点を知りたい",
       "SNS発信だけに限界を感じている占い師・個人鑑定者",
-      JSON.stringify(["SNSだけでは残りにくい情報", "相談前の不安を減らす役割", "予約までの道筋を整える", "Raven Oracleでの考え方"]),
-      `${article.title} | Raven Oracle Blog`,
+      JSON.stringify(["SNSだけでは残りにくい情報", "相談前の不安を減らす役割", "予約までの道筋を整える", "レイヴン・ブラックウッドでの考え方"]),
+      `${article.title} | レイヴン・ブラックウッド Blog`,
       article.description,
-      `${article.title} | Raven Oracle Blog`,
+      `${article.title} | レイヴン・ブラックウッド Blog`,
       article.description,
       JSON.stringify([]),
       JSON.stringify([]),

@@ -44,7 +44,7 @@ async function buildAiBlogDraft(input: { topic: string; category: string; primar
   if (!apiKey) return { draft: fallback, provider: "fallback-template" };
   const model = (env as any).OPENAI_MODEL || process.env.OPENAI_MODEL || "gpt-4.1-mini";
   const prompt = [
-    "You are Fortune Studio Blog Engine for Raven Oracle.",
+    "You are Fortune Studio Blog Engine for Raven Blackwood.",
     "Write a production-ready Japanese blog article. Return JSON only, no markdown fences.",
     "Brand rules: no guaranteed fortune claims, no fear-based sales copy, no dependency inducement. Divination helps people organize choices.",
     "Return keys: title, slug, description, body, category, tags, primaryKeyword, secondaryKeywords, searchIntent, targetReader, outline, seoTitle, metaDescription, keyMessage, recommendedSocialAngle.",
@@ -186,7 +186,7 @@ async function createDueDailyDraft(settingsRow: { schedule_json?: string | null 
   return 1;
 }
 
-export async function POST() {
+async function processBlogEvents() {
   const settings = await env.DB.prepare("SELECT enabled, kill_switch, schedule_json FROM blog_engine_settings WHERE tenant_id = ? LIMIT 1")
     .bind(BLOG_ENGINE_TENANT_ID)
     .first<{ enabled: number; kill_switch: number; schedule_json?: string }>();
@@ -261,6 +261,17 @@ export async function POST() {
   }
 
   return Response.json({ ok: true, drafted, published, processed, created, failed });
+}
+
+export async function POST() {
+  try {
+    return await processBlogEvents();
+  } catch (error) {
+    return Response.json(
+      { ok: false, error: error instanceof Error ? error.message : "Unknown blog engine error" },
+      { status: 500, headers: { "Cache-Control": "no-store" } },
+    );
+  }
 }
 
 
