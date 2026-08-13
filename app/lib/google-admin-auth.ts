@@ -20,6 +20,13 @@ export function googleRedirectUri(origin: string) {
   return `${origin}/api/admin/auth/google/callback`;
 }
 
+export function publicOrigin(request: Request) {
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
+  if (forwardedHost) return `${forwardedProto}://${forwardedHost}`;
+  return new URL(request.url).origin;
+}
+
 export function adminSessionMaxAge() {
   return SESSION_TTL_SECONDS;
 }

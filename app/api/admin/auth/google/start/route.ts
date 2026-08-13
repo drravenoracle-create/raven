@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { GOOGLE_STATE_COOKIE, googleRedirectUri, randomState, safeRelativeReturnPath } from "@/app/lib/google-admin-auth";
+import { GOOGLE_STATE_COOKIE, googleRedirectUri, publicOrigin, randomState, safeRelativeReturnPath } from "@/app/lib/google-admin-auth";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 
@@ -8,11 +8,12 @@ export function GET(request: Request) {
   if (!clientId) return new Response("GOOGLE_CLIENT_ID is not configured.", { status: 503 });
 
   const url = new URL(request.url);
+  const origin = publicOrigin(request);
   const returnTo = safeRelativeReturnPath(url.searchParams.get("return_to"));
   const state = `${randomState()}.${encodeURIComponent(returnTo)}`;
   const authUrl = new URL(GOOGLE_AUTH_URL);
   authUrl.searchParams.set("client_id", clientId);
-  authUrl.searchParams.set("redirect_uri", googleRedirectUri(url.origin));
+  authUrl.searchParams.set("redirect_uri", googleRedirectUri(origin));
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("scope", "openid email profile");
   authUrl.searchParams.set("state", state);

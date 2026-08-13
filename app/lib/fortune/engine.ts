@@ -1,4 +1,4 @@
-import { getPersona, personaSystemPrompt } from "@/app/lib/personas";
+﻿import { getPersona, personaSystemPrompt } from "@/app/lib/personas";
 import { checkFortuneSafety } from "@/app/lib/fortune/safety";
 import { tarotCards, type TarotCard } from "@/app/lib/fortune/tarot";
 
@@ -33,6 +33,13 @@ const themeLabels: Record<FortuneTheme, string> = {
   work: "仕事",
   money: "金運",
   today: "今日",
+};
+
+const themeInstructions: Record<FortuneTheme, string> = {
+  today: "Focus on the rhythm of the day, what to do first, what to postpone, and one small grounding action.",
+  love: "Focus on emotional distance, communication temperature, timing of contact, and how to avoid pushing the other person.",
+  work: "Focus on priorities, timing, where effort is leaking, negotiation posture, and the next concrete work action.",
+  money: "Focus on spending, recovery of value, small financial decisions, avoiding impulsive purchases, and one practical money action.",
 };
 
 const luckyActions = [
@@ -112,11 +119,14 @@ export function buildFortunePrompt(input: { theme: FortuneTheme; name?: string; 
   return [
     personaSystemPrompt(persona),
     "",
-    "You are generating a free daily fortune result for Raven Oracle.",
+    "You are generating a free daily fortune result for Raven Blackwood.",
     "The card has already been drawn by the server. Do not change, replace, redraw, or add cards.",
     "Do not state the future, hidden facts, or another person's feelings as certainty.",
     "Do not create fear, dependency, urgency pressure, or spiritual threats.",
-    "Reply in Japanese. Keep Raven's voice calm, strategic, compassionate, and practical.",
+    "Reply in Japanese. Keep Raven Blackwood's voice calm, strategic, compassionate, and practical.",
+    "Make the result clearly specific to the selected theme. Do not reuse generic wording across themes.",
+    themeInstructions[input.theme],
+    "Use these four meanings internally: 兆し, 読み, 注意点, 今日の一手.",
     "Return only valid JSON matching this shape:",
     '{"title":"string","summary":"string","advice":"string","caution":"string","luckyAction":"string"}',
     "",

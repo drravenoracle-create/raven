@@ -1,405 +1,175 @@
-"use client";
+﻿import { getSortedBlogPosts } from "./lib/blog";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+const latestPosts = getSortedBlogPosts().filter((post) => post.slug !== "timed-chat-review-flow").slice(0, 3);
 
-type Message = {
-  id: number;
-  role: "user" | "raven";
-  text: string;
-  at: string;
-};
+const navLinks = [
+  { href: "/guild/", label: "ギルド" },
+  { href: "/divination-methods/", label: "占術" },
+  { href: "/divination-dictionary/", label: "占術辞典" },
+  { href: "/free-fortune/", label: "AI無料占い" },
+  { href: "/text-reading/", label: "AIテキスト占い" },
+  { href: "/faq/", label: "FAQ" },
+  { href: "/blog/", label: "ブログ" },
+];
 
-const openingMessages: Message[] = [
+const methodLinks = [
+  { href: "/divination-methods/qimen-dunjia/", label: "奇門遁甲", body: "時と方位を読み、動くべき入口を探る。" },
+  { href: "/divination-methods/liu-ren/", label: "六壬神課", body: "問いの発端、相手の意図、流れの変化を見る。" },
+  { href: "/divination-methods/taiyi/", label: "太乙神数", body: "長期の運勢、環境、時代の大きな流れを読む。" },
+  { href: "/divination-methods/yijing/", label: "易経", body: "変化の中で取るべき姿勢を整える。" },
+];
+
+const serviceLinks = [
   {
-    id: 1,
-    role: "raven",
-    text: "鑑定したい文章を貼り付けてください。文面の温度、意図、圧、次の一手を整理します。",
-    at: "00:00",
+    href: "/free-fortune/",
+    label: "AI無料占い",
+    title: "今の流れを軽く確かめる",
+    body: "今日、恋愛・相性、仕事・金運、易断から選び、短い占い結果で今の兆しを確認できます。",
+  },
+  {
+    href: "/text-reading/",
+    label: "AIテキスト占い",
+    title: "文章の温度と次の一手を見る",
+    body: "相手から来た文章、送る前の文章、相談文を貼り、意図・注意点・整え方を確認できます。現在は全メニューをトライアル価格0円で提供中です。",
   },
 ];
 
-function scoreText(text: string) {
-  const trimmed = text.trim();
-  const lengthScore = Math.min(35, Math.round(trimmed.length / 12));
-  const questionScore = (trimmed.match(/[?]/g) ?? []).length * 7;
-  const emotionWords = [
-    "不安",
-    "怖い",
-    "迷う",
-    "好き",
-    "嫌い",
-    "つらい",
-    "怒り",
-    "寂しい",
-    "信じる",
-    "anxious",
-    "afraid",
-    "lost",
-    "love",
-    "hate",
-    "hurt",
-    "angry",
-    "lonely",
-    "trust",
-  ];
-  const emotionScore = emotionWords.reduce(
-    (sum, word) => sum + (trimmed.toLowerCase().includes(word) ? 8 : 0),
-    0,
-  );
-  const clarityScore = /したい|必要|なぜなら|だから|決める|予定|want|need|because|therefore|decide|plan/i.test(trimmed) ? 18 : 6;
-
-  return Math.min(100, 18 + lengthScore + questionScore + emotionScore + clarityScore);
-}
-
-function createReading(text: string) {
-  if (!text.trim()) {
-    return {
-      score: 0,
-      title: "入力待ち",
-      summary: "文章を入力すると、Raven Oracle用の仮鑑定がここに表示されます。",
-      advice: "送信予定の文面、相談文、メモのどれかをそのまま貼り付けてください。",
-      flags: ["入力待ち"],
-    };
-  }
-
-  const score = scoreText(text);
-  const lower = text.toLowerCase();
-  const isQuestion = /[?？]|どう|なぜ|べき|かな|how|why|should|could|would/.test(lower);
-  const isEmotional = /不安|怖い|迷う|好き|嫌い|つらい|怒り|寂しい|信じる|anxious|afraid|lost|love|hate|hurt|angry|lonely|trust/.test(lower);
-  const isAction = /したい|必要|送る|会う|決める|止める|始める|変える|want|need|send|meet|decide|stop|start|change/.test(lower);
-
-  return {
-    score,
-    title: score >= 75 ? "圧が強い文面" : score >= 50 ? "意図が見える文面" : "余白が多い文面",
-    summary: isEmotional
-      ? "感情が文面を運んでいます。誠実さは伝わりますが、要求や境界線は少し補強が必要です。"
-      : isQuestion
-        ? "問いかけが中心です。相手の返答を引き出しやすい一方で、結論はまだ開いた状態です。"
-        : "落ち着いた説明文です。重要度や感情を一文足すと、意図がより明確になります。",
-    advice: isAction
-      ? "最後に「次にどうしてほしいか」を一文で明示すると、相手が返答しやすくなります。"
-      : "改善するなら、希望、境界線、タイミングを一つずつ足してください。",
-    flags: [
-      isEmotional ? "感情強め" : "感情控えめ",
-      isQuestion ? "問いかけ型" : "説明型",
-      isAction ? "行動意図あり" : "行動意図が薄い",
-    ],
-  };
-}
-
-function formatSeconds(total: number) {
-  const minutes = Math.floor(total / 60).toString().padStart(2, "0");
-  const seconds = (total % 60).toString().padStart(2, "0");
-
-  return `${minutes}:${seconds}`;
-}
-
 export default function Home() {
-  const [text, setText] = useState("");
-  const [duration, setDuration] = useState(10);
-  const [remaining, setRemaining] = useState(10 * 60);
-  const [active, setActive] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [messages, setMessages] = useState<Message[]>(openingMessages);
-  const [geminiReading, setGeminiReading] = useState("");
-  const [apiStatus, setApiStatus] = useState<"idle" | "loading" | "error">("idle");
-  const [apiError, setApiError] = useState("");
-  const [chatStatus, setChatStatus] = useState<"idle" | "loading">("idle");
-  const reading = useMemo(() => createReading(text), [text]);
-
-  useEffect(() => {
-    if (!active) return;
-
-    const timer = window.setInterval(() => {
-      setRemaining((value) => {
-        const next = Math.max(0, value - 1);
-        if (next === 0) setActive(false);
-        return next;
-      });
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, [active]);
-
-  function startSession() {
-    setRemaining(duration * 60);
-    setActive(true);
-    setMessages((current) => [
-      ...current,
-      {
-        id: Date.now(),
-        role: "raven",
-        text: `${duration}分の時間制チャットを開始しました。焦点を一つに絞って進めます。`,
-        at: formatSeconds(duration * 60),
-      },
-    ]);
-  }
-
-  function stopSession() {
-    setActive(false);
-  }
-
-  function tickMinute() {
-    setRemaining((value) => {
-      const next = Math.max(0, value - 60);
-      if (next === 0) setActive(false);
-      return next;
-    });
-  }
-
-  async function runGeminiReading() {
-    if (!text.trim()) return;
-
-    setApiStatus("loading");
-    setApiError("");
-
-    try {
-      const response = await fetch("/api/raven", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          mode: "reading",
-          sourceText: text,
-        }),
-      });
-      const data = (await response.json()) as { text?: string; error?: string };
-
-      if (!response.ok || !data.text) {
-        throw new Error(data.error || "Gemini鑑定に失敗しました。");
-      }
-
-      setGeminiReading(data.text);
-      setApiStatus("idle");
-    } catch (error) {
-      setApiStatus("error");
-      setApiError(error instanceof Error ? error.message : "Gemini鑑定に失敗しました。");
-    }
-  }
-
-  async function sendMessage(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!draft.trim()) return;
-
-    const currentDraft = draft.trim();
-    const userMessage: Message = {
-      id: Date.now(),
-      role: "user",
-      text: currentDraft,
-      at: formatSeconds(remaining),
-    };
-
-    setMessages((current) => [...current, userMessage]);
-    setDraft("");
-    setChatStatus("loading");
-
-    try {
-      const response = await fetch("/api/raven", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          mode: "chat",
-          sourceText: text,
-          message: currentDraft,
-          history: messages.map(({ role, text: messageText }) => ({
-            role,
-            text: messageText,
-          })),
-        }),
-      });
-      const data = (await response.json()) as { text?: string; error?: string };
-
-      if (!response.ok || !data.text) {
-        throw new Error(data.error || "Gemini chat failed.");
-      }
-
-      setMessages((current) => [
-        ...current,
-        {
-          id: Date.now() + 1,
-          role: "raven",
-          text: data.text,
-          at: formatSeconds(Math.max(0, remaining - 15)),
-        },
-      ]);
-      setChatStatus("idle");
-    } catch {
-      setMessages((current) => [
-        ...current,
-        {
-          id: Date.now() + 1,
-          role: "raven",
-          text:
-            reading.score > 0
-              ? `${reading.title}です。今は「${reading.flags[1]}」として扱うと整理しやすいです。${reading.advice}`
-              : "Geminiはまだ未設定です。鑑定対象の文章を貼ると、ローカル判定で補助できます。",
-          at: formatSeconds(Math.max(0, remaining - 15)),
-        },
-      ]);
-      setChatStatus("idle");
-    }
-  }
-
   return (
-    <main className="min-h-screen bg-[#f6f2ea] text-[#1d2320]">
-      <section className="mx-auto grid min-h-screen w-full max-w-7xl gap-6 px-5 py-6 lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="flex flex-col gap-5">
-          <header className="border-b border-[#d8d1c4] pb-5">
-            <p className="text-sm font-semibold uppercase text-[#5f6f61]">
-              Raven Oracle Review Site
-            </p>
-            <h1 className="mt-2 text-4xl font-semibold leading-tight sm:text-5xl">
-              Raven Oracle テキスト鑑定
+    <main className="raven-page min-h-screen text-[#20241f]">
+      <section className="raven-home-hero">
+        <nav className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-5 py-5 text-sm font-semibold text-[#e7d7b6]">
+          <span className="mr-2 uppercase tracking-[0.14em] text-[#d8b15f]">レイヴン・ブラックウッド</span>
+          {navLinks.map((link) => (
+            <a key={link.href} href={link.href}>{link.label}</a>
+          ))}
+        </nav>
+
+        <div className="mx-auto grid max-w-7xl gap-8 px-5 pb-10 pt-4 lg:grid-cols-[1fr_420px] lg:items-end">
+          <div className="max-w-3xl pb-3">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#d8b15f]">Raven Blackwood Oracle Room</p>
+            <h1 className="mt-4 text-5xl font-semibold leading-tight text-[#fff8e7] sm:text-7xl">
+              古典占術で、<br />
+              迷いを次の一手へ。
             </h1>
-            <p className="mt-3 max-w-2xl text-base leading-7 text-[#56615a]">
-              ヒアリングシートで調整したRavenの人格と言葉遣いを使い、文面の温度、意図、リスク、次の一手を整理します。
+            <p className="mt-5 max-w-2xl text-base leading-8 text-[#e9dfcc] sm:text-lg">
+              レイヴン・ブラックウッドは、奇門遁甲、六壬神課、太乙神数、易経を判断の地図として扱う案内役です。
+              <br className="sm:hidden" />
+              未来を断定せず、問いを整え、現実に戻し、
+              <br className="sm:hidden" />
+              今選べる行動を見つけます。
             </p>
-          </header>
-
-          <div className="grid gap-3 rounded border border-[#d8d1c4] bg-[#fffaf1] p-4 text-sm text-[#4c574f] sm:grid-cols-3">
-            <div>
-              <p className="font-semibold text-[#28332c]">対象</p>
-              <p className="mt-1">Raven Oracle</p>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <a className="raven-hero-button" href="/text-reading/">AIテキスト占いへ</a>
+              <a className="raven-hero-button raven-hero-button-secondary" href="/divination-methods/">占術を読む</a>
             </div>
-            <div>
-              <p className="font-semibold text-[#28332c]">AI設定</p>
-              <p className="mt-1">Gemini API / persona: raven-oracle</p>
-            </div>
-            <div>
-              <p className="font-semibold text-[#28332c]">調整元</p>
-              <p className="mt-1">ヒアリングシート反映済み</p>
+            <div className="raven-hero-trust mt-7 grid gap-3 sm:grid-cols-3">
+              <div><strong>4系統</strong><span>古典占術の視点</span></div>
+              <div><strong>64卦</strong><span>易経ページを個別解説</span></div>
+              <div><strong>0円</strong><span>無料占い・テキスト鑑定導線</span></div>
             </div>
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-[1fr_0.78fr]">
-            <label className="flex min-h-[420px] flex-col rounded border border-[#d8d1c4] bg-[#fffaf1] p-4 shadow-sm">
-              <span className="text-sm font-semibold text-[#2d372f]">鑑定する文章</span>
-              <textarea
-                className="mt-3 min-h-0 flex-1 resize-none bg-transparent text-base leading-7 outline-none placeholder:text-[#9a9184]"
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-                placeholder="送信前のメッセージ、相談文、日記、メモを貼り付けます。"
-              />
-              <span className="mt-3 text-sm text-[#71695e]">{text.trim().length} 文字</span>
-            </label>
-
-            <aside className="rounded border border-[#cfd8cb] bg-[#eef4ec] p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-[#526954]">鑑定スコア</p>
-                  <h2 className="text-3xl font-semibold">{reading.score}</h2>
-                </div>
-                <div className="h-20 w-20 rounded-full border-8 border-[#8aa179] bg-[#fbfff7]" />
-              </div>
-              <h3 className="mt-5 text-xl font-semibold">{reading.title}</h3>
-              <p className="mt-3 leading-7 text-[#4b574e]">{reading.summary}</p>
-              <p className="mt-4 rounded bg-[#ffffffb8] p-3 leading-7 text-[#303a33]">{reading.advice}</p>
-              <button
-                className="mt-4 w-full rounded bg-[#1f2c24] px-4 py-3 text-sm font-semibold text-[#f8f5ec] disabled:opacity-45"
-                onClick={runGeminiReading}
-                disabled={!text.trim() || apiStatus === "loading"}
-              >
-                {apiStatus === "loading" ? "Geminiで鑑定中..." : "Gemini鑑定を実行"}
-              </button>
-              {apiError ? (
-                <p className="mt-3 rounded border border-[#c99b83] bg-[#fff4ed] p-3 text-sm leading-6 text-[#7a351e]">
-                  {apiError}
-                </p>
-              ) : null}
-              {geminiReading ? (
-                <div className="mt-3 rounded border border-[#b8c4b2] bg-[#fbfff7] p-3">
-                  <p className="text-sm font-semibold text-[#526954]">Gemini鑑定結果</p>
-                  <p className="mt-2 whitespace-pre-wrap leading-7 text-[#303a33]">{geminiReading}</p>
-                </div>
-              ) : null}
-              <div className="mt-4 flex flex-wrap gap-2">
-                {reading.flags.map((flag) => (
-                  <span key={flag} className="rounded border border-[#b8c4b2] px-3 py-1 text-sm">
-                    {flag}
-                  </span>
-                ))}
-              </div>
-            </aside>
-          </div>
+          <aside className="raven-profile-panel">
+            <img className="raven-profile-image" src="/raven-blackwood-cover.png" alt="レイヴン・ブラックウッド" />
+            <div className="p-5">
+              <p className="text-sm font-semibold text-[#8d6a2f]">Founder / Oracle Strategist</p>
+              <h2 className="mt-1 text-2xl font-semibold">レイヴン・ブラックウッド</h2>
+              <p className="mt-3 leading-7 text-[#5e625c]">
+                神秘を飾りにせず、相談者が恐れではなく判断軸から次の行動を選べるよう導く、静かな鑑定室の主です。
+              </p>
+              <a className="mt-4 inline-flex text-sm font-semibold text-[#596d51] underline underline-offset-4" href="/guild/">人物紹介を読む</a>
+            </div>
+          </aside>
         </div>
+      </section>
 
-        <section className="flex min-h-[640px] flex-col rounded border border-[#cfc7ba] bg-[#171d1a] text-[#f8f5ec] shadow-xl">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#313b35] p-4">
+      <section className="raven-home-band">
+        <div className="mx-auto grid max-w-7xl gap-4 px-5 py-7 md:grid-cols-3">
+          <a className="raven-path-card" href="/text-reading/">
+            <p>相談文・返信文を見る</p>
+            <h2>AIテキスト占い</h2>
+            <span>文章の温度、相手に与える印象、次の一手を整理します。</span>
+          </a>
+          <a className="raven-path-card" href="/free-fortune/">
+            <p>軽く兆しを確かめる</p>
+            <h2>AI無料占い</h2>
+            <span>今日・恋愛・仕事金運・易断から、短い結果を確認できます。</span>
+          </a>
+          <a className="raven-path-card" href="/divination-dictionary/yijing-64-hexagrams/">
+            <p>古典占術を読む</p>
+            <h2>易経 六十四卦</h2>
+            <span>各卦の意味、変爻、変卦、物語上の位置を個別に読めます。</span>
+          </a>
+        </div>
+      </section>
+
+      <section className="mx-auto grid max-w-7xl gap-6 px-5 py-8 lg:grid-cols-[0.95fr_1.05fr]">
+        <section className="raven-home-card p-6">
+          <p className="text-sm font-semibold text-[#8d6a2f]">自己紹介</p>
+          <h2 className="mt-2 text-3xl font-semibold">レイヴンについて</h2>
+          <p className="mt-4 leading-8 text-[#5e625c]">
+            レイヴンの鑑定は、恐れを煽るためのものではありません。感情、状況、相手との距離、動く時期を分けて見ながら、相談者が自分の判断を取り戻すための道具として占術を扱います。
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3 text-sm font-semibold text-[#596d51]">
+            <a className="underline underline-offset-4" href="/guild/">ギルドメンバー紹介を見る</a>
+            <a className="underline underline-offset-4" href="/divination-dictionary/">古典占術辞典を読む</a>
+          </div>
+        </section>
+
+        <section className="grid gap-3 sm:grid-cols-2">
+          {methodLinks.map((method) => (
+            <a key={method.href} className="raven-home-method p-5" href={method.href}>
+              <h3 className="text-xl font-semibold">{method.label}</h3>
+              <p className="mt-2 leading-7 text-[#5e625c]">{method.body}</p>
+            </a>
+          ))}
+        </section>
+      </section>
+
+      <section className="mx-auto grid max-w-7xl gap-6 px-5 pb-10 lg:grid-cols-[0.8fr_1.2fr]">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+          {serviceLinks.map((service) => (
+            <a key={service.href} className="raven-home-card block p-5" href={service.href}>
+              <p className="text-sm font-semibold text-[#8d6a2f]">{service.label}</p>
+              <h2 className="mt-2 text-2xl font-semibold">{service.title}</h2>
+              <p className="mt-3 leading-7 text-[#5e625c]">{service.body}</p>
+              <span className="mt-4 inline-block text-sm font-semibold text-[#596d51] underline underline-offset-4">専用ページへ</span>
+            </a>
+          ))}
+        </section>
+
+        <section className="raven-home-card p-5">
+          <div className="mb-4 flex items-end justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-[#9eb28f]">Timed Chat</p>
-              <h2 className="text-2xl font-semibold">時間制チャット</h2>
+              <p className="text-sm font-semibold text-[#8d6a2f]">ブログ</p>
+              <h2 className="mt-1 text-2xl font-semibold">最新記事</h2>
             </div>
-            <div className="flex items-center gap-2">
-              <select
-                className="rounded border border-[#48534d] bg-[#222a25] px-3 py-2 text-sm"
-                value={duration}
-                onChange={(event) => {
-                  const next = Number(event.target.value);
-                  setDuration(next);
-                  if (!active) setRemaining(next * 60);
-                }}
-              >
-                <option value={5}>5分</option>
-                <option value={10}>10分</option>
-                <option value={20}>20分</option>
-                <option value={30}>30分</option>
-              </select>
-              <button className="rounded bg-[#d9efc8] px-4 py-2 text-sm font-semibold text-[#142017]" onClick={startSession}>
-                開始
-              </button>
-              <button className="rounded border border-[#657167] px-4 py-2 text-sm" onClick={stopSession}>
-                停止
-              </button>
-            </div>
+            <a className="text-sm font-semibold text-[#596d51] underline underline-offset-4" href="/blog/">一覧を見る</a>
           </div>
-
-          <div className="flex items-center justify-between border-b border-[#313b35] px-4 py-3">
-            <div className="font-mono text-4xl font-semibold">{formatSeconds(remaining)}</div>
-            <button
-              className="rounded border border-[#657167] px-3 py-2 text-sm disabled:opacity-40"
-              disabled={!active || remaining === 0}
-              onClick={tickMinute}
-            >
-              1分進める
-            </button>
-          </div>
-
-          <div className="flex-1 space-y-3 overflow-y-auto p-4">
-            {messages.map((message) => (
-              <article
-                key={message.id}
-                className={`max-w-[86%] rounded p-3 ${
-                  message.role === "user"
-                    ? "ml-auto bg-[#e7ddc8] text-[#1e241f]"
-                    : "bg-[#26302a] text-[#f8f5ec]"
-                }`}
-              >
-                <div className="mb-1 flex justify-between gap-4 text-xs opacity-70">
-                  <span>{message.role === "user" ? "あなた" : "Raven"}</span>
-                  <span>{message.at}</span>
-                </div>
-                <p className="leading-7">{message.text}</p>
+          <div className="grid gap-3">
+            {latestPosts.map((post) => (
+              <article key={post.slug} className="border-t border-[#d7cabc] pt-4 first:border-t-0 first:pt-0">
+                <p className="text-xs font-semibold text-[#8d6a2f]">{post.category} / {post.pubDate}</p>
+                <h3 className="mt-2 text-xl font-semibold"><a href={`/blog/${post.slug}/`}>{post.title}</a></h3>
+                <p className="mt-2 leading-7 text-[#5e625c]">{post.description}</p>
               </article>
             ))}
           </div>
-
-          <form className="flex gap-2 border-t border-[#313b35] p-4" onSubmit={sendMessage}>
-            <input
-              className="min-w-0 flex-1 rounded border border-[#48534d] bg-[#222a25] px-3 py-3 outline-none placeholder:text-[#8b948e]"
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder={active ? "Ravenに相談する" : "セッション開始後に入力できます"}
-              disabled={!active || chatStatus === "loading"}
-            />
-            <button className="rounded bg-[#d9efc8] px-5 py-3 font-semibold text-[#142017]" disabled={!active || chatStatus === "loading"}>
-              {chatStatus === "loading" ? "送信中" : "送信"}
-            </button>
-          </form>
         </section>
       </section>
+
+      <footer className="border-t border-[#d8cdbd] px-5 py-6">
+        <nav className="mx-auto flex max-w-7xl flex-wrap gap-4 text-sm font-semibold text-[#596d51]">
+          <a href="/guild/">ギルドメンバー紹介</a>
+          <a href="/divination-methods/">レイヴンの占術</a>
+          <a href="/divination-dictionary/">古典占術辞典</a>
+          <a href="/faq/">FAQ</a>
+          <a href="/tokushoho/">特定商取引法に基づく表記</a>
+          <a href="/privacy/">個人情報保護方針</a>
+          <a href="/disclaimer/">免責事項</a>
+        </nav>
+      </footer>
     </main>
   );
 }

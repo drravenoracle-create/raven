@@ -6,7 +6,9 @@ import { useEffect, useState } from "react";
 type Slide = { heading: string; body: string };
 type SnsPost = { id: string; title: string; status: string; platform: string; post_type: string; scheduled_at?: string; created_at?: string };
 type SnsSettings = { automation_level?: number; emergency_stop_all?: number; schedule_json?: string };
+type DeckOption = { id: string; name: string; status: string; sns_use_allowed: number };
 type UploadedMedia = { assetId: string; url: string; fileName: string; sizeBytes: number; mimeType: string };
+type SnsAction = "idle" | "loading" | "generating" | "saving" | "uploading" | "publishing" | "copying" | "downloading" | "deleting";
 
 const ideas = [
   "返信前の文章を整える3つの視点",
@@ -24,9 +26,16 @@ export default function SnsAdminPage() {
   const [posts, setPosts] = useState<SnsPost[]>([]);
   const [scheduledAt, setScheduledAt] = useState("");
   const [settings, setSettings] = useState<SnsSettings | null>(null);
+  const [decks, setDecks] = useState<DeckOption[]>([]);
+  const [cardDeckId, setCardDeckId] = useState("");
+  const [cardCount, setCardCount] = useState(0);
+  const [cardSelectionMode, setCardSelectionMode] = useState("random");
+  const [cardTag, setCardTag] = useState("");
+  const [cardExcludeRecentDays, setCardExcludeRecentDays] = useState(14);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [uploadedMedia, setUploadedMedia] = useState<UploadedMedia | null>(null);
   const [duplicateCandidate, setDuplicateCandidate] = useState<{ id: string; title?: string; created_at?: string; score?: number } | null>(null);
+  const [activeAction, setActiveAction] = useState<SnsAction>("loading");
   const postCounts = {
     draft: posts.filter((post) => post.status === "draft").length,
     scheduled: posts.filter((post) => post.status === "scheduled").length,
@@ -35,11 +44,34 @@ export default function SnsAdminPage() {
   };
 
   async function loadPosts() {
-    const response = await fetch("/api/sns/posts?tenantId=raven-oracle", { cache: "no-store" });
-    if (!response.ok) return;
-    const payload = await response.json();
-    setPosts(payload.posts || []);
-    setSettings(payload.settings || null);
+    try {
+      const response = await fetch("/api/sns/posts?tenantId=raven-oracle", { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setStatus(payload.error || "SNS投稿一覧の取得に失敗しました。");
+        return;
+      }
+      setPosts(payload.posts || []);
+      setSettings(payload.settings || null);
+    } catch {
+      setStatus("SNS投稿一覧の取得に失敗しました。通信状態を確認してください。");
+    } finally {
+      setActiveAction((current) => (current === "loading" ? "idle" : current));
+    }
+  }
+
+  async function loadDecks() {
+    try {
+      const response = await fetch("/api/card-library?resource=decks&tenantId=raven-oracle", { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok) setDecks(payload.decks || []);
+    } catch {}
+  }
+
+  function suggestTheme() {
+    const nextTopic = ideas[Math.floor(Math.random() * ideas.length)];
+    setTopic(nextTopic);
+    setStatus(`テーマを「${nextTopic}」に変更しました。必要なら生成を押してください。`);
   }
 
   useEffect(() => {
@@ -53,24 +85,33 @@ export default function SnsAdminPage() {
         }
       })
       .catch(() => {
-        if (active) setPosts([]);
+        if (active) {
+          setPosts([]);
+          setStatus("SNS投稿一覧の取得に失敗しました。");
+        }
+      })
+      .finally(() => {
+        if (active) setActiveAction("idle");
       });
+    loadDecks();
     return () => {
       active = false;
     };
   }, []);
 
   function generateSlides() {
+    setActiveAction("generating");
     const generated = [
       { heading: topic, body: "今の気持ちを責めずに、まず一文で整理します。" },
       { heading: "意図を見る", body: "何を伝えたいのか、相手に何を返してほしいのかを分けます。" },
       { heading: "圧を下げる", body: "正しさが強すぎる時は、要望と気持ちを別の文にします。" },
       { heading: "次の一手", body: "送る、待つ、保留する。行動を一つだけ選びます。" },
-      { heading: "Raven Blackwood", body: "テキスト鑑定と時間制チャットで、文面を落ち着いて整えます。" },
+      { heading: "レイヴン・ブラックウッド", body: "テキスト鑑定と時間制チャットで、文面を落ち着いて整えます。" },
     ];
     setSlides(generated);
-    setCaption(`${topic}\n\n${tone}なトーンで、送信前の迷いを短く整えるための投稿です。\n\n${goal}として、Raven Blackwoodのテキスト鑑定へ案内します。\n\n#RavenOracle #文章鑑定 #相談整理 #返信前チェック`);
+    setCaption(`${topic}\n\n${tone}なトーンで、送信前の迷いを短く整えるための投稿です。\n\n${goal}として、レイヴン・ブラックウッドのテキスト鑑定へ案内します。\n\n#レイヴンブラックウッド #文章鑑定 #相談整理 #返信前チェック`);
     setStatus("スライド案を生成しました。内容を確認してから投稿準備してください。");
+    setActiveAction("idle");
   }
 
   function scheduleLabel() {
@@ -82,43 +123,62 @@ export default function SnsAdminPage() {
   }
 
   async function saveDraft(nextStatus = "draft", allowDuplicate = false) {
+    if (activeAction !== "idle") return;
+    setActiveAction("saving");
+    setStatus(nextStatus === "scheduled" ? "予約投稿を保存しています。" : "下書きを保存しています。");
     const hasVideo = Boolean(uploadedMedia);
-    const response = await fetch("/api/sns/posts", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        tenant_id: "raven-oracle",
-        platform: "instagram",
-        post_type: hasVideo ? "reel" : "carousel",
-        title: topic,
-        theme: topic,
-        category: hasVideo ? "完成済み動画" : "文章鑑定",
-        character: "Raven Blackwood",
-        purpose: goal,
-        cta: "必要なら、Raven Blackwoodのテキスト鑑定で一緒に整理します。",
-        caption,
-        script: slides.map((slide, index) => `${index + 1}. ${slide.heading}: ${slide.body}`).join("\n"),
-        media_type: hasVideo ? "video" : "",
-        media_url: uploadedMedia?.url || "",
-        status: nextStatus,
-        scheduled_at: scheduledAt,
-        allow_duplicate: allowDuplicate,
-      }),
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      if (response.status === 409 && payload.duplicatePost) {
-        setDuplicateCandidate(payload.duplicatePost);
+    const preparedSlides = slides.length ? slides : buildSlides(topic);
+    const preparedCaption = caption.trim() || buildCaption(topic, tone, goal);
+    if (!slides.length) setSlides(preparedSlides);
+    if (!caption.trim()) setCaption(preparedCaption);
+    try {
+      const response = await fetch("/api/sns/posts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tenant_id: "raven-oracle",
+          platform: "instagram",
+          post_type: hasVideo ? "reel" : "carousel",
+          title: topic,
+          theme: topic,
+          category: hasVideo ? "完成済み動画" : "文章鑑定",
+          character: "レイヴン・ブラックウッド",
+          purpose: goal,
+          cta: "必要なら、レイヴン・ブラックウッドのテキスト鑑定で一緒に整理します。",
+          caption: preparedCaption,
+          script: preparedSlides.map((slide, index) => `${index + 1}. ${slide.heading}: ${slide.body}`).join("\n"),
+          media_type: hasVideo ? "video" : "",
+          media_url: uploadedMedia?.url || "",
+          status: nextStatus,
+          scheduled_at: scheduledAt,
+          card_deck_id: cardDeckId,
+          card_count: cardCount,
+          card_selection_mode: cardSelectionMode,
+          card_tag: cardTag,
+          card_exclude_recent_days: cardExcludeRecentDays,
+          allow_duplicate: allowDuplicate,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 409 && payload.duplicatePost) {
+          setDuplicateCandidate(payload.duplicatePost);
+        }
+        setStatus(payload.error || "保存に失敗しました。");
+        return;
       }
-      setStatus(payload.error || "保存に失敗しました。");
-      return;
+      setDuplicateCandidate(null);
+      setStatus(nextStatus === "scheduled" ? "予約投稿として保存しました。" : "下書き保存しました。");
+      await loadPosts();
+    } catch {
+      setStatus("保存に失敗しました。通信状態を確認してください。");
+    } finally {
+      setActiveAction("idle");
     }
-    setDuplicateCandidate(null);
-    setStatus(nextStatus === "scheduled" ? "予約投稿として保存しました。" : "下書き保存しました。");
-    await loadPosts();
   }
 
   async function uploadCompletedVideo() {
+    if (activeAction !== "idle") return;
     if (!videoFile) {
       setStatus("MP4ファイルを選択してください。");
       return;
@@ -134,42 +194,95 @@ export default function SnsAdminPage() {
     form.append("mood", "ready");
     form.append("license_type", "owned");
     form.append("tags", "sns,ready,mp4,no-processing");
+    setActiveAction("uploading");
     setStatus("MP4をR2へアップロードしています。");
-    const response = await fetch("/api/reel-engine/assets", { method: "POST", body: form });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      setStatus(payload.error || "MP4アップロードに失敗しました。");
-      return;
+    try {
+      const response = await fetch("/api/reel-engine/assets", { method: "POST", body: form });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setStatus(payload.error || "MP4アップロードに失敗しました。");
+        return;
+      }
+      const url = `/api/reel-engine/assets?assetId=${encodeURIComponent(payload.assetId)}`;
+      setUploadedMedia({ assetId: payload.assetId, url, fileName: videoFile.name, sizeBytes: payload.sizeBytes || videoFile.size, mimeType: payload.mimeType || videoFile.type });
+      setStatus("MP4をアップロードしました。予約保存すると、この動画を無加工で投稿予約します。");
+    } catch {
+      setStatus("MP4アップロードに失敗しました。通信状態を確認してください。");
+    } finally {
+      setActiveAction("idle");
     }
-    const url = `/api/reel-engine/assets?assetId=${encodeURIComponent(payload.assetId)}`;
-    setUploadedMedia({ assetId: payload.assetId, url, fileName: videoFile.name, sizeBytes: payload.sizeBytes || videoFile.size, mimeType: payload.mimeType || videoFile.type });
-    setStatus("MP4をアップロードしました。予約保存すると、この動画を無加工で投稿予約します。");
   }
 
-  function clearUploadedVideo() {
+  async function clearUploadedVideo() {
+    if (activeAction !== "idle") return;
+    const media = uploadedMedia;
     setVideoFile(null);
     setUploadedMedia(null);
-    setStatus("動画選択を解除しました。");
+    if (!media) {
+      setStatus("動画選択を解除しました。");
+      return;
+    }
+    setActiveAction("deleting");
+    setStatus("アップロード済みMP4を削除しています。");
+    try {
+      const response = await fetch("/api/reel-engine/assets", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ asset_id: media.assetId }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      setStatus(response.ok ? "アップロード済みMP4を削除しました。" : payload.error || "MP4削除に失敗しました。");
+    } catch {
+      setStatus("MP4削除に失敗しました。通信状態を確認してください。");
+    } finally {
+      setActiveAction("idle");
+    }
   }
 
   async function publishPost(id: string) {
-    const response = await fetch("/api/sns/publish", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ tenant_id: "raven-oracle", id }),
-    });
-    const payload = await response.json().catch(() => ({}));
-    setStatus(payload.ok ? "公開処理を記録しました。" : payload.error || "公開処理に失敗しました。");
-    await loadPosts();
+    if (activeAction !== "idle") return;
+    setActiveAction("publishing");
+    setStatus("投稿処理を実行しています。");
+    try {
+      const response = await fetch("/api/sns/publish", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tenant_id: "raven-oracle", id }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      const detail = payload.details?.error?.message ? ` Meta: ${payload.details.error.message}` : "";
+      setStatus(payload.ok ? "公開処理を記録しました。" : `${payload.error || "公開処理に失敗しました。"}${detail}`);
+      await loadPosts();
+    } catch {
+      setStatus("公開処理に失敗しました。通信状態を確認してください。");
+    } finally {
+      setActiveAction("idle");
+    }
   }
 
   async function copyCaption() {
-    await navigator.clipboard.writeText(caption);
-    setStatus("キャプションをコピーしました。");
+    if (activeAction !== "idle") return;
+    const preparedCaption = caption.trim() || buildCaption(topic, tone, goal);
+    if (!caption.trim()) setCaption(preparedCaption);
+    setActiveAction("copying");
+    try {
+      await navigator.clipboard.writeText(preparedCaption);
+      setStatus("キャプションをコピーしました。");
+    } catch {
+      setStatus("コピーできませんでした。ブラウザのクリップボード権限を確認してください。");
+    } finally {
+      setActiveAction("idle");
+    }
   }
 
   function downloadSlide(index: number) {
+    if (activeAction !== "idle") return;
     const slide = slides[index];
+    if (!slide) {
+      setStatus("先に生成を押してスライド案を作成してください。");
+      return;
+    }
+    setActiveAction("downloading");
     const canvas = document.createElement("canvas");
     canvas.width = 1080;
     canvas.height = 1920;
@@ -183,7 +296,7 @@ export default function SnsAdminPage() {
     ctx.fillRect(0, 0, 1080, 1920);
     ctx.fillStyle = "#20241f";
     ctx.font = "700 48px sans-serif";
-    ctx.fillText("Raven Blackwood", 90, 150);
+    ctx.fillText("レイヴン・ブラックウッド", 90, 150);
     ctx.font = "700 78px sans-serif";
     wrap(ctx, slide.heading, 90, 430, 900, 96);
     ctx.font = "500 48px sans-serif";
@@ -195,12 +308,17 @@ export default function SnsAdminPage() {
     link.href = canvas.toDataURL("image/png");
     link.download = `raven-oracle-${String(index + 1).padStart(2, "0")}.png`;
     link.click();
+    setStatus("PNGを書き出しました。");
+    setActiveAction("idle");
   }
 
   return (
     <main className="min-h-screen bg-[#f5f0e8] px-5 py-8 text-[#20241f]">
       <div className="mx-auto max-w-6xl">
-        <Link className="text-sm font-semibold text-[#596d51]" href="/admin/">管理ダッシュボード</Link>
+        <nav className="flex flex-wrap gap-3">
+          <Link className="text-sm font-semibold text-[#596d51]" href="/admin/">管理ダッシュボード</Link>
+          <Link className="text-sm font-semibold text-[#596d51]" href="/admin/decks/">Deck Manager</Link>
+        </nav>
         <header className="mt-5 border-b border-[#d7cabc] pb-6">
           <p className="text-sm font-semibold uppercase text-[#6c5f3d]">SNS Creator</p>
           <h1 className="mt-2 text-4xl font-semibold">SNSコンテンツ生成</h1>
@@ -222,10 +340,19 @@ export default function SnsAdminPage() {
             <label className="mt-3 grid gap-2 text-sm font-semibold">トーン<select className="admin-field" value={tone} onChange={(event) => setTone(event.target.value)}><option>静かで知的</option><option>やさしく寄り添う</option><option>短く実用的</option></select></label>
             <label className="mt-3 grid gap-2 text-sm font-semibold">予約日時<input className="admin-field" type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} /></label>
             <div className="mt-4 rounded border border-[#d7cabc] bg-white p-3">
+              <p className="text-sm font-semibold text-[#6c5f3d]">Card Library 任意連携</p>
+              <label className="mt-3 grid gap-2 text-sm font-semibold">使用デッキ<select className="admin-field" value={cardDeckId} onChange={(event) => setCardDeckId(event.target.value)}><option value="">使用しない</option>{decks.map((deck) => <option key={deck.id} value={deck.id}>{deck.name} / {deck.status} / SNS {deck.sns_use_allowed ? "可" : "不可"}</option>)}</select></label>
+              <label className="mt-3 grid gap-2 text-sm font-semibold">使用枚数<select className="admin-field" value={cardCount} onChange={(event) => setCardCount(Number(event.target.value))}><option value={0}>0枚</option><option value={1}>今日の1枚</option><option value={3}>3枚引き / 3択</option></select></label>
+              <label className="mt-3 grid gap-2 text-sm font-semibold">選出方式<select className="admin-field" value={cardSelectionMode} onChange={(event) => setCardSelectionMode(event.target.value)}><option value="random">完全ランダム</option><option value="least_used">未使用・低頻度優先</option></select></label>
+              <label className="mt-3 grid gap-2 text-sm font-semibold">投稿テーマタグ<input className="admin-field" value={cardTag} onChange={(event) => setCardTag(event.target.value)} placeholder="daily, love など" /></label>
+              <label className="mt-3 grid gap-2 text-sm font-semibold">直近使用除外日数<input className="admin-field" type="number" value={cardExcludeRecentDays} onChange={(event) => setCardExcludeRecentDays(Number(event.target.value))} /></label>
+              <p className="mt-3 text-xs leading-5 text-[#5e625c]">有効化済み、SNS利用可のデッキ・カードだけをサーバー側で選出します。AIがカードを捏造しないよう、D1上のカードIDから本文へ追加します。</p>
+            </div>
+            <div className="mt-4 rounded border border-[#d7cabc] bg-white p-3">
               <label className="grid gap-2 text-sm font-semibold">完成済みMP4<input className="admin-field" type="file" accept="video/mp4" onChange={(event) => setVideoFile(event.target.files?.[0] || null)} /></label>
               <div className="mt-3 flex flex-wrap gap-2">
-                <button className="rounded border border-[#d7cabc] px-4 py-2 text-sm font-semibold" type="button" onClick={uploadCompletedVideo}>MP4アップロード</button>
-                {uploadedMedia ? <button className="rounded border border-[#d7cabc] px-4 py-2 text-sm font-semibold" type="button" onClick={clearUploadedVideo}>解除</button> : null}
+                <button className="rounded border border-[#d7cabc] px-4 py-2 text-sm font-semibold disabled:opacity-60" type="button" onClick={uploadCompletedVideo} disabled={activeAction !== "idle"}>{activeAction === "uploading" ? "アップロード中" : "MP4アップロード"}</button>
+                {uploadedMedia ? <button className="rounded border border-[#d7cabc] px-4 py-2 text-sm font-semibold disabled:opacity-60" type="button" onClick={clearUploadedVideo} disabled={activeAction !== "idle"}>{activeAction === "deleting" ? "削除中" : "削除"}</button> : null}
               </div>
               {uploadedMedia ? <div className="mt-3 text-xs leading-5 text-[#5e625c]">
                 <p className="font-semibold text-[#20241f]">{uploadedMedia.fileName}</p>
@@ -235,32 +362,33 @@ export default function SnsAdminPage() {
               </div> : <p className="mt-3 text-xs leading-5 text-[#5e625c]">アップロード済み動画がある場合、投稿種別はReel、動画URLはR2プレビューURLとして保存します。動画への加工は行いません。</p>}
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              <button className="rounded border border-[#d7cabc] px-4 py-2 font-semibold" type="button" onClick={() => setTopic(ideas[Math.floor(Math.random() * ideas.length)])}>テーマ提案</button>
-              <button className="rounded bg-[#222820] px-4 py-2 font-semibold text-[#fff8ed]" type="button" onClick={generateSlides}>生成</button>
-              <button className="rounded bg-[#596d51] px-4 py-2 font-semibold text-[#fff8ed]" type="button" onClick={() => saveDraft("draft")}>下書き保存</button>
-              <button className="rounded bg-[#222820] px-4 py-2 font-semibold text-[#fff8ed]" type="button" onClick={() => saveDraft("scheduled")}>予約保存</button>
+              <button className="rounded border border-[#d7cabc] px-4 py-2 font-semibold disabled:opacity-60" type="button" onClick={suggestTheme} disabled={activeAction !== "idle"}>テーマ提案</button>
+              <button className="rounded bg-[#222820] px-4 py-2 font-semibold text-[#fff8ed] disabled:opacity-60" type="button" onClick={generateSlides} disabled={activeAction !== "idle"}>{activeAction === "generating" ? "生成中" : "生成"}</button>
+              <button className="rounded bg-[#596d51] px-4 py-2 font-semibold text-[#fff8ed] disabled:opacity-60" type="button" onClick={() => saveDraft("draft")} disabled={activeAction !== "idle"}>{activeAction === "saving" ? "保存中" : "下書き保存"}</button>
+              <button className="rounded bg-[#222820] px-4 py-2 font-semibold text-[#fff8ed] disabled:opacity-60" type="button" onClick={() => saveDraft("scheduled")} disabled={activeAction !== "idle"}>{activeAction === "saving" ? "保存中" : "予約保存"}</button>
             </div>
             <p className="mt-4 text-sm leading-7 text-[#5e625c]">Instagram API未設定時は公開処理を止め、失敗ログを保存します。</p>
             {duplicateCandidate ? <div className="mt-4 rounded border border-[#b98043] bg-[#fff6e8] p-3 text-sm leading-6">
               <p className="font-semibold text-[#7a451b]">重複候補があります</p>
               <p className="mt-1 text-[#5e625c]">{duplicateCandidate.title || duplicateCandidate.id}</p>
               <p className="text-[#5e625c]">類似度 {duplicateCandidate.score || 0}% / {duplicateCandidate.created_at || "作成日不明"}</p>
-              <button className="mt-3 rounded border border-[#b98043] px-3 py-2 text-xs font-semibold text-[#7a451b]" type="button" onClick={() => saveDraft("draft", true)}>確認済みとして下書き保存</button>
+              <button className="mt-3 rounded border border-[#b98043] px-3 py-2 text-xs font-semibold text-[#7a451b] disabled:opacity-60" type="button" onClick={() => saveDraft("draft", true)} disabled={activeAction !== "idle"}>確認済みとして下書き保存</button>
             </div> : null}
           </aside>
           <div className="grid gap-6">
             <section className="rounded border border-[#d7cabc] bg-[#fffaf2] p-5">
               <h2 className="text-2xl font-semibold">スライド</h2>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
+                {!slides.length ? <div className="rounded border border-dashed border-[#cbd4c4] bg-white p-5 text-sm leading-7 text-[#5e625c]">まだスライド案はありません。左側の「生成」を押すと、5枚構成のSNSスライド案とキャプションを作成します。</div> : null}
                 {slides.map((slide, index) => (
                   <article key={`${slide.heading}-${index}`} className="rounded border border-[#d7cabc] bg-white p-4">
                     <div className="aspect-[9/16] rounded border border-[#cbd4c4] bg-[#edf3e8] p-5">
-                      <p className="text-xs font-semibold uppercase text-[#596d51]">Raven Blackwood</p>
+                      <p className="text-xs font-semibold uppercase text-[#596d51]">レイヴン・ブラックウッド</p>
                       <h3 className="mt-8 text-2xl font-semibold">{slide.heading}</h3>
                       <p className="mt-5 leading-7 text-[#3f4b3d]">{slide.body}</p>
                       <p className="mt-8 text-sm text-[#596d51]">{index + 1}/{slides.length}</p>
                     </div>
-                    <button className="mt-3 rounded bg-[#222820] px-4 py-2 text-sm font-semibold text-[#fff8ed]" type="button" onClick={() => downloadSlide(index)}>PNG</button>
+                    <button className="mt-3 rounded bg-[#222820] px-4 py-2 text-sm font-semibold text-[#fff8ed] disabled:opacity-60" type="button" onClick={() => downloadSlide(index)} disabled={activeAction !== "idle"}>{activeAction === "downloading" ? "書き出し中" : "PNG"}</button>
                   </article>
                 ))}
               </div>
@@ -268,14 +396,14 @@ export default function SnsAdminPage() {
             <section className="rounded border border-[#d7cabc] bg-[#fffaf2] p-5">
               <h2 className="text-2xl font-semibold">キャプション</h2>
               <textarea className="admin-field mt-4 min-h-44 leading-7" value={caption} onChange={(event) => setCaption(event.target.value)} />
-              <button className="mt-3 rounded bg-[#222820] px-4 py-2 font-semibold text-[#fff8ed]" type="button" onClick={copyCaption}>コピー</button>
+              <button className="mt-3 rounded bg-[#222820] px-4 py-2 font-semibold text-[#fff8ed] disabled:opacity-60" type="button" onClick={copyCaption} disabled={activeAction !== "idle"}>{activeAction === "copying" ? "コピー中" : "コピー"}</button>
               <p className="mt-3 text-sm text-[#5e625c]">{status}</p>
             </section>
             <section className="grid gap-5 lg:grid-cols-2">
-              <PostList title="下書き" posts={posts.filter((post) => post.status === "draft")} onPublish={publishPost} />
-              <PostList title="予約済み" posts={posts.filter((post) => post.status === "scheduled")} onPublish={publishPost} />
-              <PostList title="投稿済み" posts={posts.filter((post) => post.status === "published")} onPublish={publishPost} />
-              <PostList title="失敗・要確認" posts={posts.filter((post) => post.status === "failed")} onPublish={publishPost} />
+              <PostList title="下書き" posts={posts.filter((post) => post.status === "draft")} onPublish={publishPost} disabled={activeAction !== "idle"} />
+              <PostList title="予約済み" posts={posts.filter((post) => post.status === "scheduled")} onPublish={publishPost} disabled={activeAction !== "idle"} />
+              <PostList title="投稿済み" posts={posts.filter((post) => post.status === "published")} onPublish={publishPost} disabled={activeAction !== "idle"} />
+              <PostList title="失敗・要確認" posts={posts.filter((post) => post.status === "failed")} onPublish={publishPost} disabled={activeAction !== "idle"} />
             </section>
           </div>
         </section>
@@ -299,6 +427,20 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, x: number, y: number,
   if (line) ctx.fillText(line, x, y);
 }
 
+function buildSlides(topic: string) {
+  return [
+    { heading: topic, body: "今の気持ちを責めずに、まず一文で整理します。" },
+    { heading: "意図を見る", body: "何を伝えたいのか、相手に何を返してほしいのかを分けます。" },
+    { heading: "圧を下げる", body: "正しさが強すぎる時は、要望と気持ちを別の文にします。" },
+    { heading: "次の一手", body: "送る、待つ、保留する。行動を一つだけ選びます。" },
+    { heading: "レイヴン・ブラックウッド", body: "テキスト鑑定と時間制チャットで、文面を落ち着いて整えます。" },
+  ];
+}
+
+function buildCaption(topic: string, tone: string, goal: string) {
+  return `${topic}\n\n${tone}なトーンで、送信前の迷いを短く整えるための投稿です。\n\n${goal}として、レイヴン・ブラックウッドのテキスト鑑定へ案内します。\n\n#レイヴンブラックウッド #文章鑑定 #相談整理 #返信前チェック`;
+}
+
 function Metric({ label, value }: { label: string; value: number }) {
   return <div className="rounded border border-[#d7cabc] bg-[#fffaf2] p-4"><p className="text-sm font-semibold text-[#6c5f3d]">{label}</p><p className="mt-2 text-3xl font-semibold">{value}</p></div>;
 }
@@ -315,7 +457,7 @@ function formatBytes(value: number) {
   return `${size.toFixed(index ? 1 : 0)} ${units[index]}`;
 }
 
-function PostList({ title, posts, onPublish }: { title: string; posts: SnsPost[]; onPublish: (id: string) => Promise<void> }) {
+function PostList({ title, posts, onPublish, disabled }: { title: string; posts: SnsPost[]; onPublish: (id: string) => Promise<void>; disabled: boolean }) {
   return (
     <section className="rounded border border-[#d7cabc] bg-[#fffaf2] p-5">
       <h2 className="text-2xl font-semibold">{title}</h2>
@@ -325,7 +467,7 @@ function PostList({ title, posts, onPublish }: { title: string; posts: SnsPost[]
             <p className="text-sm font-semibold text-[#596d51]">{post.platform} / {post.post_type} / {post.status}</p>
             <h3 className="mt-1 font-semibold leading-6">{post.title}</h3>
             <p className="mt-1 text-xs text-[#5e625c]">{post.scheduled_at || post.created_at || "日時未設定"}</p>
-            {post.status !== "published" ? <button className="mt-3 rounded bg-[#222820] px-4 py-2 text-sm font-semibold text-[#fff8ed]" type="button" onClick={() => onPublish(post.id)}>今すぐ投稿</button> : null}
+            {post.status !== "published" ? <button className="mt-3 rounded bg-[#222820] px-4 py-2 text-sm font-semibold text-[#fff8ed] disabled:opacity-60" type="button" onClick={() => onPublish(post.id)} disabled={disabled}>今すぐ投稿</button> : null}
           </article>
         ))}
         {!posts.length ? <p className="text-sm text-[#5e625c]">該当投稿はありません。</p> : null}

@@ -1,5 +1,5 @@
 {
-  "name": "raven-oracle-review-site",
+  "name": "raven-oracle",
   "version": "0.1.0",
   "private": true,
   "engines": {
@@ -9,6 +9,8 @@
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
     "build": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
+    "preflight:prod": "node scripts/preflight-production.mjs",
+    "secrets": "python -X utf8 scripts/manage_secrets.py",
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"

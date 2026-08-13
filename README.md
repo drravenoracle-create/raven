@@ -1,4 +1,4 @@
-# Raven Oracle Review Site
+# Raven Blackwood Review Site
 
 レイヴン個人サイト用のコードレビュー / 文章レビューサイトです。鑑定文、投稿文、返信文などを貼り付けて、トーン、意図、圧の強さ、次に取る行動を確認できます。
 
@@ -39,6 +39,12 @@ Copy `.env.example` to `.env.local` for local development.
 - `NEXT_PUBLIC_GA_MEASUREMENT_ID`: GA4 measurement id used by client analytics.
 
 No personal information should be sent to analytics tools from this review site.
+
+## Growth Engine
+
+Raven Oracle Growth Engine S-B extension is documented in `docs/growth-engine/`.
+
+It adds tenant-scoped schemas and APIs for analytics connectors, conversion tracking, content intelligence, internal link recommendations, refresh/CTA/trend/calendar/audience/experiment records, and cost tracking. External providers remain disabled until server-side credentials and adapters are configured.
 
 ## Workspace Auth Headers
 
@@ -109,7 +115,7 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 
 コードレビューサイトは Fortune Studio 公式サイト本体には置かず、各メンバーの個人サイト用プロジェクトで管理します。
 
-- Raven: this project, `Raven Oracle Review Site`
+- Raven: this project, `Raven Blackwood Review Site`
 - Ruby Hitomi: `ruby-hitomi` project
 
 他メンバーのレビューサイトを追加する場合も、公式サイト本体ではなく各メンバー用プロジェクトに同じ方針で追加してください。

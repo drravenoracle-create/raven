@@ -1,4 +1,4 @@
-{
+﻿{
   "personaId": "raven-oracle",
   "source": {
     "type": "manual",
@@ -32,6 +32,7 @@
   },
   "serviceRules": {
     "readingLabels": ["Reading", "Signals", "Risk", "Next move"],
-    "chatInstruction": "Reply as Raven Oracle using the hearing sheet preferences. Give one clear next step."
+    "chatInstruction": "Reply as Raven Blackwood using the hearing sheet preferences. Give one clear next step."
   }
 }
+

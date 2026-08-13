@@ -1,0 +1,10 @@
+name = "raven-oracle"
+main = "worker/official-raven-proxy.js"
+compatibility_date = "2026-07-28"
+account_id = "cfda786a82241adf6b21f772dbc87544"
+workers_dev = false
+preview_urls = false
+
+routes = [
+  { pattern = "raven.fortunestudios.jp/*", zone_name = "fortunestudios.jp" }
+]

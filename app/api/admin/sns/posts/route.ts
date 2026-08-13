@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { findSnsDuplicate, fingerprintSnsContent, type SnsDuplicateCandidate } from "@/app/lib/sns-dedupe";
+import { recordCardUsage, selectCards } from "@/app/lib/card-library";
 
 const TENANT_ID = "raven-oracle";
 const DUPLICATE_LOOKBACK_DAYS = 45;
@@ -92,11 +93,32 @@ export async function POST(request: Request) {
   }
 
   const id = crypto.randomUUID();
+  let selectedCardPayload = "";
+  let selectedCardsForUsage: { id: string; deck_id: string }[] = [];
+  const cardDeckId = clean(body.card_deck_id ?? body.cardDeckId, 120);
+  const cardCount = Number(body.card_count ?? body.cardCount ?? 0) || 0;
+  if (cardDeckId && cardCount > 0) {
+    const selection = await selectCards(env.DB, {
+      deck_id: cardDeckId,
+      count: Math.min(cardCount, 12),
+      selection_mode: clean(body.card_selection_mode ?? body.cardSelectionMode, 40) || "random",
+      tag: clean(body.card_tag ?? body.cardTag, 80),
+      exclude_recent_days: Number(body.card_exclude_recent_days ?? body.cardExcludeRecentDays ?? 0) || 0,
+    }, tenantId);
+    selectedCardsForUsage = selection.cards.map((card) => ({ id: card.id, deck_id: card.deck_id }));
+    selectedCardPayload = selection.cards.map((card, index) => {
+      const name = card.name_ja || card.name;
+      const meaning = card.sns_summary || card.upright_meaning || card.love_meaning || card.work_meaning || card.money_meaning;
+      return `${index + 1}. ${name}: ${meaning}`;
+    }).join("\n");
+  }
   const theme = clean(body.theme, 180) || "\u8fd4\u4fe1\u524d\u306e\u6587\u7ae0\u3092\u6574\u3048\u308b3\u3064\u306e\u8996\u70b9";
-  const cta = clean(body.cta, 240) || "\u5fc5\u8981\u306a\u3089\u3001Raven Blackwood\u306e\u30c6\u30ad\u30b9\u30c8\u9451\u5b9a\u3067\u4e00\u7dd2\u306b\u6574\u7406\u3057\u307e\u3059\u3002";
-  const caption = clean(body.caption, 2200) || `${theme}\n\n\u9001\u308b\u524d\u306b\u3001\u6c17\u6301\u3061\u30fb\u76ee\u7684\u30fb\u76f8\u624b\u306b\u4f1d\u3048\u305f\u3044\u3053\u3068\u3092\u5206\u3051\u3066\u898b\u76f4\u3057\u307e\u3059\u3002\n\n${cta}\n\n#RavenBlackwood #\u30ec\u30a4\u30f4\u30f3\u30d6\u30e9\u30c3\u30af\u30a6\u30c3\u30c9 #\u6587\u7ae0\u9451\u5b9a #\u76f8\u8ac7\u6574\u7406`;
+  const cta = clean(body.cta, 240) || "必要なら、レイヴン・ブラックウッドのテキスト鑑定で一緒に整理します。";
+  const captionBase = clean(body.caption, 2200) || `${theme}\n\n送る前に、気持ち・目的・相手に伝えたいことを分けて見直します。\n\n${cta}\n\n#レイヴンブラックウッド #文章鑑定 #相談整理`;
+  const caption = selectedCardPayload ? clean(`${captionBase}\n\n今日のカード\n${selectedCardPayload}`, 2200) : captionBase;
   const title = clean(body.title, 180) || theme;
-  const script = clean(body.script, 4000);
+  const scriptBase = clean(body.script, 4000);
+  const script = selectedCardPayload ? clean(`${scriptBase}\n\n[Card Library]\n${selectedCardPayload}`, 4000) : scriptBase;
   const status = clean(body.status, 40) || "draft";
   const requestedScheduledAt = clean(body.scheduled_at ?? body.scheduledAt, 80);
   const scheduledAt = status === "scheduled" && !requestedScheduledAt ? await nextSnsScheduledAt(tenantId) : requestedScheduledAt;
@@ -142,11 +164,11 @@ export async function POST(request: Request) {
       title,
       theme,
       clean(body.category, 120) || "SNS\u6295\u7a3f",
-      clean(body.character, 120) || "Raven Blackwood",
+      clean(body.character, 120) || "レイヴン・ブラックウッド",
       clean(body.purpose, 180) || "\u30c6\u30ad\u30b9\u30c8\u9451\u5b9a\u3078\u306e\u6848\u5185",
       cta,
       caption,
-      clean(body.hashtags, 500) || "#RavenBlackwood #\u30ec\u30a4\u30f4\u30f3\u30d6\u30e9\u30c3\u30af\u30a6\u30c3\u30c9 #\u6587\u7ae0\u9451\u5b9a #\u76f8\u8ac7\u6574\u7406",
+      clean(body.hashtags, 500) || "#レイヴンブラックウッド #文章鑑定 #相談整理",
       script,
       clean(body.media_type ?? body.mediaType, 40),
       clean(body.media_url ?? body.mediaUrl, 1000),
@@ -157,5 +179,14 @@ export async function POST(request: Request) {
       duplicate ? `allowed_duplicate:${duplicate.candidate.id}:${Math.round(duplicate.score * 100)}` : `fingerprint:${fingerprint}`,
     )
     .run();
+  if (selectedCardsForUsage.length) {
+    await recordCardUsage(env.DB, {
+      cards: selectedCardsForUsage,
+      contentType: "sns_draft",
+      snsPlatform: clean(body.platform, 40) || "instagram",
+      postId: id,
+      selectionMode: clean(body.card_selection_mode ?? body.cardSelectionMode, 40) || "random",
+    }, tenantId);
+  }
   return Response.json({ ok: true, id, duplicateWarning: duplicate ? { id: duplicate.candidate.id, score: Math.round(duplicate.score * 100) } : null }, { status: 201, headers: { "Cache-Control": "no-store" } });
 }

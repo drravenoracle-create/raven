@@ -58,3 +58,439 @@ a {
   border-color: #596d51;
   box-shadow: 0 0 0 3px rgba(89, 109, 81, 0.16);
 }
+
+.raven-page {
+  background: #f5f0e8;
+  color: #20241f;
+  overflow-x: hidden;
+}
+
+.raven-page p,
+.raven-page span,
+.raven-page a,
+.raven-page h1,
+.raven-page h2,
+.raven-page h3 {
+  overflow-wrap: anywhere;
+}
+
+.raven-shell {
+  display: grid;
+  gap: 1.5rem;
+  max-width: 72rem;
+  margin-inline: auto;
+  padding: 1.5rem 1.25rem;
+}
+
+.raven-card {
+  border: 1px solid #d7cabc;
+  border-radius: 4px;
+  background: #fffaf2;
+  color: #20241f;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.raven-home-hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(18, 24, 19, 0.98), rgba(18, 24, 19, 0.82) 54%, rgba(18, 24, 19, 0.62)),
+    linear-gradient(180deg, rgba(18, 24, 19, 0.18), rgba(18, 24, 19, 0.74)),
+    url("/raven-blackwood-cover.png"),
+    #151b16;
+  background-size: auto, auto, min(56vw, 760px) auto;
+  background-position: center, center, right 8% top 18%;
+  background-repeat: no-repeat;
+}
+
+.raven-hero-button {
+  display: inline-flex;
+  min-height: 3rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d8b15f;
+  border-radius: 6px;
+  background: #d8b15f;
+  padding: 0.8rem 1rem;
+  color: #151b16;
+  font-weight: 800;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+}
+
+.raven-hero-button-secondary {
+  background: transparent;
+  color: #fff8e7;
+}
+
+.raven-hero-trust > div {
+  border: 1px solid rgba(236, 217, 176, 0.28);
+  border-radius: 6px;
+  background: rgba(255, 248, 231, 0.08);
+  padding: 0.9rem;
+  color: #fff8e7;
+  backdrop-filter: blur(8px);
+}
+
+.raven-hero-trust strong {
+  display: block;
+  color: #d8b15f;
+  font-size: 1.45rem;
+  line-height: 1.1;
+}
+
+.raven-hero-trust span {
+  display: block;
+  margin-top: 0.25rem;
+  color: #e9dfcc;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.raven-home-band {
+  border-block: 1px solid #d7cabc;
+  background:
+    linear-gradient(90deg, rgba(250, 246, 237, 0.98), rgba(237, 243, 232, 0.95)),
+    #f5f0e8;
+}
+
+.raven-path-card {
+  display: block;
+  min-height: 10rem;
+  border: 1px solid #cbbfac;
+  border-radius: 8px;
+  background: #fffaf2;
+  padding: 1.15rem;
+  color: #20241f;
+  box-shadow: 0 12px 30px rgba(44, 37, 28, 0.07);
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.raven-path-card:hover {
+  transform: translateY(-2px);
+  border-color: #8d6a2f;
+  box-shadow: 0 18px 44px rgba(44, 37, 28, 0.12);
+}
+
+.raven-path-card p {
+  margin: 0;
+  color: #8d6a2f;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.raven-path-card h2 {
+  margin: 0.35rem 0 0;
+  color: #20241f;
+  font-size: 1.55rem;
+  line-height: 1.25;
+  font-weight: 800;
+}
+
+.raven-path-card span {
+  display: block;
+  margin-top: 0.75rem;
+  color: #5e625c;
+  line-height: 1.7;
+}
+
+.raven-profile-panel,
+.raven-home-card,
+.raven-home-method,
+.raven-dictionary-card,
+.raven-dictionary-section {
+  border: 1px solid #d5c4a9;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 252, 245, 0.96), rgba(250, 243, 231, 0.98)),
+    #fffaf2;
+  box-shadow: 0 12px 32px rgba(44, 37, 28, 0.08);
+}
+
+.raven-profile-panel {
+  overflow: hidden;
+}
+
+.raven-profile-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  object-position: 50% 18%;
+}
+
+.raven-home-method {
+  border-left: 5px solid #8d6a2f;
+}
+
+.raven-dictionary {
+  background:
+    linear-gradient(180deg, rgba(18, 24, 19, 0.94) 0, rgba(18, 24, 19, 0.94) 19rem, rgba(245, 240, 232, 0) 19rem),
+    radial-gradient(circle at 16% 8%, rgba(216, 177, 95, 0.18), transparent 22rem),
+    #f5f0e8;
+}
+
+.raven-dictionary-hero {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(236, 217, 176, 0.28);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(22, 29, 23, 0.96), rgba(45, 55, 36, 0.9)),
+    #161d17;
+  padding: 1.5rem;
+  box-shadow: 0 20px 50px rgba(17, 24, 18, 0.24);
+}
+
+.raven-dictionary-hero::after {
+  content: "";
+  position: absolute;
+  inset: auto 1.25rem 1.25rem auto;
+  width: 8rem;
+  aspect-ratio: 1;
+  border: 1px solid rgba(216, 177, 95, 0.34);
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, transparent 48%, rgba(216, 177, 95, 0.26) 49%, rgba(216, 177, 95, 0.26) 51%, transparent 52%),
+    linear-gradient(0deg, transparent 48%, rgba(216, 177, 95, 0.26) 49%, rgba(216, 177, 95, 0.26) 51%, transparent 52%);
+  opacity: 0.55;
+}
+
+.raven-dictionary-card {
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.raven-dictionary-card:hover {
+  transform: translateY(-2px);
+  border-color: #a98342;
+  box-shadow: 0 18px 42px rgba(44, 37, 28, 0.14);
+}
+
+.raven-dictionary-section {
+  border-left: 5px solid #8d6a2f;
+}
+
+.raven-fortune-form input,
+.raven-fortune-form select,
+.raven-fortune-form textarea {
+  width: 100%;
+  border: 1px solid #cbbfac;
+  border-radius: 4px;
+  background: #ffffff;
+  padding: 0.85rem;
+  color: #20241f;
+  line-height: 1.6;
+  outline: none;
+}
+
+.raven-fortune-form input,
+.raven-fortune-form select {
+  min-height: 3rem;
+}
+
+.raven-fortune-form textarea {
+  resize: vertical;
+}
+
+.raven-fortune-form input:focus,
+.raven-fortune-form select:focus,
+.raven-fortune-form textarea:focus {
+  border-color: #596d51;
+  box-shadow: 0 0 0 3px rgba(89, 109, 81, 0.16);
+}
+
+.raven-primary-button,
+.raven-fortune-form button[type="submit"] {
+  display: block;
+  width: 100%;
+  min-height: 3.25rem;
+  border: 2px solid #fff4cf;
+  border-radius: 4px;
+  background: #10140f;
+  color: #fffdf5;
+  font-weight: 800;
+  box-shadow: 0 0 0 1px rgba(16, 20, 15, 0.7), 0 10px 24px rgba(16, 20, 15, 0.22);
+}
+
+.raven-primary-button:hover,
+.raven-fortune-form button[type="submit"]:hover {
+  background: #273220;
+  color: #ffffff;
+}
+
+.raven-primary-button:focus-visible,
+.raven-fortune-form button[type="submit"]:focus-visible {
+  outline: 3px solid #72f2d4;
+  outline-offset: 3px;
+}
+
+@media (min-width: 640px) {
+  .raven-fortune-form > .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .raven-page .sm\:grid-cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .raven-shell {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 0.82fr);
+  }
+}
+
+@media (max-width: 639px) {
+  .raven-shell {
+    padding: 1rem;
+  }
+
+  .raven-home-hero {
+    background:
+      linear-gradient(180deg, rgba(18, 24, 19, 0.9), rgba(18, 24, 19, 0.98)),
+      url("/raven-blackwood-cover.png"),
+      #151b16;
+    background-size: auto, 92vw auto;
+    background-position: center, right -5rem top 6.5rem;
+    background-repeat: no-repeat;
+  }
+
+  .raven-home-hero nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: flex-start;
+    gap: 0.55rem;
+    font-size: 0.78rem;
+  }
+
+  .raven-home-hero nav > span {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin-right: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .raven-home-hero nav > a {
+    display: block;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .raven-home-hero > div,
+  .raven-home-hero > div > div,
+  .raven-home-hero .max-w-3xl {
+    min-width: 0;
+    width: 100%;
+    max-width: calc(100vw - 2.5rem);
+  }
+
+  .raven-hero-button {
+    width: 100%;
+  }
+
+  .raven-hero-trust {
+    grid-template-columns: 1fr;
+  }
+
+  .raven-page h1 {
+    max-width: 100%;
+    font-size: 2rem;
+    line-height: 1.18;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+  }
+
+  .raven-page p,
+  .raven-page span,
+  .raven-page a,
+  .raven-page h2,
+  .raven-page h3,
+  .raven-page label,
+  .raven-page button {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+  }
+
+  .raven-text-shell {
+    width: calc(100vw - 3rem) !important;
+    max-width: calc(100vw - 3rem) !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  .raven-content-shell {
+    width: calc(100vw - 3rem) !important;
+    max-width: calc(100vw - 3rem) !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  .raven-text-shell .raven-card,
+  .raven-text-shell form,
+  .raven-text-shell aside,
+  .raven-content-shell .raven-card,
+  .raven-content-shell article,
+  .raven-content-shell header,
+  .raven-content-shell aside,
+  .raven-content-shell section,
+  .raven-content-shell div,
+  .raven-content-shell ul,
+  .raven-content-shell li {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .raven-content-shell {
+    overflow-x: hidden;
+  }
+
+  .raven-content-shell .grid,
+  .raven-content-shell .flex {
+    min-width: 0;
+  }
+
+  .raven-content-shell a {
+    white-space: normal;
+  }
+
+  .raven-home-hero p,
+  .raven-path-card span,
+  .raven-home-card p,
+  .raven-home-method p {
+    display: block;
+    width: calc(100vw - 4rem) !important;
+    max-width: calc(100vw - 4rem) !important;
+    white-space: normal !important;
+    word-break: break-all;
+  }
+
+  .raven-path-card {
+    min-height: auto;
+  }
+
+  .raven-profile-panel {
+    margin-top: 0.5rem;
+  }
+
+  .raven-dictionary-hero {
+    padding: 1.1rem;
+  }
+
+  .raven-dictionary-hero::after {
+    width: 5.5rem;
+    opacity: 0.35;
+  }
+
+  .raven-fortune-form > .grid,
+  .raven-page .sm\:grid-cols-3 {
+    grid-template-columns: 1fr;
+  }
+}

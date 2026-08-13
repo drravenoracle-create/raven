@@ -6,6 +6,7 @@ import {
   adminSessionMaxAge,
   createSessionCookie,
   googleRedirectUri,
+  publicOrigin,
 } from "@/app/lib/google-admin-auth";
 
 type TokenResponse = {
@@ -25,6 +26,7 @@ export async function GET(request: Request) {
   if (!clientId || !clientSecret) return new Response("Google OAuth is not configured.", { status: 503 });
 
   const url = new URL(request.url);
+  const origin = publicOrigin(request);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const storedState = request.headers.get("cookie")?.match(new RegExp(`${GOOGLE_STATE_COOKIE}=([^;]+)`))?.[1];
@@ -41,7 +43,7 @@ export async function GET(request: Request) {
       client_secret: clientSecret,
       code,
       grant_type: "authorization_code",
-      redirect_uri: googleRedirectUri(url.origin),
+      redirect_uri: googleRedirectUri(origin),
     }),
   });
   const token = (await tokenResponse.json()) as TokenResponse;
@@ -60,7 +62,7 @@ export async function GET(request: Request) {
     return new Response("This Google account is not allowed to access Raven admin.", { status: 403 });
   }
 
-  const response = NextResponse.redirect(new URL(returnTo, url.origin));
+  const response = NextResponse.redirect(new URL(returnTo, origin));
   response.cookies.delete(GOOGLE_STATE_COOKIE);
   response.cookies.set(ADMIN_SESSION_COOKIE, await createSessionCookie(user.email), {
     httpOnly: true,
