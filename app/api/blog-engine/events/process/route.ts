@@ -91,6 +91,16 @@ function jstLocalToUtcIso(date: string, time: string) {
   return new Date(`${date}T${time}:00+09:00`).toISOString();
 }
 
+function nextSnsScheduledAt() {
+  const { date, time } = jstParts();
+  if (time <= "07:00") return jstLocalToUtcIso(date, time);
+  if (time < "13:00") return jstLocalToUtcIso(date, "13:00");
+  if (time <= "17:00") return jstLocalToUtcIso(date, time);
+  const next = new Date(`${date}T01:00:00+09:00`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return next.toISOString();
+}
+
 async function insertSocialDerivatives(articleId: string, draft: ReturnType<typeof buildBlogDraft>) {
   let created = 0;
   for (const social of createSocialDerivatives(articleId, draft)) {
@@ -104,6 +114,34 @@ async function insertSocialDerivatives(articleId: string, draft: ReturnType<type
       .bind(crypto.randomUUID(), BLOG_ENGINE_TENANT_ID, articleId, social.platform, social.format, social.angle, social.content, draft.keyMessage, social.trackingId)
       .run();
     created += 1;
+    if (social.platform === "instagram" && social.format === "carousel") {
+      const existingPost = await env.DB.prepare("SELECT id FROM sns_posts WHERE tenant_id = ? AND duplicate_warning = ? LIMIT 1")
+        .bind(BLOG_ENGINE_TENANT_ID, social.trackingId)
+        .first<{ id: string }>();
+      if (!existingPost) {
+        await env.DB.prepare(
+          `INSERT INTO sns_posts
+            (id, tenant_id, platform, post_type, title, theme, category, character, purpose, cta, caption, hashtags, script, media_type, media_url, thumbnail_url, status, scheduled_at, duplicate_warning, ai_generated)
+            VALUES (?, ?, 'instagram', 'image', ?, ?, ?, 'レイヴン・ブラックウッド', 'ブログ記事からSNS導線を作る', ?, ?, ?, ?, 'image', ?, ?, 'scheduled', ?, ?, 1)`,
+        )
+          .bind(
+            crypto.randomUUID(),
+            BLOG_ENGINE_TENANT_ID,
+            `${draft.title} / Instagram`.slice(0, 180),
+            draft.title,
+            draft.category,
+            draft.keyMessage,
+            social.content,
+            "#レイヴンブラックウッド #占い #相談整理 #ブログ更新",
+            social.content,
+            "https://raven.fortunestudios.jp/raven-blackwood-cover.png",
+            "https://raven.fortunestudios.jp/raven-blackwood-cover.png",
+            nextSnsScheduledAt(),
+            social.trackingId,
+          )
+          .run();
+      }
+    }
   }
   return created;
 }

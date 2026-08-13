@@ -16,6 +16,36 @@ function postTypeFor(format: string) {
   return "carousel";
 }
 
+function mediaFor(format: string) {
+  if (format === "reel_script") return { mediaType: "", mediaUrl: "", postType: "draft" };
+  return {
+    mediaType: "image",
+    mediaUrl: "https://raven.fortunestudios.jp/raven-blackwood-cover.png",
+    postType: "scheduled",
+  };
+}
+
+function nextSnsScheduledAt() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const get = (type: string) => parts.find((part) => part.type === type)?.value || "";
+  const date = `${get("year")}-${get("month")}-${get("day")}`;
+  const time = `${get("hour")}:${get("minute")}`;
+  if (time <= "07:00") return new Date(`${date}T${time}:00+09:00`).toISOString();
+  if (time < "13:00") return new Date(`${date}T13:00:00+09:00`).toISOString();
+  if (time <= "17:00") return new Date(`${date}T${time}:00+09:00`).toISOString();
+  const next = new Date(`${date}T01:00:00+09:00`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return next.toISOString();
+}
+
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return Response.json({ error: "Invalid JSON body." }, { status: 400 });
@@ -51,6 +81,10 @@ export async function POST(request: Request) {
       socialCreated += 1;
     }
 
+    if (social.platform !== "instagram") {
+      continue;
+    }
+
     const existingPost = await env.DB.prepare("SELECT id FROM sns_posts WHERE tenant_id = ? AND duplicate_warning = ? LIMIT 1")
       .bind(BLOG_ENGINE_TENANT_ID, social.trackingId)
       .first<{ id: string }>();
@@ -59,10 +93,11 @@ export async function POST(request: Request) {
       continue;
     }
 
+    const media = mediaFor(social.format);
     await env.DB.prepare(
       `INSERT INTO sns_posts
-        (id, tenant_id, platform, post_type, title, theme, category, character, purpose, cta, caption, hashtags, script, status, duplicate_warning, ai_generated)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, tenant_id, platform, post_type, title, theme, category, character, purpose, cta, caption, hashtags, script, media_type, media_url, thumbnail_url, status, scheduled_at, duplicate_warning, ai_generated)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
         crypto.randomUUID(),
@@ -72,13 +107,17 @@ export async function POST(request: Request) {
         `${article.title} / ${social.platform} ${social.format}`.slice(0, 180),
         article.title,
         article.category,
-        "Raven Blackwood",
+        "レイヴン・ブラックウッド",
         "ブログ記事からSNS導線を作る",
         draft.keyMessage,
         social.content,
-        "#RavenBlackwood #レイヴンブラックウッド #占い #相談整理",
+        "#レイヴンブラックウッド #占い #相談整理 #ブログ更新",
         social.content,
-        "draft",
+        media.mediaType,
+        media.mediaUrl,
+        media.mediaUrl,
+        media.postType,
+        media.postType === "scheduled" ? nextSnsScheduledAt() : "",
         social.trackingId,
         1,
       )

@@ -17,6 +17,34 @@ async function logFailure(input: { tenantId: string; id: string; platform: strin
     .run();
 }
 
+async function logRetryableAuthFailure(input: { tenantId: string; id: string; platform: string; code: number; message: string; body?: unknown }) {
+  await env.DB.prepare(
+    "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'auth_error', ?, ?, ?)",
+  )
+    .bind(crypto.randomUUID(), input.tenantId, input.id, input.platform, input.code, input.body ? JSON.stringify(input.body) : null, input.message)
+    .run();
+  await env.DB.prepare("UPDATE sns_posts SET status = 'scheduled', updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
+    .bind(input.tenantId, input.id)
+    .run();
+}
+
+function isInstagramAuthError(body: unknown) {
+  const error = (body as { error?: { code?: number; type?: string; error_subcode?: number } })?.error;
+  return error?.code === 190 || error?.type === "OAuthException";
+}
+
+function parseMediaUrls(post: { media_url?: string; thumbnail_url?: string }) {
+  const raw = String(post.media_url || post.thumbnail_url || "").trim();
+  if (!raw) return [];
+  if (raw.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 10);
+    } catch {}
+  }
+  return raw.split(/[\n,]/).map((item) => item.trim()).filter(Boolean).slice(0, 10);
+}
+
 async function waitForInstagramContainer(containerId: string) {
   for (let attempt = 0; attempt < 24; attempt += 1) {
     const response = await fetch(`https://graph.facebook.com/v26.0/${containerId}?fields=status_code&access_token=${env.INSTAGRAM_ACCESS_TOKEN}`);
@@ -49,24 +77,60 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: "Instagram API is not configured." }, { status: 400 });
   }
 
-  const mediaUrl = String(fullPost.media_url || fullPost.thumbnail_url || "");
+  const mediaUrls = parseMediaUrls(fullPost);
   const caption = String(fullPost.caption || fullPost.title || "").slice(0, 2200);
-  if (!mediaUrl) {
+  if (!mediaUrls.length) {
     await logFailure({ tenantId, id, platform, code: 400, message: "A public media_url or thumbnail_url is required for Instagram publishing." });
     return Response.json({ ok: false, error: "A public media_url or thumbnail_url is required for Instagram publishing." }, { status: 400 });
   }
 
   const isReel = fullPost.post_type === "reel" || fullPost.media_type === "video";
+  if (fullPost.post_type === "carousel" && mediaUrls.length >= 2 && !isReel) {
+    const childIds: string[] = [];
+    for (const mediaUrl of mediaUrls) {
+      const childResponse = await fetch(`https://graph.facebook.com/v26.0/${env.INSTAGRAM_ACCOUNT_ID}/media`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ image_url: mediaUrl, is_carousel_item: "true", access_token: env.INSTAGRAM_ACCESS_TOKEN }),
+      });
+      const childBody = (await childResponse.json().catch(() => ({}))) as { id?: string; error?: unknown };
+      if (!childResponse.ok || !childBody.id) {
+        if (isInstagramAuthError(childBody)) {
+          await logRetryableAuthFailure({ tenantId, id, platform, code: childResponse.status, message: "Instagram access token expired.", body: childBody });
+          return Response.json({ ok: false, error: "Instagram access token expired. Please update INSTAGRAM_ACCESS_TOKEN.", details: childBody }, { status: 401 });
+        }
+        await logFailure({ tenantId, id, platform, code: childResponse.status, message: "Instagram carousel child creation failed", body: childBody });
+        return Response.json({ ok: false, error: "Instagram carousel child creation failed", details: childBody }, { status: 502 });
+      }
+      childIds.push(childBody.id);
+    }
+    const carouselResponse = await fetch(`https://graph.facebook.com/v26.0/${env.INSTAGRAM_ACCOUNT_ID}/media`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ media_type: "CAROUSEL", children: childIds.join(","), caption, access_token: env.INSTAGRAM_ACCESS_TOKEN }),
+    });
+    const carouselBody = (await carouselResponse.json().catch(() => ({}))) as { id?: string; error?: unknown };
+    if (!carouselResponse.ok || !carouselBody.id) {
+      if (isInstagramAuthError(carouselBody)) {
+        await logRetryableAuthFailure({ tenantId, id, platform, code: carouselResponse.status, message: "Instagram access token expired.", body: carouselBody });
+        return Response.json({ ok: false, error: "Instagram access token expired. Please update INSTAGRAM_ACCESS_TOKEN.", details: carouselBody }, { status: 401 });
+      }
+      await logFailure({ tenantId, id, platform, code: carouselResponse.status, message: "Instagram carousel container creation failed", body: carouselBody });
+      return Response.json({ ok: false, error: "Instagram carousel container creation failed", details: carouselBody }, { status: 502 });
+    }
+    return publishInstagramContainer({ tenantId, id, platform, creationId: carouselBody.id, isReel: false, mode: "instagram_carousel" });
+  }
+
   const params = new URLSearchParams({
     caption,
     access_token: env.INSTAGRAM_ACCESS_TOKEN,
   });
   if (isReel) {
     params.set("media_type", "REELS");
-    params.set("video_url", mediaUrl);
+    params.set("video_url", mediaUrls[0]);
     params.set("share_to_feed", "true");
   } else {
-    params.set("image_url", mediaUrl);
+    params.set("image_url", mediaUrls[0]);
   }
 
   const createResponse = await fetch(`https://graph.facebook.com/v26.0/${env.INSTAGRAM_ACCOUNT_ID}/media`, {
@@ -76,6 +140,10 @@ export async function POST(request: Request) {
   });
   const createBody = (await createResponse.json().catch(() => ({}))) as { id?: string; error?: unknown };
   if (!createResponse.ok || !createBody.id) {
+    if (isInstagramAuthError(createBody)) {
+      await logRetryableAuthFailure({ tenantId, id, platform, code: createResponse.status, message: "Instagram access token expired.", body: createBody });
+      return Response.json({ ok: false, error: "Instagram access token expired. Please update INSTAGRAM_ACCESS_TOKEN.", details: createBody }, { status: 401 });
+    }
     await logFailure({ tenantId, id, platform, code: createResponse.status, message: "Instagram media container creation failed", body: createBody });
     return Response.json({ ok: false, error: "Instagram media container creation failed", details: createBody }, { status: 502 });
   }
@@ -98,6 +166,10 @@ export async function POST(request: Request) {
   });
   const publishBody = (await publishResponse.json().catch(() => ({}))) as { id?: string; error?: unknown };
   if (!publishResponse.ok || !publishBody.id) {
+    if (isInstagramAuthError(publishBody)) {
+      await logRetryableAuthFailure({ tenantId, id, platform, code: publishResponse.status, message: "Instagram access token expired.", body: publishBody });
+      return Response.json({ ok: false, error: "Instagram access token expired. Please update INSTAGRAM_ACCESS_TOKEN.", details: publishBody }, { status: 401 });
+    }
     await logFailure({ tenantId, id, platform, code: publishResponse.status, message: "Instagram media publish failed", body: publishBody });
     return Response.json({ ok: false, error: "Instagram media publish failed", details: publishBody }, { status: 502 });
   }
@@ -113,6 +185,38 @@ export async function POST(request: Request) {
     .run();
 
   return Response.json({ ok: true, externalId, isReel }, { headers: { "Cache-Control": "no-store" } });
+}
+
+async function publishInstagramContainer(input: { tenantId: string; id: string; platform: string; creationId: string; isReel: boolean; mode: string }) {
+  const publishResponse = await fetch(`https://graph.facebook.com/v26.0/${env.INSTAGRAM_ACCOUNT_ID}/media_publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      creation_id: input.creationId,
+      access_token: env.INSTAGRAM_ACCESS_TOKEN,
+    }),
+  });
+  const publishBody = (await publishResponse.json().catch(() => ({}))) as { id?: string; error?: unknown };
+  if (!publishResponse.ok || !publishBody.id) {
+    if (isInstagramAuthError(publishBody)) {
+      await logRetryableAuthFailure({ tenantId: input.tenantId, id: input.id, platform: input.platform, code: publishResponse.status, message: "Instagram access token expired.", body: publishBody });
+      return Response.json({ ok: false, error: "Instagram access token expired. Please update INSTAGRAM_ACCESS_TOKEN.", details: publishBody }, { status: 401 });
+    }
+    await logFailure({ tenantId: input.tenantId, id: input.id, platform: input.platform, code: publishResponse.status, message: "Instagram media publish failed", body: publishBody });
+    return Response.json({ ok: false, error: "Instagram media publish failed", details: publishBody }, { status: 502 });
+  }
+
+  const externalId = publishBody.id;
+  await env.DB.prepare(
+    "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body) VALUES (?, ?, ?, ?, 'publish', 'success', ?, ?)",
+  )
+    .bind(crypto.randomUUID(), input.tenantId, input.id, input.platform, 200, JSON.stringify({ externalId, isReel: input.isReel, mode: input.mode }))
+    .run();
+  await env.DB.prepare("UPDATE sns_posts SET status = 'published', published_at = CURRENT_TIMESTAMP, external_post_id = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
+    .bind(externalId, input.tenantId, input.id)
+    .run();
+
+  return Response.json({ ok: true, externalId, isReel: input.isReel, mode: input.mode }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function DELETE(request: Request) {

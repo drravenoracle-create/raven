@@ -244,6 +244,22 @@ function parseMediaUrls(post: Record<string, unknown>) {
     .slice(0, 10);
 }
 
+function isInstagramAuthError(body: unknown) {
+  const error = (body as { error?: { code?: number; type?: string } })?.error;
+  return error?.code === 190 || error?.type === "OAuthException";
+}
+
+async function logRetryableInstagramAuthFailure(env: Env, input: { tenantId: string; id: string; platform: string; code: number; body?: unknown }) {
+  await env.DB.prepare(
+    "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'auth_error', ?, ?, ?)",
+  )
+    .bind(crypto.randomUUID(), input.tenantId, input.id, input.platform, input.code, input.body ? JSON.stringify(input.body) : null, "Instagram access token expired")
+    .run();
+  await env.DB.prepare("UPDATE sns_posts SET status = 'scheduled', updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
+    .bind(input.tenantId, input.id)
+    .run();
+}
+
 async function publishInstagramContainer(env: Env, post: Record<string, unknown>, creationId: string, providerMode: string) {
   const tenantId = String(post.tenant_id || TENANT_ID);
   const id = String(post.id || "");
@@ -258,6 +274,10 @@ async function publishInstagramContainer(env: Env, post: Record<string, unknown>
   });
   const publishBody = (await publishResponse.json().catch(() => ({}))) as { id?: string; error?: unknown };
   if (!publishResponse.ok || !publishBody.id) {
+    if (isInstagramAuthError(publishBody)) {
+      await logRetryableInstagramAuthFailure(env, { tenantId, id, platform, code: publishResponse.status, body: publishBody });
+      return { ok: false, error: "Instagram access token expired. Please update INSTAGRAM_ACCESS_TOKEN.", details: publishBody };
+    }
     await env.DB.prepare(
       "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?, ?)",
     )
@@ -321,7 +341,8 @@ async function publishSnsPost(env: Env, post: Record<string, unknown>) {
     return { ok: false, error: "Instagram投稿には公開アクセス可能な画像URLが必要です" };
   }
 
-  if (postType === "carousel" && mediaUrls.length >= 2) {
+  const isReel = postType === "reel" || String(post.media_type || "") === "video";
+  if (postType === "carousel" && mediaUrls.length >= 2 && !isReel) {
     const childIds: string[] = [];
     for (const mediaUrl of mediaUrls) {
       const childResponse = await fetch(`https://graph.facebook.com/v26.0/${env.INSTAGRAM_ACCOUNT_ID}/media`, {
@@ -331,6 +352,10 @@ async function publishSnsPost(env: Env, post: Record<string, unknown>) {
       });
       const childBody = (await childResponse.json().catch(() => ({}))) as { id?: string; error?: unknown };
       if (!childResponse.ok || !childBody.id) {
+        if (isInstagramAuthError(childBody)) {
+          await logRetryableInstagramAuthFailure(env, { tenantId, id, platform, code: childResponse.status, body: childBody });
+          return { ok: false, error: "Instagram access token expired. Please update INSTAGRAM_ACCESS_TOKEN.", details: childBody };
+        }
         await env.DB.prepare(
           "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?, ?)",
         )
@@ -350,6 +375,10 @@ async function publishSnsPost(env: Env, post: Record<string, unknown>) {
     });
     const carouselBody = (await carouselResponse.json().catch(() => ({}))) as { id?: string; error?: unknown };
     if (!carouselResponse.ok || !carouselBody.id) {
+      if (isInstagramAuthError(carouselBody)) {
+        await logRetryableInstagramAuthFailure(env, { tenantId, id, platform, code: carouselResponse.status, body: carouselBody });
+        return { ok: false, error: "Instagram access token expired. Please update INSTAGRAM_ACCESS_TOKEN.", details: carouselBody };
+      }
       await env.DB.prepare(
         "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?, ?)",
       )
@@ -366,10 +395,16 @@ async function publishSnsPost(env: Env, post: Record<string, unknown>) {
   const createResponse = await fetch(`https://graph.facebook.com/v26.0/${env.INSTAGRAM_ACCOUNT_ID}/media`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ image_url: mediaUrls[0], caption, access_token: env.INSTAGRAM_ACCESS_TOKEN }),
+    body: new URLSearchParams(isReel
+      ? { media_type: "REELS", video_url: mediaUrls[0], caption, share_to_feed: "true", access_token: env.INSTAGRAM_ACCESS_TOKEN }
+      : { image_url: mediaUrls[0], caption, access_token: env.INSTAGRAM_ACCESS_TOKEN }),
   });
   const createBody = (await createResponse.json().catch(() => ({}))) as { id?: string; error?: unknown };
   if (!createResponse.ok || !createBody.id) {
+    if (isInstagramAuthError(createBody)) {
+      await logRetryableInstagramAuthFailure(env, { tenantId, id, platform, code: createResponse.status, body: createBody });
+      return { ok: false, error: "Instagram access token expired. Please update INSTAGRAM_ACCESS_TOKEN.", details: createBody };
+    }
     await env.DB.prepare(
       "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?, ?)",
     )

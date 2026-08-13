@@ -80,6 +80,27 @@ function clean(value: unknown, maxLength: number) {
   return String(value ?? "").trim().slice(0, maxLength);
 }
 
+function nextSnsScheduledAt() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const get = (type: string) => parts.find((part) => part.type === type)?.value || "";
+  const date = `${get("year")}-${get("month")}-${get("day")}`;
+  const time = `${get("hour")}:${get("minute")}`;
+  if (time <= "07:00") return new Date(`${date}T${time}:00+09:00`).toISOString();
+  if (time < "13:00") return new Date(`${date}T13:00:00+09:00`).toISOString();
+  if (time <= "17:00") return new Date(`${date}T${time}:00+09:00`).toISOString();
+  const next = new Date(`${date}T01:00:00+09:00`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return next.toISOString();
+}
+
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return Response.json({ error: "Invalid JSON body." }, { status: 400 });
@@ -159,14 +180,44 @@ export async function POST(request: Request) {
   await env.DB.prepare("INSERT INTO blog_engine_events (event_id, event_type, tenant_id, article_id, payload_json) VALUES (?, ?, ?, ?, ?)")
     .bind(event.event_id, event.event_type, tenantId, id, JSON.stringify(event.payload))
     .run();
+  let snsQueued = 0;
   for (const social of createSocialDerivatives(id, draft)) {
     await env.DB.prepare(
       "INSERT INTO blog_engine_social_contents (id, tenant_id, source_article_id, platform, format, angle, content, cta, tracking_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
       .bind(crypto.randomUUID(), tenantId, id, social.platform, social.format, social.angle, social.content, draft.keyMessage, social.trackingId)
       .run();
+    if (social.platform === "instagram" && social.format === "carousel") {
+      const existingPost = await env.DB.prepare("SELECT id FROM sns_posts WHERE tenant_id = ? AND duplicate_warning = ? LIMIT 1")
+        .bind(tenantId, social.trackingId)
+        .first<{ id: string }>();
+      if (!existingPost) {
+        await env.DB.prepare(
+          `INSERT INTO sns_posts
+            (id, tenant_id, platform, post_type, title, theme, category, character, purpose, cta, caption, hashtags, script, media_type, media_url, thumbnail_url, status, scheduled_at, duplicate_warning, ai_generated)
+            VALUES (?, ?, 'instagram', 'image', ?, ?, ?, 'レイヴン・ブラックウッド', 'ブログ記事からSNS導線を作る', ?, ?, ?, ?, 'image', ?, ?, 'scheduled', ?, ?, 1)`,
+        )
+          .bind(
+            crypto.randomUUID(),
+            tenantId,
+            `${draft.title} / Instagram`.slice(0, 180),
+            draft.title,
+            draft.category,
+            draft.keyMessage,
+            social.content,
+            "#レイヴンブラックウッド #占い #相談整理 #ブログ更新",
+            social.content,
+            "https://raven.fortunestudios.jp/raven-blackwood-cover.png",
+            "https://raven.fortunestudios.jp/raven-blackwood-cover.png",
+            nextSnsScheduledAt(),
+            social.trackingId,
+          )
+          .run();
+        snsQueued += 1;
+      }
+    }
   }
-  return Response.json({ ok: true, id, status, provider: aiResult.provider, draft }, { status: 201, headers: { "Cache-Control": "no-store" } });
+  return Response.json({ ok: true, id, status, provider: aiResult.provider, snsQueued, draft }, { status: 201, headers: { "Cache-Control": "no-store" } });
 }
 
 
