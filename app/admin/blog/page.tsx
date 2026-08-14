@@ -25,6 +25,19 @@ type ArticleForm = Pick<EngineArticle, "id" | "slug" | "title" | "description" |
 
 const categories = ["今日・今週・今月の運勢", "占術解説", "仕事運・金運", "恋愛・人間関係", "意思決定・人生相談", "東洋占術／戦略占術", "レイヴン・ブラックウッド世界観・ギルドの日常", "初心者向け占い解説", "鑑定サービス紹介"];
 const statusLabels: Record<string, string> = { draft: "下書き", scheduled: "予約済み", approved: "承認済み", published: "公開済み", quality_failed: "品質停止" };
+type TopicSuggestion = { title: string; category: string };
+const topicSuggestions: TopicSuggestion[] = [
+  { title: "迷いを一つの問いに絞ると、占いの答えはどう変わるのか", category: "意思決定・人生相談" },
+  { title: "奇門遁甲で見る、動くべき時と待つべき時の違い", category: "東洋占術／戦略占術" },
+  { title: "六壬神課が人間関係の距離感を読む時に見るもの", category: "占術解説" },
+  { title: "太乙神数で考える、大きな流れと個人の選択", category: "占術解説" },
+  { title: "易経の変爻は、なぜ状況の変化を読む鍵になるのか", category: "占術解説" },
+  { title: "恋愛相談で相手の気持ちだけを追いすぎないために", category: "恋愛・人間関係" },
+  { title: "仕事運を見る前に整理したい、選択肢と責任の分け方", category: "仕事運・金運" },
+  { title: "初めて鑑定を受ける人が、質問文で失敗しないための準備", category: "初心者向け占い解説" },
+  { title: "レイヴン・ブラックウッドの鑑定で大切にしている現実的な一手", category: "鑑定サービス紹介" },
+  { title: "ギルドの日常から見る、占い師が言葉を選ぶ理由", category: "レイヴン・ブラックウッド世界観・ギルドの日常" },
+];
 const defaultGenerationPrompt = [
   "You are Fortune Studio Blog Engine for Raven Blackwood.",
   "Write a production-ready Japanese blog article. Do not output markdown fences. Return JSON only.",
@@ -55,10 +68,15 @@ function toForm(article: EngineArticle): ArticleForm {
   };
 }
 
+function nextTopicSuggestion(currentTitle: string): TopicSuggestion {
+  const index = topicSuggestions.findIndex((item) => item.title === currentTitle);
+  return topicSuggestions[(index + 1 + topicSuggestions.length) % topicSuggestions.length];
+}
+
 export default function BlogAdminPage() {
   const [statusMessage, setStatusMessage] = useState("待機中です。");
-  const [engineTopic, setEngineTopic] = useState("迷った時に未来を決めつけず、選択肢を整える方法");
-  const [engineCategory, setEngineCategory] = useState("意思決定・人生相談");
+  const [engineTopic, setEngineTopic] = useState(topicSuggestions[0].title);
+  const [engineCategory, setEngineCategory] = useState(topicSuggestions[0].category);
   const [generationPrompt, setGenerationPrompt] = useState(defaultGenerationPrompt);
   const [engineArticles, setEngineArticles] = useState<EngineArticle[]>([]);
   const [recommendations, setRecommendations] = useState<EngineRecommendation[]>([]);
@@ -118,6 +136,13 @@ export default function BlogAdminPage() {
     void loadEngineDashboard();
   }, []);
 
+  function refreshTopicSuggestion() {
+    const suggestion = nextTopicSuggestion(engineTopic);
+    setEngineTopic(suggestion.title);
+    setEngineCategory(suggestion.category);
+    setStatusMessage(`タイトル案を更新しました: ${suggestion.category}`);
+  }
+
   async function generateEngineArticle() {
     if (isGenerating) return;
     setIsGenerating(true);
@@ -142,6 +167,11 @@ export default function BlogAdminPage() {
       setStatusMessage(response.ok ? `下書きを作成しました: ${payload.id}` : payload.error || "記事生成に失敗しました。");
       await loadEngineDashboard();
       setFilter("draft");
+      if (response.ok) {
+        const suggestion = nextTopicSuggestion(engineTopic);
+        setEngineTopic(suggestion.title);
+        setEngineCategory(suggestion.category);
+      }
     } catch {
       setStatusMessage("記事生成に失敗しました。通信状態を確認してください。");
     } finally {
@@ -267,6 +297,10 @@ export default function BlogAdminPage() {
                 <input className="admin-field" value={engineTopic} onChange={(event) => setEngineTopic(event.target.value)} aria-label="記事テーマ" placeholder="記事テーマ" />
                 <select className="admin-field" value={engineCategory} onChange={(event) => setEngineCategory(event.target.value)}>{categories.map((category) => <option key={category}>{category}</option>)}</select>
                 <button className="rounded bg-[#222820] px-5 py-3 font-semibold text-[#fff8ed] disabled:opacity-60" type="button" onClick={generateEngineArticle} disabled={isGenerating}>{isGenerating ? "生成中" : "下書きを生成"}</button>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded border border-[#d7cabc] bg-white p-3">
+                <p className="text-sm font-semibold text-[#596d51]">タイトル案とカテゴリは、生成前に差し替えできます。</p>
+                <button className="rounded border border-[#596d51] px-4 py-2 text-sm font-semibold text-[#596d51] disabled:opacity-60" type="button" onClick={refreshTopicSuggestion} disabled={isGenerating}>新しい案に更新</button>
               </div>
               <details className="mt-4 rounded border border-[#d7cabc] bg-white p-4">
                 <summary className="cursor-pointer text-sm font-semibold text-[#596d51]">生成プロンプトを確認・編集</summary>
