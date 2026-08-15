@@ -91,6 +91,11 @@ function jstLocalToUtcIso(date: string, time: string) {
   return new Date(`${date}T${time}:00+09:00`).toISOString();
 }
 
+function timeToMinutes(time: string) {
+  const [hour, minute] = time.split(":").map((part) => Number(part));
+  return hour * 60 + minute;
+}
+
 function nextSnsScheduledAt() {
   const { date, time } = jstParts();
   if (time <= "07:00") return jstLocalToUtcIso(date, time);
@@ -154,74 +159,98 @@ async function createDueDailyDraft(settingsRow: { schedule_json?: string | null 
   } catch {
     schedule = {};
   }
-  const series = (schedule.daily_series || []).find((item: any) => item?.enabled && item?.id === "today-fortune");
-  if (!series) return 0;
-  const draftTime = series.draft_time || schedule.draft_time || "07:00";
-  const publishTime = series.publish_time || schedule.publish_time || "07:00";
-  if (time < draftTime) return 0;
+  const enabledSeries = (schedule.daily_series || []).filter((item: any) => item?.enabled);
+  let created = 0;
 
-  const idempotencyKey = `daily:${BLOG_ENGINE_TENANT_ID}:${series.id}:${date}`;
-  const existing = await env.DB.prepare("SELECT id FROM blog_engine_articles WHERE tenant_id = ? AND idempotency_key = ? LIMIT 1")
-    .bind(BLOG_ENGINE_TENANT_ID, idempotencyKey)
-    .first<{ id: string }>();
-  if (existing) return 0;
+  for (const series of enabledSeries) {
+    const draftTime = series.draft_time || schedule.draft_time || "07:00";
+    const publishTime = series.publish_time || schedule.publish_time || draftTime;
+    const currentMinutes = timeToMinutes(time);
+    const draftMinutes = timeToMinutes(draftTime);
+    if (currentMinutes < draftMinutes || currentMinutes > draftMinutes + 45) continue;
 
-  const generationInput = {
-    topic: series.title || "今日の占い",
-    category: series.category || "今日の占い",
-    primaryKeyword: "今日の占い レイヴン・ブラックウッド",
-    targetReader: "朝のうちに一日の流れと判断軸を整えたい読者",
-    searchIntent: "今日の占いを読み、仕事・恋愛・対人の注意点を確認したい",
-  };
-  const fallbackDraft = buildBlogDraft(generationInput);
-  const aiResult = await buildAiBlogDraft(generationInput, fallbackDraft, date);
-  const draft = aiResult.draft;
-  const articleId = crypto.randomUUID();
-  const scheduledAt = jstLocalToUtcIso(date, publishTime);
-  await env.DB.prepare(
-    `INSERT INTO blog_engine_articles
-      (id, tenant_id, title, slug, description, body, category, tags_json, primary_keyword, secondary_keywords_json,
-       search_intent, target_reader, outline_json, seo_title, meta_description, og_title, og_description, faq_json,
-       internal_links_json, related_articles_json, key_message, recommended_social_angle, quality_score, brand_score,
-       safety_score, quality_report_json, status, scheduled_at, generation_version, idempotency_key)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, 'blog-engine-v2.0', ?)`,
-  )
-    .bind(
-      articleId,
-      BLOG_ENGINE_TENANT_ID,
-      draft.title,
-      draft.slug,
-      draft.description,
-      draft.body,
-      draft.category,
-      JSON.stringify(draft.tags),
-      draft.primaryKeyword,
-      JSON.stringify(draft.secondaryKeywords),
-      draft.searchIntent,
-      draft.targetReader,
-      JSON.stringify(draft.outline),
-      draft.seoTitle,
-      draft.metaDescription,
-      draft.seoTitle,
-      draft.metaDescription,
-      JSON.stringify([]),
-      JSON.stringify([]),
-      JSON.stringify([]),
-      draft.keyMessage,
-      draft.recommendedSocialAngle,
-      draft.qualityScore,
-      draft.brandScore,
-      draft.safetyScore,
-      JSON.stringify(draft.qualityReport),
-      scheduledAt,
-      idempotencyKey,
+    const idempotencyKey = `daily:${BLOG_ENGINE_TENANT_ID}:${series.id}:${date}`;
+    const existing = await env.DB.prepare("SELECT id FROM blog_engine_articles WHERE tenant_id = ? AND idempotency_key = ? LIMIT 1")
+      .bind(BLOG_ENGINE_TENANT_ID, idempotencyKey)
+      .first<{ id: string }>();
+    if (existing) continue;
+
+    const generationInput =
+      series.id === "guild-diary"
+        ? {
+            topic: series.title || "ギルド日記",
+            category: series.category || "ギルド日記",
+            primaryKeyword: "ギルド日記 レイヴン・ブラックウッド",
+            targetReader: "レイヴン・ブラックウッドの世界観やギルドメンバーの日常を読みたい読者",
+            searchIntent: "占いサイトの世界観やギルドの日常を物語として楽しみたい",
+          }
+        : series.id === "divination-intro"
+          ? {
+              topic: series.title || "占術紹介",
+              category: series.category || "占術紹介",
+              primaryKeyword: "占術紹介 古典占術",
+              targetReader: "奇門遁甲・六壬神課・太乙神数・易経などの占術に興味を持ち始めた読者",
+              searchIntent: "古典占術の種類や基本的な考え方を知りたい",
+            }
+          : {
+              topic: series.title || "今日の占い",
+              category: series.category || "今日の占い",
+              primaryKeyword: "今日の占い レイヴン・ブラックウッド",
+              targetReader: "朝のうちに一日の流れと判断軸を整えたい読者",
+              searchIntent: "今日の占いを読み、仕事・恋愛・対人の注意点を確認したい",
+            };
+    const fallbackDraft = buildBlogDraft(generationInput);
+    const aiResult = await buildAiBlogDraft(generationInput, fallbackDraft, date);
+    const draft = aiResult.draft;
+    const articleId = crypto.randomUUID();
+    const scheduledAt = jstLocalToUtcIso(date, publishTime);
+    await env.DB.prepare(
+      `INSERT INTO blog_engine_articles
+        (id, tenant_id, title, slug, description, body, category, tags_json, primary_keyword, secondary_keywords_json,
+         search_intent, target_reader, outline_json, seo_title, meta_description, og_title, og_description, faq_json,
+         internal_links_json, related_articles_json, key_message, recommended_social_angle, quality_score, brand_score,
+         safety_score, quality_report_json, status, scheduled_at, generation_version, idempotency_key)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, 'blog-engine-v2.0', ?)`,
     )
-    .run();
-  await env.DB.prepare("INSERT INTO blog_engine_events (event_id, event_type, tenant_id, article_id, payload_json) VALUES (?, 'article.created', ?, ?, ?)")
-    .bind(crypto.randomUUID(), BLOG_ENGINE_TENANT_ID, articleId, JSON.stringify({ article_id: articleId, series_id: series.id, draft_time: draftTime, publish_time: publishTime, provider: aiResult.provider }))
-    .run();
-  await insertSocialDerivatives(articleId, draft);
-  return 1;
+      .bind(
+        articleId,
+        BLOG_ENGINE_TENANT_ID,
+        draft.title,
+        draft.slug,
+        draft.description,
+        draft.body,
+        draft.category,
+        JSON.stringify(draft.tags),
+        draft.primaryKeyword,
+        JSON.stringify(draft.secondaryKeywords),
+        draft.searchIntent,
+        draft.targetReader,
+        JSON.stringify(draft.outline),
+        draft.seoTitle,
+        draft.metaDescription,
+        draft.seoTitle,
+        draft.metaDescription,
+        JSON.stringify([]),
+        JSON.stringify([]),
+        JSON.stringify([]),
+        draft.keyMessage,
+        draft.recommendedSocialAngle,
+        draft.qualityScore,
+        draft.brandScore,
+        draft.safetyScore,
+        JSON.stringify(draft.qualityReport),
+        scheduledAt,
+        idempotencyKey,
+      )
+      .run();
+    await env.DB.prepare("INSERT INTO blog_engine_events (event_id, event_type, tenant_id, article_id, payload_json) VALUES (?, 'article.created', ?, ?, ?)")
+      .bind(crypto.randomUUID(), BLOG_ENGINE_TENANT_ID, articleId, JSON.stringify({ article_id: articleId, series_id: series.id, draft_time: draftTime, publish_time: publishTime, provider: aiResult.provider }))
+      .run();
+    await insertSocialDerivatives(articleId, draft);
+    created += 1;
+  }
+
+  return created;
 }
 
 async function processBlogEvents() {

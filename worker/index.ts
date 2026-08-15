@@ -525,6 +525,11 @@ function jstLocalToUtcIso(date: string, time: string) {
   return new Date(`${date}T${time}:00+09:00`).toISOString();
 }
 
+function timeToMinutes(time: string) {
+  const [hour, minute] = time.split(":").map((part) => Number(part));
+  return hour * 60 + minute;
+}
+
 function dateSeed(date: string) {
   return date.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
 }
@@ -562,15 +567,84 @@ function buildDailyFortuneArticle(date: string) {
   };
 }
 
-async function createDueDailyBlogDraft(env: Env, autoPublish: boolean) {
+function buildDailyGuildDiaryArticle(date: string) {
+  const scene = pickDaily(["雨音の残る作戦室", "暖炉の前の丸い机", "夜番明けの記録棚", "灯りを落とした相談室", "星図を広げた長机"], date, 5);
+  const member = pickDaily(["ルナ・スターウィンド", "スカーレット・ドノバン", "アトラス・グレイ", "ソル・ルミナ", "レイヴン・ブラックウッド"], date, 9);
+  const theme = pickDaily(["待つこと", "境界線", "言葉を短くすること", "予定を整えること", "自分を責めないこと", "迷いを書き出すこと"], date, 13);
+  const closing = pickDaily(["急がない夜にも、選択の種は残る。", "静かな記録ほど、明日の判断を助ける。", "誰かを読む前に、自分の輪郭を取り戻す。", "答えではなく、次の一手を灯す。"], date, 17);
+  const title = `ギルド日記 ${date} - ${theme}について`;
+  const body = [
+    "## 夜のギルド",
+    `${date}の夜、ギルドは${scene}に集まっていた。昼間の相談記録はすでに束ねられ、机の端にはまだ温かい茶器が置かれている。今日の記録に何度も現れた言葉は「${theme}」だった。`,
+    "## 今日の小さな会話",
+    `${member}が、閉じかけた帳面に視線を落として言った。相談者の言葉はそれぞれ違っていても、奥にある迷いは似ている。返事を待つのか、距離を置くのか、もう一度だけ確かめるのか。ギルドでは、誰かの未来を決めつける前に、その人が失いかけている判断軸を探す。`,
+    "## レイヴンの記録",
+    "レイヴン・ブラックウッドは、話を急がせなかった。強い助言ほど、相談者の心が追いついていない時には重くなる。だから今日の記録には、断定ではなく問いが残された。何を守りたいのか。どこから先は自分を削るのか。今日できる一手は、本当に大きな決断でなければならないのか。",
+    "## ギルドの結論",
+    `夜の終わりに、レイヴンは短く書き添えた。「${closing}」 ギルド日記は、占いの結果そのものではない。相談の後ろ側で交わされた、小さな整理の記録である。明日また別の問いが届いても、この夜の一行が誰かの足元を少しだけ照らすかもしれない。`,
+  ].join("\n\n");
+  return {
+    title,
+    slug: `guild-diary-${date}`,
+    description: `${date}のギルド日記。レイヴン・ブラックウッドとギルドメンバーが、その日の相談記録から小さな気づきを残します。`,
+    body,
+    category: "ギルド日記",
+    tags: ["ギルド日記", "レイヴン・ブラックウッド", member, "ギルドの日常", "占い師の記録"],
+    keyMessage: `今日のギルド日記は「${theme}」。${closing}`,
+  };
+}
+
+function buildDailyDivinationIntroArticle(date: string) {
+  const method = pickDaily([
+    { slug: "qimen-dunjia", name: "奇門遁甲", keyword: "方位と時の配置", point: "動くタイミングと進む方角を読む" },
+    { slug: "liuren", name: "六壬神課", keyword: "問いの構造", point: "人間関係や状況の絡まりをほどく" },
+    { slug: "taiyi", name: "太乙神数", keyword: "大きな時運", point: "時代や局面の流れを俯瞰する" },
+    { slug: "yijing", name: "易経", keyword: "変化の物語", point: "今の状態から次の変化を読む" },
+    { slug: "wuxing", name: "陰陽五行", keyword: "気の偏りと調和", point: "物事の性質とバランスを整理する" },
+  ], date, 23);
+  const title = `占術紹介 ${date} - ${method.name}とは`;
+  const body = [
+    "## 今日の占術",
+    `今日取り上げる占術は「${method.name}」です。レイヴン・ブラックウッドの鑑定では、占術を未来を断定する装置としてではなく、状況を分解し、判断の視界を整えるための体系として扱います。${method.name}の中心にあるのは、${method.keyword}です。`,
+    "## 何を見るための占術か",
+    `${method.name}は、${method.point}ために用いられます。相談者が抱える問いは、恋愛、仕事、人生の選択などさまざまですが、いずれも「今どこに立っているのか」「何を急ぎ、何を待つべきか」を見極めることが重要です。`,
+    "## 初心者が押さえる入口",
+    "占術を学ぶ時、最初から細かな用語をすべて覚える必要はありません。まずは、その占術が何を地図にしているのかを知ることです。時間を見るのか、方位を見るのか、象意を見るのか、人間関係の配置を見るのか。入口を間違えなければ、古典占術は急に身近になります。",
+    "## レイヴンの使い方",
+    `レイヴンは${method.name}を、相談者の不安を煽るためではなく、選択肢を落ち着いて並べるために使います。結果を一つの命令として受け取るのではなく、「今は何が強く、何が弱いのか」を確認する。その読み方が、古典占術を現代の相談に生かす鍵になります。`,
+  ].join("\n\n");
+  return {
+    title,
+    slug: `divination-intro-${method.slug}-${date}`,
+    description: `${method.name}の基本的な考え方と、レイヴン・ブラックウッドの鑑定での使い方を紹介します。`,
+    body,
+    category: "占術紹介",
+    tags: ["占術紹介", method.name, "古典占術", "レイヴン・ブラックウッド", "占術解説"],
+    keyMessage: `${method.name}は、${method.keyword}を通じて、次の判断を整えるための占術です。`,
+  };
+}
+
+async function createDailyArticleIfDue(env: Env, autoPublish: boolean, input: {
+  seriesId: string;
+  draftTime: string;
+  publishTime: string;
+  article: ReturnType<typeof buildDailyFortuneArticle>;
+  primaryKeyword: string;
+  secondaryKeywords: string[];
+  searchIntent: string;
+  targetReader: string;
+  outline: string[];
+}) {
   const { date, time } = jstParts();
-  if (time < "07:00") return 0;
-  const idempotencyKey = `daily:${TENANT_ID}:today-fortune:${date}`;
+  const currentMinutes = timeToMinutes(time);
+  const draftMinutes = timeToMinutes(input.draftTime);
+  if (currentMinutes < draftMinutes || currentMinutes > draftMinutes + 45) return 0;
+  const idempotencyKey = `daily:${TENANT_ID}:${input.seriesId}:${date}`;
   const existing = await env.DB.prepare("SELECT id FROM blog_engine_articles WHERE tenant_id = ? AND idempotency_key = ? LIMIT 1")
     .bind(TENANT_ID, idempotencyKey)
     .first<{ id: string }>();
   if (existing) return 0;
-  const article = buildDailyFortuneArticle(date);
+  const article = input.article;
   const articleId = crypto.randomUUID();
   await env.DB.prepare(
     `INSERT INTO blog_engine_articles
@@ -589,11 +663,11 @@ async function createDueDailyBlogDraft(env: Env, autoPublish: boolean) {
       article.body,
       article.category,
       JSON.stringify(article.tags),
-      "今日の占い",
-      JSON.stringify(["レイヴン・ブラックウッド 今日の占い", "易断 今日", "一日の運勢"]),
-      "今日の流れと注意点を短く確認したい",
-      "朝のうちに一日の判断軸を整えたい読者",
-      JSON.stringify(["今日の兆し", "仕事と対人運", "恋愛と心の距離", "気をつけること", "今日の一手"]),
+      input.primaryKeyword,
+      JSON.stringify(input.secondaryKeywords),
+      input.searchIntent,
+      input.targetReader,
+      JSON.stringify(input.outline),
       `${article.title} | レイヴン・ブラックウッド Blog`,
       article.description,
       `${article.title} | レイヴン・ブラックウッド Blog`,
@@ -604,14 +678,53 @@ async function createDueDailyBlogDraft(env: Env, autoPublish: boolean) {
       article.keyMessage,
       JSON.stringify({ warnings: [], blocked: false }),
       autoPublish ? "scheduled" : "draft",
-      autoPublish ? jstLocalToUtcIso(date, "07:00") : null,
+      autoPublish ? jstLocalToUtcIso(date, input.publishTime) : null,
       idempotencyKey,
     )
     .run();
   await env.DB.prepare("INSERT INTO blog_engine_events (event_id, event_type, tenant_id, article_id, payload_json) VALUES (?, 'article.created', ?, ?, ?)")
-    .bind(crypto.randomUUID(), TENANT_ID, articleId, JSON.stringify({ article_id: articleId, series_id: "today-fortune", draft_time: "07:00", publish_time: "07:00" }))
+    .bind(crypto.randomUUID(), TENANT_ID, articleId, JSON.stringify({ article_id: articleId, series_id: input.seriesId, draft_time: input.draftTime, publish_time: input.publishTime }))
     .run();
   return 1;
+}
+
+async function createDueDailyBlogDraft(env: Env, autoPublish: boolean) {
+  const { date } = jstParts();
+  let count = 0;
+  count += await createDailyArticleIfDue(env, autoPublish, {
+    seriesId: "today-fortune",
+    draftTime: "07:00",
+    publishTime: "07:00",
+    article: buildDailyFortuneArticle(date),
+    primaryKeyword: "今日の占い",
+    secondaryKeywords: ["レイヴン・ブラックウッド 今日の占い", "易断 今日", "一日の運勢"],
+    searchIntent: "今日の流れと注意点を短く確認したい",
+    targetReader: "朝のうちに一日の判断軸を整えたい読者",
+    outline: ["今日の兆し", "仕事と対人運", "恋愛と心の距離", "気をつけること", "今日の一手"],
+  });
+  count += await createDailyArticleIfDue(env, autoPublish, {
+    seriesId: "guild-diary",
+    draftTime: "22:00",
+    publishTime: "22:00",
+    article: buildDailyGuildDiaryArticle(date),
+    primaryKeyword: "ギルド日記 レイヴン・ブラックウッド",
+    secondaryKeywords: ["レイヴン・ブラックウッド ギルド", "占い師 日記", "ギルドの日常"],
+    searchIntent: "レイヴン・ブラックウッドの世界観やギルドの日常を読みたい",
+    targetReader: "占い結果だけでなく、レイヴンの世界観や登場人物に親しみたい読者",
+    outline: ["夜のギルド", "今日の小さな会話", "レイヴンの記録", "ギルドの結論"],
+  });
+  count += await createDailyArticleIfDue(env, autoPublish, {
+    seriesId: "divination-intro",
+    draftTime: "09:00",
+    publishTime: "09:00",
+    article: buildDailyDivinationIntroArticle(date),
+    primaryKeyword: "占術紹介",
+    secondaryKeywords: ["古典占術", "占術解説", "レイヴン・ブラックウッド 占術"],
+    searchIntent: "古典占術の種類や基本的な使い方を知りたい",
+    targetReader: "奇門遁甲・六壬神課・太乙神数・易経などの占術に興味を持ち始めた読者",
+    outline: ["今日の占術", "何を見るための占術か", "初心者が押さえる入口", "レイヴンの使い方"],
+  });
+  return count;
 }
 
 async function queueAndPublishBlogSnsPost(env: Env, article: { id: string; slug?: string; title?: string; category?: string; key_message?: string }) {

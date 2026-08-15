@@ -21,6 +21,7 @@ export const metadata = {
 };
 
 async function loadPublishedPosts() {
+  const staticPosts = getSortedBlogPosts().map((post) => ({ ...post, viewCount: 0 }));
   try {
     const result = await env.DB.prepare(
       "SELECT a.slug, a.title, a.description, a.published_at, a.created_at, a.category, a.tags_json, COUNT(e.id) AS view_count FROM blog_engine_articles a LEFT JOIN analytics_events e ON e.tenant_id = a.tenant_id AND e.event_name = 'page_view' AND (e.page_path = '/blog/' || a.slug OR e.page_path = '/blog/' || a.slug || '/' ) WHERE a.tenant_id = 'raven-oracle' AND a.status = 'published' GROUP BY a.id ORDER BY datetime(COALESCE(a.published_at, a.created_at)) DESC LIMIT 100",
@@ -34,9 +35,11 @@ async function loadPublishedPosts() {
       tags: JSON.parse(post.tags_json || "[]") as string[],
       viewCount: Number(post.view_count || 0),
     }));
-    return posts.length ? posts : getSortedBlogPosts().map((post) => ({ ...post, viewCount: 0 }));
+    const slugs = new Set(posts.map((post) => post.slug));
+    return [...posts, ...staticPosts.filter((post) => !slugs.has(post.slug))]
+      .sort((a, b) => b.pubDate.localeCompare(a.pubDate));
   } catch {
-    return getSortedBlogPosts().map((post) => ({ ...post, viewCount: 0 }));
+    return staticPosts;
   }
 }
 
