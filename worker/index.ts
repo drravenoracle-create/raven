@@ -73,6 +73,17 @@ function isInSnsPublishWindow(scheduleJson: unknown) {
   return schedule.windows.some((window) => time >= window.start && time <= window.end);
 }
 
+function currentSnsPublishWindow(scheduleJson: unknown) {
+  const { date, time } = jstParts();
+  const schedule = parseSnsSchedule(scheduleJson);
+  const window = schedule.windows.find((item) => time >= item.start && time <= item.end);
+  if (!window) return null;
+  return {
+    startIso: jstLocalToUtcIso(date, window.start),
+    endIso: new Date().toISOString(),
+  };
+}
+
 async function readJson(request: Request) {
   return (await request.json().catch(() => null)) as Record<string, unknown> | null;
 }
@@ -480,12 +491,13 @@ async function publishDueSnsPosts(env: Env) {
   const settings = await env.DB.prepare("SELECT automation_level, emergency_stop_all, schedule_json FROM sns_automation_settings WHERE tenant_id = ? LIMIT 1").bind(TENANT_ID).first<{ automation_level?: number; emergency_stop_all?: number; schedule_json?: string }>();
   if (settings?.emergency_stop_all) return 0;
   if (!settings?.automation_level) return 0;
-  if (!isInSnsPublishWindow(settings.schedule_json)) return 0;
+  const publishWindow = currentSnsPublishWindow(settings.schedule_json);
+  if (!publishWindow) return 0;
   await createDueDailySnsPost(env, settings.schedule_json);
   const result = await env.DB.prepare(
-    "SELECT * FROM sns_posts WHERE tenant_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL AND datetime(scheduled_at) <= datetime('now') AND retry_count < 3 LIMIT 10",
+    "SELECT * FROM sns_posts WHERE tenant_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL AND datetime(scheduled_at) >= datetime(?) AND datetime(scheduled_at) <= datetime(?) AND retry_count < 3 ORDER BY datetime(scheduled_at) ASC LIMIT 3",
   )
-    .bind(TENANT_ID)
+    .bind(TENANT_ID, publishWindow.startIso, publishWindow.endIso)
     .all();
   let count = 0;
   for (const post of result.results || []) {
