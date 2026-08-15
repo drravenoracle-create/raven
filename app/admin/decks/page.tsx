@@ -50,6 +50,31 @@ type Usage = {
   used_at?: string;
 };
 
+type DriveFolder = { id: string; name: string; webViewLink?: string; modifiedTime?: string };
+type DriveImageCandidate = {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  thumbnailUrl: string;
+  webViewLink: string;
+  card_number: number;
+  card_name: string;
+  selected?: boolean;
+  importName?: string;
+  importNameJa?: string;
+};
+type DriveImportJob = {
+  id: string;
+  status: string;
+  source_folder_name?: string;
+  total_count: number;
+  success_count: number;
+  skipped_count: number;
+  failed_count: number;
+  created_at?: string;
+};
+
 const tenantId = "raven-oracle";
 
 const emptyCard = {
@@ -82,6 +107,13 @@ export default function DeckManagerPage() {
   const [selectCount, setSelectCount] = useState(1);
   const [selectionMode, setSelectionMode] = useState("random");
   const [excludeRecentDays, setExcludeRecentDays] = useState(14);
+  const [driveFolderQuery, setDriveFolderQuery] = useState("");
+  const [driveFolderId, setDriveFolderId] = useState("");
+  const [driveFolderName, setDriveFolderName] = useState("");
+  const [driveFolders, setDriveFolders] = useState<DriveFolder[]>([]);
+  const [driveImages, setDriveImages] = useState<DriveImageCandidate[]>([]);
+  const [driveDuplicatePolicy, setDriveDuplicatePolicy] = useState("skip");
+  const [driveJobs, setDriveJobs] = useState<DriveImportJob[]>([]);
 
   const selectedDeck = useMemo(
     () => decks.find((deck) => deck.id === selectedDeckId) || decks[0],
@@ -132,6 +164,7 @@ export default function DeckManagerPage() {
 
   useEffect(() => {
     loadAll("");
+    loadDriveJobs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -231,6 +264,113 @@ export default function DeckManagerPage() {
       );
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "カード選出に失敗しました。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadDriveJobs() {
+    try {
+      const response = await fetch("/api/card-library/drive-import?resource=jobs&tenantId=raven-oracle", { cache: "no-store" });
+      const payload = await readJson(response);
+      if (response.ok && payload.ok) setDriveJobs(payload.jobs || []);
+    } catch {}
+  }
+
+  async function searchDriveFolders() {
+    setBusy(true);
+    setStatus("Google Driveフォルダを検索しています...");
+    try {
+      const response = await fetch(`/api/card-library/drive-import?resource=folders&tenantId=raven-oracle&q=${encodeURIComponent(driveFolderQuery)}`, { cache: "no-store" });
+      const payload = await readJson(response);
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "Driveフォルダ検索に失敗しました。");
+      setDriveFolders(payload.folders || []);
+      setStatus((payload.folders || []).length ? "Driveフォルダを取得しました。" : "Driveフォルダが見つかりません。サービスアカウントへフォルダ共有されているか確認してください。");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Driveフォルダ検索に失敗しました。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadDriveImages(folderId = driveFolderId, folderName = driveFolderName) {
+    if (!folderId) {
+      setStatus("Driveフォルダを選択またはフォルダIDを入力してください。");
+      return;
+    }
+    setBusy(true);
+    setStatus("Drive画像を読み込んでいます...");
+    try {
+      const response = await fetch(`/api/card-library/drive-import?resource=images&tenantId=raven-oracle&folderId=${encodeURIComponent(folderId)}`, { cache: "no-store" });
+      const payload = await readJson(response);
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "Drive画像の取得に失敗しました。");
+      const images = (payload.images || []).map((image: DriveImageCandidate) => ({
+        ...image,
+        selected: Boolean(image.card_number && image.card_name),
+        importName: image.card_name || "",
+        importNameJa: image.card_name || "",
+      }));
+      setDriveFolderId(folderId);
+      setDriveFolderName(folderName);
+      setDriveImages(images);
+      setStatus(`${images.length}件のDrive画像を取得しました。番号とカード名を確認してください。`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Drive画像の取得に失敗しました。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function updateDriveImage(id: string, patch: Partial<DriveImageCandidate>) {
+    setDriveImages((current) => current.map((image) => (image.id === id ? { ...image, ...patch } : image)));
+  }
+
+  function setAllDriveImages(selected: boolean) {
+    setDriveImages((current) => current.map((image) => ({ ...image, selected })));
+  }
+
+  async function importDriveImages() {
+    if (!selectedDeck?.id) {
+      setStatus("先に対象デッキを選択してください。");
+      return;
+    }
+    const files = driveImages
+      .filter((image) => image.selected)
+      .map((image) => ({
+        fileId: image.id,
+        fileName: image.name,
+        mimeType: image.mimeType,
+        sizeBytes: image.size,
+        card_number: Number(image.card_number || 0),
+        name: image.importName || image.card_name,
+        name_ja: image.importNameJa || image.importName || image.card_name,
+      }));
+    if (!files.length) {
+      setStatus("取り込む画像を選択してください。");
+      return;
+    }
+    setBusy(true);
+    setStatus("Drive画像を運用Storageへコピーし、カード登録しています...");
+    try {
+      const response = await fetch("/api/card-library/drive-import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          action: "importBulk",
+          deck_id: selectedDeck.id,
+          folder_id: driveFolderId,
+          folder_name: driveFolderName,
+          duplicate_policy: driveDuplicatePolicy,
+          files,
+        }),
+      });
+      const payload = await readJson(response);
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "Drive画像の一括登録に失敗しました。");
+      setStatus(`Drive import完了: 成功 ${payload.success} / skip ${payload.skipped} / 失敗 ${payload.failed}`);
+      await Promise.all([loadAll(selectedDeck.id), loadDriveJobs()]);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Drive画像の一括登録に失敗しました。");
     } finally {
       setBusy(false);
     }
@@ -339,6 +479,53 @@ export default function DeckManagerPage() {
               <button className="mt-4 rounded bg-[#222820] px-4 py-3 text-sm font-semibold text-[#fff8ed] disabled:opacity-60" type="button" onClick={createCard} disabled={busy}>カード登録</button>
             </Panel>
 
+            <Panel title="Google Driveから追加" eyebrow="Drive Import">
+              <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                <input className="admin-field" value={driveFolderQuery} onChange={(event) => setDriveFolderQuery(event.target.value)} placeholder="Driveフォルダ名で検索" />
+                <button className="rounded border border-[#d7cabc] px-4 py-2 text-sm font-semibold disabled:opacity-60" type="button" onClick={searchDriveFolders} disabled={busy}>フォルダ検索</button>
+              </div>
+              {driveFolders.length ? <div className="mt-3 grid gap-2 md:grid-cols-2">
+                {driveFolders.map((folder) => (
+                  <button key={folder.id} className="rounded border border-[#d7cabc] bg-white p-3 text-left text-sm" type="button" onClick={() => loadDriveImages(folder.id, folder.name)}>
+                    <span className="block font-semibold">{folder.name}</span>
+                    <span className="mt-1 block break-all text-xs text-[#5e625c]">{folder.id}</span>
+                  </button>
+                ))}
+              </div> : null}
+              <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
+                <input className="admin-field" value={driveFolderId} onChange={(event) => setDriveFolderId(event.target.value)} placeholder="DriveフォルダIDを直接入力" />
+                <button className="rounded border border-[#d7cabc] px-4 py-2 text-sm font-semibold disabled:opacity-60" type="button" onClick={() => loadDriveImages()} disabled={busy}>画像取得</button>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <button className="rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold" type="button" onClick={() => setAllDriveImages(true)}>全選択</button>
+                <button className="rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold" type="button" onClick={() => setAllDriveImages(false)}>選択解除</button>
+                <label className="flex items-center gap-2 text-sm font-semibold">重複時<select className="admin-field max-w-40" value={driveDuplicatePolicy} onChange={(event) => setDriveDuplicatePolicy(event.target.value)}><option value="skip">skip</option><option value="replace">replace</option><option value="create_new">create new</option></select></label>
+                <button className="rounded bg-[#222820] px-4 py-2 text-sm font-semibold text-[#fff8ed] disabled:opacity-60" type="button" onClick={importDriveImages} disabled={busy || !driveImages.some((image) => image.selected)}>一括登録実行</button>
+              </div>
+              <p className="mt-3 text-xs leading-5 text-[#5e625c]">Drive原本は削除・移動・変更しません。画像はR2などの運用Storageへコピーし、Card Libraryには画像URLまたはstorage keyのみ保存します。1回の取り込みは最大20件です。</p>
+              {driveImages.length ? <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {driveImages.map((image) => (
+                  <article key={image.id} className={`rounded border bg-white p-3 ${image.selected ? "border-[#596d51]" : "border-[#d7cabc]"}`}>
+                    <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={Boolean(image.selected)} onChange={(event) => updateDriveImage(image.id, { selected: event.target.checked })} /> 取り込む</label>
+                    {image.thumbnailUrl ? <img className="mt-3 aspect-[2/3] w-full rounded border border-[#d7cabc] object-cover" src={image.thumbnailUrl} alt={image.name} /> : null}
+                    <p className="mt-2 break-all text-xs text-[#5e625c]">{image.name}</p>
+                    <div className="mt-3 grid grid-cols-[88px_1fr] gap-2">
+                      <label className="grid gap-1 text-xs font-semibold">番号<input className="admin-field" type="number" value={image.card_number || ""} onChange={(event) => updateDriveImage(image.id, { card_number: Number(event.target.value) })} /></label>
+                      <label className="grid gap-1 text-xs font-semibold">カード名<input className="admin-field" value={image.importName || ""} onChange={(event) => updateDriveImage(image.id, { importName: event.target.value })} /></label>
+                    </div>
+                    <label className="mt-2 grid gap-1 text-xs font-semibold">日本語名<input className="admin-field" value={image.importNameJa || ""} onChange={(event) => updateDriveImage(image.id, { importNameJa: event.target.value })} /></label>
+                    <p className="mt-2 text-xs text-[#5e625c]">{image.mimeType} / {formatBytes(image.size)}</p>
+                  </article>
+                ))}
+              </div> : null}
+              {driveJobs.length ? <div className="mt-5 rounded border border-[#d7cabc] bg-white p-3">
+                <p className="text-sm font-semibold text-[#6c5f3d]">最近の取り込み</p>
+                <div className="mt-2 grid gap-2">
+                  {driveJobs.slice(0, 5).map((job) => <p key={job.id} className="text-xs leading-5 text-[#5e625c]">{job.status} / {job.source_folder_name || "-"} / 成功 {job.success_count} / skip {job.skipped_count} / 失敗 {job.failed_count} / {job.created_at || "-"}</p>)}
+                </div>
+              </div> : null}
+            </Panel>
+
             <Panel title="カード一覧・選出" eyebrow="Cards">
               <div className="grid gap-3 md:grid-cols-4">
                 <input className="admin-field" value={cardFilter.q} onChange={(event) => setCardFilter({ ...cardFilter, q: event.target.value })} placeholder="検索" />
@@ -381,6 +568,18 @@ function Panel({ title, eyebrow, children }: { title: string; eyebrow: string; c
 
 function Metric({ label, value }: { label: string; value: number }) {
   return <span className="rounded border border-[#d7cabc] bg-white px-3 py-2">{label}: {value}</span>;
+}
+
+function formatBytes(value: number) {
+  if (!value) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let size = value;
+  let index = 0;
+  while (size >= 1024 && index < units.length - 1) {
+    size /= 1024;
+    index += 1;
+  }
+  return `${size.toFixed(index ? 1 : 0)} ${units[index]}`;
 }
 
 function CardBox({ card }: { card: Card }) {
