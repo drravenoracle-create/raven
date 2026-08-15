@@ -1,7 +1,25 @@
 import { env } from "cloudflare:workers";
 
 const TENANT_ID = "raven-oracle";
-const allowedEvents = new Set(["page_view", "raven_text_reading", "timed_chat_start", "admin_note_view", "raven_primary_action"]);
+const allowedEvents = new Set([
+  "page_view",
+  "raven_text_reading",
+  "timed_chat_start",
+  "admin_note_view",
+  "raven_primary_action",
+  "member_registration_started",
+  "member_registered",
+  "login_completed",
+  "trial_offer_viewed",
+  "trial_started",
+  "trial_completed",
+  "reading_started",
+  "reading_completed",
+  "reading_history_viewed",
+  "reading_repeated",
+  "character_switched",
+  "paid_reading_purchased",
+]);
 
 function clean(value: unknown, maxLength: number) {
   return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, maxLength);

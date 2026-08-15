@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type ReadingMode = "message" | "reply" | "consultation";
 type DivinationMenu = "integrated" | "qimen" | "liuren" | "taiyi" | "yijing";
@@ -73,10 +73,28 @@ export default function TextReadingPage() {
   const [result, setResult] = useState("");
   const [model, setModel] = useState("");
   const [status, setStatus] = useState("文章を入力すると、AIテキスト鑑定結果を表示します。");
+  const [memberNotice, setMemberNotice] = useState("");
+  const [authLinks, setAuthLinks] = useState<{ login_url?: string; register_url?: string }>({});
   const [busy, setBusy] = useState(false);
 
   const selectedMode = useMemo(() => modes.find((item) => item.id === mode) || modes[0], [mode]);
   const selectedDivination = useMemo(() => divinationMenus.find((item) => item.id === divination) || divinationMenus[0], [divination]);
+
+  useEffect(() => {
+    fetch(`/api/member/status?return_to=/text-reading/&menu_id=raven-text-${divination}`)
+      .then((response) => response.json())
+      .then((payload) => {
+        setAuthLinks(payload.auth_links || {});
+        if (payload.flags?.member_system_enabled && payload.flags?.configured && !payload.session?.authenticated) {
+          setMemberNotice("トライアル利用と鑑定履歴保存には、ギルド共通アカウントへの登録またはログインが必要です。");
+        } else if (payload.flags?.member_system_enabled && payload.session?.authenticated) {
+          setMemberNotice("ギルド共通アカウントにログイン済みです。鑑定結果は履歴に保存されます。");
+        } else {
+          setMemberNotice("");
+        }
+      })
+      .catch(() => setMemberNotice(""));
+  }, [divination]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -104,7 +122,10 @@ export default function TextReadingPage() {
         }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "AI鑑定に失敗しました。");
+      if (!response.ok) {
+        if (payload.auth_url || payload.register_url) setAuthLinks({ login_url: payload.auth_url, register_url: payload.register_url });
+        throw new Error(payload.error || "AI鑑定に失敗しました。");
+      }
       setResult(payload.text || "");
       setModel(payload.model || "");
       setStatus(payload.model ? `AI鑑定完了: ${payload.model}` : "AI鑑定完了");
@@ -182,6 +203,16 @@ export default function TextReadingPage() {
           </section>
 
           <form className="raven-card raven-fortune-form p-4" onSubmit={submit}>
+            {memberNotice ? (
+              <div className="mb-4 rounded border border-[#d7cabc] bg-white/70 p-3 text-sm leading-6 text-[#5e625c]">
+                <p>{memberNotice}</p>
+                <div className="mt-2 flex flex-wrap gap-3 font-semibold text-[#596d51]">
+                  {authLinks.register_url ? <a className="underline underline-offset-4" href={authLinks.register_url}>無料登録</a> : null}
+                  {authLinks.login_url ? <a className="underline underline-offset-4" href={authLinks.login_url}>ログイン</a> : null}
+                  <a className="underline underline-offset-4" href="/member/">マイページ</a>
+                </div>
+              </div>
+            ) : null}
             <div className="rounded border border-[#d7cabc] bg-white/70 p-3 text-sm leading-6 text-[#5e625c]">
               <p className="font-semibold text-[#20241f]">現在の読み方: {selectedMode.label} / {selectedDivination.label}</p>
               <p className="mt-1">出力構成: {selectedDivination.output}</p>

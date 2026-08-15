@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Theme = "today" | "love" | "work" | "money" | "yijing";
 
@@ -67,9 +67,27 @@ export default function FreeFortuneClient() {
   const [reading, setReading] = useState<Reading | null>(null);
   const [model, setModel] = useState("");
   const [status, setStatus] = useState("テーマを選んで、今の流れを短く確認できます。");
+  const [memberNotice, setMemberNotice] = useState("");
+  const [authLinks, setAuthLinks] = useState<{ login_url?: string; register_url?: string }>({});
   const [busy, setBusy] = useState(false);
 
   const selectedTheme = themes.find((item) => item.id === theme) || themes[0];
+
+  useEffect(() => {
+    fetch(`/api/member/status?return_to=/free-fortune/&menu_id=raven-free-${theme}`)
+      .then((response) => response.json())
+      .then((payload) => {
+        setAuthLinks(payload.auth_links || {});
+        if (payload.flags?.member_system_enabled && payload.flags?.configured && !payload.session?.authenticated) {
+          setMemberNotice("無料トライアルを履歴に残すには、ギルド共通アカウントへの登録またはログインが必要です。");
+        } else if (payload.flags?.member_system_enabled && payload.session?.authenticated) {
+          setMemberNotice("ギルド共通アカウントにログイン済みです。結果は履歴保存の対象になります。");
+        } else {
+          setMemberNotice("");
+        }
+      })
+      .catch(() => setMemberNotice(""));
+  }, [theme]);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -84,8 +102,11 @@ export default function FreeFortuneClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: "fortune", theme, name, concern }),
       });
-      const payload = (await response.json()) as { reading?: Reading; model?: string; error?: string };
-      if (!response.ok || !payload.reading) throw new Error(payload.error || "鑑定結果を取得できませんでした。");
+      const payload = (await response.json()) as { reading?: Reading; model?: string; error?: string; auth_url?: string; register_url?: string };
+      if (!response.ok || !payload.reading) {
+        if (payload.auth_url || payload.register_url) setAuthLinks({ login_url: payload.auth_url, register_url: payload.register_url });
+        throw new Error(payload.error || "鑑定結果を取得できませんでした。");
+      }
       setReading(payload.reading);
       setModel(payload.model || "");
       if (payload.model) {
@@ -132,6 +153,16 @@ export default function FreeFortuneClient() {
           </div>
 
           <form className="raven-card raven-fortune-form p-4 sm:p-5" onSubmit={submit}>
+            {memberNotice ? (
+              <div className="mb-4 rounded border border-[#d7cabc] bg-white/70 p-3 text-sm leading-6 text-[#5e625c]">
+                <p>{memberNotice}</p>
+                <div className="mt-2 flex flex-wrap gap-3 font-semibold text-[#596d51]">
+                  {authLinks.register_url ? <a className="underline underline-offset-4" href={authLinks.register_url}>無料登録</a> : null}
+                  {authLinks.login_url ? <a className="underline underline-offset-4" href={authLinks.login_url}>ログイン</a> : null}
+                  <a className="underline underline-offset-4" href="/member/">マイページ</a>
+                </div>
+              </div>
+            ) : null}
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="flex flex-col gap-2">
                 <span className="text-sm font-semibold">お名前</span>

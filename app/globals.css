@@ -293,6 +293,21 @@ a {
   border-left: 5px solid #8d6a2f;
 }
 
+.raven-member-hero {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(236, 217, 176, 0.24);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(18, 24, 19, 0.98), rgba(18, 24, 19, 0.84) 58%, rgba(18, 24, 19, 0.58)),
+    url("/raven-blackwood-cover.png"),
+    #151b16;
+  background-size: auto, min(42vw, 520px) auto;
+  background-position: center, right 1.5rem top 20%;
+  background-repeat: no-repeat;
+  box-shadow: 0 20px 50px rgba(17, 24, 18, 0.22);
+}
+
 .raven-fortune-form input,
 .raven-fortune-form select,
 .raven-fortune-form textarea {

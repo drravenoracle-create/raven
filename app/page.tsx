@@ -26,6 +26,7 @@ const navLinks = [
   { href: "/divination-dictionary/", label: "占術辞典" },
   { href: "/free-fortune/", label: "AI無料占い" },
   { href: "/text-reading/", label: "AIテキスト占い" },
+  { href: "/member/", label: "マイページ" },
   { href: "/faq/", label: "FAQ" },
   { href: "/blog/", label: "ブログ" },
 ];
@@ -249,6 +250,7 @@ export default async function Home() {
           <a href="/guild/">ギルドメンバー紹介</a>
           <a href="/divination-methods/">レイヴンの占術</a>
           <a href="/divination-dictionary/">古典占術辞典</a>
+          <a href="/member/">マイページ</a>
           <a href="/faq/">FAQ</a>
           <a href="/tokushoho/">特定商取引法に基づく表記</a>
           <a href="/privacy/">個人情報保護方針</a>

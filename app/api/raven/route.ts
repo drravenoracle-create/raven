@@ -1,3 +1,4 @@
+import { env } from "cloudflare:workers";
 import { getPersona, personaSystemPrompt } from "@/app/lib/personas";
 import {
   buildFallbackReading,
@@ -7,6 +8,16 @@ import {
   normalizeTheme,
   parseAIReading,
 } from "@/app/lib/fortune/engine";
+import {
+  commitReadingEntitlement,
+  guildMemberErrorResponse,
+  isGuildMemberSystemActive,
+  menuIdForRavenReading,
+  recordMemberEvent,
+  releaseReadingEntitlement,
+  reserveReadingEntitlement,
+  type TrialReservation,
+} from "@/app/lib/guild-member-client";
 
 type RavenRequest = {
   mode?: "fortune" | "reading" | "chat";
@@ -126,6 +137,71 @@ function extractText(data: OpenAIResponse) {
   );
 }
 
+function consultationSummary(payload: RavenRequest) {
+  return String(payload.concern || payload.sourceText || payload.message || "").replace(/\s+/g, " ").trim().slice(0, 260);
+}
+
+function divinationMethods(payload: RavenRequest) {
+  if (payload.mode === "fortune") return [String(payload.theme || "today")];
+  if (payload.mode === "reading") return [String(payload.divination || "integrated")];
+  return [];
+}
+
+async function reserveMemberReading(request: Request, payload: RavenRequest) {
+  if (!isGuildMemberSystemActive(env)) return null;
+  const menuId = menuIdForRavenReading({ mode: payload.mode, theme: payload.theme, divination: payload.divination });
+  try {
+    await recordMemberEvent(env, request, "reading_started", { menu_id: menuId, mode: payload.mode });
+    const reservation = await reserveReadingEntitlement(env, request, {
+      menuId,
+      readingMode: payload.mode || "reading",
+      consultationSummary: consultationSummary(payload),
+    });
+    await recordMemberEvent(env, request, reservation.is_trial ? "trial_started" : "reading_started", { menu_id: menuId, mode: payload.mode });
+    return { menuId, reservation };
+  } catch (error) {
+    return guildMemberErrorResponse(error);
+  }
+}
+
+async function commitMemberReading(
+  request: Request,
+  payload: RavenRequest,
+  context: { menuId: string; reservation: TrialReservation } | null,
+  resultSnapshot: unknown,
+  modelIdentifier?: string,
+) {
+  if (!context) return {};
+  try {
+    const commit = await commitReadingEntitlement(env, request, {
+      reservationId: context.reservation.reservation_id,
+      menuId: context.menuId,
+      consultationSummary: consultationSummary(payload),
+      inputSnapshot: {
+        mode: payload.mode,
+        reading_mode: payload.readingMode,
+        divination: payload.divination,
+        theme: payload.theme,
+        name: payload.name,
+        concern: payload.concern,
+        source_text: payload.sourceText,
+      },
+      resultSnapshot,
+      promptVersion: "raven-api-guild-member-v1",
+      modelIdentifier,
+      divinationMethods: divinationMethods(payload),
+    });
+    await recordMemberEvent(env, request, context.reservation.is_trial ? "trial_completed" : "reading_completed", {
+      menu_id: context.menuId,
+      reading_id: commit.reading_id,
+    });
+    return { member: { reading_id: commit.reading_id, saved: true, is_trial: context.reservation.is_trial } };
+  } catch (error) {
+    await releaseReadingEntitlement(env, request, { reservationId: context.reservation.reservation_id, reason: "commit_failed" });
+    return guildMemberErrorResponse(error);
+  }
+}
+
 export async function POST(request: Request) {
   let payload: RavenRequest;
 
@@ -138,18 +214,26 @@ export async function POST(request: Request) {
   if (payload.mode === "fortune") {
     const theme = normalizeTheme(payload.theme);
     const card = drawServerCard({ theme, name: payload.name, concern: payload.concern });
+    const memberContext = await reserveMemberReading(request, { ...payload, theme });
+    if (memberContext instanceof Response) return memberContext;
     const safetyReading = payload.concern?.trim()
       ? buildSafetyReading({ theme, name: payload.name, concern: payload.concern, card })
       : null;
 
     if (safetyReading) {
-      return jsonResponse({ reading: safetyReading });
+      const member = await commitMemberReading(request, { ...payload, theme }, memberContext, { reading: safetyReading }, "safety");
+      if (member instanceof Response) return member;
+      return jsonResponse({ reading: safetyReading, ...member });
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
+      const reading = buildFallbackReading({ theme, name: payload.name, concern: payload.concern, card });
+      const member = await commitMemberReading(request, { ...payload, theme }, memberContext, { reading }, "fallback");
+      if (member instanceof Response) return member;
       return jsonResponse({
-        reading: buildFallbackReading({ theme, name: payload.name, concern: payload.concern, card }),
+        reading,
+        ...member,
       });
     }
 
@@ -170,10 +254,14 @@ export async function POST(request: Request) {
     const data = (await openAIResponse.json()) as OpenAIResponse;
     const text = openAIResponse.ok ? extractText(data) : "";
     const aiReading = text ? parseAIReading(text, { theme, card }) : null;
+    const reading = aiReading ?? buildFallbackReading({ theme, name: payload.name, concern: payload.concern, card });
+    const member = await commitMemberReading(request, { ...payload, theme }, memberContext, { reading }, openAIResponse.ok ? model : "fallback");
+    if (member instanceof Response) return member;
 
     return jsonResponse({
-      reading: aiReading ?? buildFallbackReading({ theme, name: payload.name, concern: payload.concern, card }),
+      reading,
       model: openAIResponse.ok ? model : undefined,
+      ...member,
     });
   }
 
@@ -200,6 +288,9 @@ export async function POST(request: Request) {
     return jsonResponse({ error: "message is required for chat mode." }, 400);
   }
 
+  const memberContext = payload.mode === "reading" ? await reserveMemberReading(request, payload) : null;
+  if (memberContext instanceof Response) return memberContext;
+
   const model = process.env.OPENAI_MODEL || DEFAULT_MODEL;
   const openAIResponse = await fetch(OPENAI_ENDPOINT, {
     method: "POST",
@@ -217,6 +308,7 @@ export async function POST(request: Request) {
   const data = (await openAIResponse.json()) as OpenAIResponse;
 
   if (!openAIResponse.ok) {
+    if (memberContext) await releaseReadingEntitlement(env, request, { reservationId: memberContext.reservation.reservation_id, reason: "ai_request_failed" });
     return jsonResponse(
       {
         error: data.error?.message || "OpenAI request failed.",
@@ -228,11 +320,16 @@ export async function POST(request: Request) {
   const text = extractText(data);
 
   if (!text) {
+    if (memberContext) await releaseReadingEntitlement(env, request, { reservationId: memberContext.reservation.reservation_id, reason: "empty_ai_response" });
     return jsonResponse({ error: "OpenAI returned an empty response." }, 502);
   }
+
+  const member = await commitMemberReading(request, payload, memberContext, { text }, model);
+  if (member instanceof Response) return member;
 
   return jsonResponse({
     text,
     model,
+    ...member,
   });
 }
