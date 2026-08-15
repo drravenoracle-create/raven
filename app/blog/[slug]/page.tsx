@@ -44,6 +44,15 @@ export function generateStaticParams() {
   return getSortedBlogPosts().map((post) => ({ slug: post.slug }));
 }
 
+function renderInlineLinks(text: string) {
+  const parts = text.split(/(\[[^\]]+\]\([^)]+\))/g);
+  return parts.map((part, index) => {
+    const match = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    if (!match) return part;
+    return <Link key={`${match[2]}-${index}`} className="font-semibold text-[#596d51] underline underline-offset-4" href={match[2]}>{match[1]}</Link>;
+  });
+}
+
 export async function generateMetadata({ params }: { params: BlogParams }) {
   const { slug } = await params;
   const post = await loadPost(slug);
@@ -66,7 +75,7 @@ export default async function BlogPostPage({ params }: { params: BlogParams }) {
           <p className="mt-3 leading-7 text-[#5e625c]">{post.description}</p>
         </header>
         <div className="raven-article mt-8">
-          {post.body.split("\n\n").map((block) => block.startsWith("## ") ? <h2 key={block}>{block.replace("## ", "")}</h2> : <p key={block}>{block}</p>)}
+          {post.body.split("\n\n").map((block) => block.startsWith("## ") ? <h2 key={block}>{block.replace("## ", "")}</h2> : <p key={block}>{renderInlineLinks(block)}</p>)}
         </div>
       </article>
     </main>

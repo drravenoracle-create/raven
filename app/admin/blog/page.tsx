@@ -19,9 +19,10 @@ type EngineArticle = {
   published_at?: string;
 };
 type EngineRecommendation = { id: string; article_id?: string; recommendation_type?: string; title: string; summary: string; reason?: string; evidence_json?: string; expected_effect?: string; risk_level: string; rollback_plan?: string; status: string; created_at?: string; applied_at?: string };
-type EngineSettings = { enabled: number; kill_switch: number; auto_post_enabled: number; posting_mode: string; automation_levels_json: string };
+type EngineSettings = { enabled: number; kill_switch: number; auto_post_enabled: number; posting_mode: string; automation_levels_json: string; schedule_json?: string };
 type SocialContent = { source_article_id: string; platform: string; format: string; angle: string; status: string; tracking_id: string; scheduled_at?: string };
 type ArticleForm = Pick<EngineArticle, "id" | "slug" | "title" | "description" | "body" | "category" | "status"> & { scheduled_at?: string };
+type DailySeries = { id: string; title: string; category: string; draft_time: string; publish_time: string; enabled: boolean };
 
 const categories = ["今日・今週・今月の運勢", "占術解説", "仕事運・金運", "恋愛・人間関係", "意思決定・人生相談", "東洋占術／戦略占術", "レイヴン・ブラックウッド世界観・ギルドの日常", "初心者向け占い解説", "鑑定サービス紹介"];
 const statusLabels: Record<string, string> = { draft: "下書き", scheduled: "予約済み", approved: "承認済み", published: "公開済み", quality_failed: "品質停止" };
@@ -52,6 +53,15 @@ function parseAutomationLevels(value?: string) {
     return JSON.parse(value || "{}") as { article_generation?: boolean; auto_publish?: boolean };
   } catch {
     return {};
+  }
+}
+
+function parseDailySeries(value?: string) {
+  try {
+    const parsed = JSON.parse(value || "{}") as { daily_series?: DailySeries[] };
+    return Array.isArray(parsed.daily_series) ? parsed.daily_series : [];
+  } catch {
+    return [];
   }
 }
 
@@ -90,6 +100,7 @@ export default function BlogAdminPage() {
   const [reviewArticleFilter, setReviewArticleFilter] = useState("all");
 
   const automation = parseAutomationLevels(engineSettings?.automation_levels_json);
+  const dailySeries = parseDailySeries(engineSettings?.schedule_json);
   const articleCounts = useMemo(() => ({
     draft: engineArticles.filter((article) => article.status === "draft" && !article.scheduled_at).length,
     scheduled: engineArticles.filter((article) => article.status === "scheduled" || (article.status === "draft" && !!article.scheduled_at)).length,
@@ -321,11 +332,21 @@ export default function BlogAdminPage() {
             <Panel eyebrow="Automation" title="自動運用設定">
               <div className="grid gap-3">
                 <Toggle label="エンジン" checked={!!engineSettings?.enabled} onChange={(checked) => updateEngineSettings({ enabled: checked })} />
-                <Toggle label="13時 下書き自動生成" checked={!!automation.article_generation} onChange={(checked) => updateEngineSettings({ articleGeneration: checked })} />
-                <Toggle label="17時 自動公開" checked={!!automation.auto_publish} onChange={(checked) => updateEngineSettings({ autoPublish: checked })} />
+                <Toggle label="記事自動生成" checked={!!automation.article_generation} onChange={(checked) => updateEngineSettings({ articleGeneration: checked })} />
+                <Toggle label="自動公開" checked={!!automation.auto_publish} onChange={(checked) => updateEngineSettings({ autoPublish: checked })} />
                 <Toggle label="緊急停止" checked={!!engineSettings?.kill_switch} onChange={(checked) => updateEngineSettings({ killSwitch: checked })} danger />
               </div>
               <p className="mt-3 rounded border border-[#d7cabc] bg-white p-3 text-sm font-semibold text-[#596d51]">モード: {engineSettings?.posting_mode || "読込中"}</p>
+              <div className="mt-3 grid gap-2">
+                {dailySeries.map((series) => (
+                  <div key={series.id} className="rounded border border-[#d7cabc] bg-white p-3">
+                    <p className="text-xs font-semibold uppercase text-[#6c5f3d]">{series.enabled ? "有効" : "停止"} / {series.id}</p>
+                    <p className="mt-1 font-semibold">{series.publish_time} {series.title}</p>
+                    <p className="mt-1 text-xs leading-5 text-[#5e625c]">カテゴリ: {series.category} / 下書き {series.draft_time} / 公開 {series.publish_time}</p>
+                  </div>
+                ))}
+                {!dailySeries.length ? <p className="rounded border border-[#d7cabc] bg-white p-3 text-sm text-[#5e625c]">スケジュール未設定です。</p> : null}
+              </div>
             </Panel>
 
             <EditorPanel article={selected} onChange={setSelected} onSave={() => saveArticle()} onClose={() => setSelected(null)} />
