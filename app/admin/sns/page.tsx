@@ -9,6 +9,9 @@ type SnsSettings = { automation_level?: number; emergency_stop_all?: number; sch
 type DeckOption = { id: string; name: string; status: string; sns_use_allowed: number };
 type UploadedMedia = { assetId: string; url: string; fileName: string; sizeBytes: number; mimeType: string };
 type SnsAction = "idle" | "loading" | "generating" | "saving" | "uploading" | "publishing" | "copying" | "downloading" | "deleting";
+type ThreeChoiceCard = { slot: "A" | "B" | "C"; cardId: string; name: string; image: string; reading: string };
+type ThreeChoicePayload = { theme: string; category: string; deckId: string; cta: string; cards: ThreeChoiceCard[]; timeline: Array<{ id: string; start: number; end: number; label: string }> };
+type VideoJob = { id: string; status: string; theme: string; category?: string; output_url?: string; error_code?: string; error_message?: string; retry_count?: number; created_at?: string; completed_at?: string };
 
 const ideas = [
   "返信前の文章を整える3つの視点",
@@ -36,12 +39,21 @@ export default function SnsAdminPage() {
   const [uploadedMedia, setUploadedMedia] = useState<UploadedMedia | null>(null);
   const [duplicateCandidate, setDuplicateCandidate] = useState<{ id: string; title?: string; created_at?: string; score?: number } | null>(null);
   const [activeAction, setActiveAction] = useState<SnsAction>("loading");
+  const [threeChoiceTheme, setThreeChoiceTheme] = useState("近いうちに起こる嬉しいこと");
+  const [threeChoiceCategory, setThreeChoiceCategory] = useState("near_future");
+  const [threeChoiceDeckId, setThreeChoiceDeckId] = useState("");
+  const [threeChoiceCta, setThreeChoiceCta] = useState("詳しい鑑定はプロフィールへ");
+  const [threeChoiceBackground, setThreeChoiceBackground] = useState("media://raven/default-background");
+  const [threeChoiceMusic, setThreeChoiceMusic] = useState("media://raven/default-bgm");
+  const [threeChoicePreview, setThreeChoicePreview] = useState<ThreeChoicePayload | null>(null);
+  const [videoJobs, setVideoJobs] = useState<VideoJob[]>([]);
   const postCounts = {
     draft: posts.filter((post) => post.status === "draft").length,
     scheduled: posts.filter((post) => post.status === "scheduled").length,
     published: posts.filter((post) => post.status === "published").length,
     failed: posts.filter((post) => post.status === "failed").length,
   };
+  const activeSnsDecks = decks.filter((deck) => deck.status === "active" && deck.sns_use_allowed);
 
   async function loadPosts() {
     try {
@@ -65,6 +77,14 @@ export default function SnsAdminPage() {
       const response = await fetch("/api/card-library?resource=decks&tenantId=raven-oracle", { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (response.ok) setDecks(payload.decks || []);
+    } catch {}
+  }
+
+  async function loadVideoJobs() {
+    try {
+      const response = await fetch("/api/sns/videos/three-choice/render", { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok) setVideoJobs(payload.jobs || []);
     } catch {}
   }
 
@@ -94,10 +114,108 @@ export default function SnsAdminPage() {
         if (active) setActiveAction("idle");
       });
     loadDecks();
+    loadVideoJobs();
     return () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!threeChoiceDeckId) {
+      const firstActive = decks.find((deck) => deck.status === "active" && deck.sns_use_allowed);
+      if (firstActive) setThreeChoiceDeckId(firstActive.id);
+    }
+  }, [decks, threeChoiceDeckId]);
+
+  async function generateThreeChoicePreview() {
+    if (activeAction !== "idle") return;
+    setActiveAction("generating");
+    setStatus("3択動画のプレビューを生成しています。");
+    try {
+      const response = await fetch("/api/sns/videos/three-choice/preview", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tenant_id: "raven-oracle",
+          theme: threeChoiceTheme,
+          category: threeChoiceCategory,
+          deck_id: threeChoiceDeckId,
+          cta: threeChoiceCta,
+          background: threeChoiceBackground,
+          music: threeChoiceMusic,
+          selection_mode: "least_used",
+          exclude_recent_days: 14,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setStatus(payload.error || "3択動画プレビューの生成に失敗しました。");
+        return;
+      }
+      setThreeChoicePreview(payload.payload);
+      setStatus("3択動画プレビューを生成しました。カードと短文を確認してください。");
+    } catch {
+      setStatus("3択動画プレビューの生成に失敗しました。通信状態を確認してください。");
+    } finally {
+      setActiveAction("idle");
+    }
+  }
+
+  async function renderThreeChoiceVideo() {
+    if (activeAction !== "idle") return;
+    if (!threeChoicePreview) {
+      setStatus("先に3択動画プレビューを生成してください。");
+      return;
+    }
+    setActiveAction("saving");
+    setStatus("3択動画ジョブを登録しています。Renderer未接続時はfailedとして記録されます。");
+    try {
+      const response = await fetch("/api/sns/videos/three-choice/render", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tenant_id: "raven-oracle", job_payload: threeChoicePreview }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      setStatus(response.ok ? `3択動画ジョブを登録しました: ${payload.jobId} / ${payload.status}` : payload.error || "3択動画ジョブ登録に失敗しました。");
+      await loadVideoJobs();
+    } catch {
+      setStatus("3択動画ジョブ登録に失敗しました。通信状態を確認してください。");
+    } finally {
+      setActiveAction("idle");
+    }
+  }
+
+  async function retryVideoJob(jobId: string) {
+    if (activeAction !== "idle") return;
+    setActiveAction("saving");
+    setStatus("3択動画ジョブを再試行しています。");
+    try {
+      const response = await fetch(`/api/sns/videos/jobs/${encodeURIComponent(jobId)}/retry`, { method: "POST" });
+      const payload = await response.json().catch(() => ({}));
+      setStatus(response.ok ? `再試行しました: ${payload.status}` : payload.error || "再試行に失敗しました。");
+      await loadVideoJobs();
+    } catch {
+      setStatus("再試行に失敗しました。通信状態を確認してください。");
+    } finally {
+      setActiveAction("idle");
+    }
+  }
+
+  async function queueVideoToSns(jobId: string) {
+    if (activeAction !== "idle") return;
+    setActiveAction("saving");
+    setStatus("完成動画をSNS下書きへ送っています。");
+    try {
+      const response = await fetch(`/api/sns/videos/${encodeURIComponent(jobId)}`, { method: "POST" });
+      const payload = await response.json().catch(() => ({}));
+      setStatus(response.ok ? `SNS下書きを作成しました: ${payload.snsPostId}` : payload.error || "SNS下書き作成に失敗しました。");
+      await Promise.all([loadPosts(), loadVideoJobs()]);
+    } catch {
+      setStatus("SNS下書き作成に失敗しました。通信状態を確認してください。");
+    } finally {
+      setActiveAction("idle");
+    }
+  }
 
   function generateSlides() {
     setActiveAction("generating");
@@ -332,6 +450,42 @@ export default function SnsAdminPage() {
         </section>
         <section className="mt-4 rounded border border-[#d7cabc] bg-[#fffaf2] p-4 text-sm leading-7 text-[#5e625c]">
           <span className="font-semibold text-[#20241f]">自動投稿予約:</span> {settings?.automation_level ? "有効" : "無効"} / 投稿枠 {scheduleLabel()} / 緊急停止 {settings?.emergency_stop_all ? "ON" : "OFF"}
+        </section>
+        <section className="mt-6 rounded border border-[#d7cabc] bg-[#fffaf2] p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold uppercase text-[#6c5f3d]">20s Three Choice Video</p>
+              <h2 className="mt-1 text-2xl font-semibold">20秒3択動画生成</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-7 text-[#5e625c]">Deck Managerのカード3枚を使い、0-2秒テーマ、2-6秒選択、6-18秒A/B/C、18-20秒CTAの固定タイムラインJSONを作成します。重いFFmpeg処理は外部Rendererへ渡します。</p>
+            </div>
+            <button className="rounded border border-[#d7cabc] bg-white px-4 py-2 text-sm font-semibold disabled:opacity-60" type="button" onClick={loadVideoJobs} disabled={activeAction !== "idle"}>ジョブ更新</button>
+          </div>
+          <div className="mt-4 grid gap-4 lg:grid-cols-[320px_1fr]">
+            <div className="grid gap-3">
+              <label className="grid gap-2 text-sm font-semibold">テーマ<input className="admin-field" value={threeChoiceTheme} onChange={(event) => setThreeChoiceTheme(event.target.value)} /></label>
+              <label className="grid gap-2 text-sm font-semibold">カテゴリ<select className="admin-field" value={threeChoiceCategory} onChange={(event) => setThreeChoiceCategory(event.target.value)}><option value="love">恋愛</option><option value="relationship">相手の気持ち</option><option value="work">仕事</option><option value="money">金運</option><option value="near_future">近未来</option><option value="daily_message">今日のメッセージ</option><option value="yes_no">YES / NO</option></select></label>
+              <label className="grid gap-2 text-sm font-semibold">使用デッキ<select className="admin-field" value={threeChoiceDeckId} onChange={(event) => setThreeChoiceDeckId(event.target.value)}><option value="">選択してください</option>{decks.map((deck) => <option key={deck.id} value={deck.id}>{deck.name} / {deck.status} / SNS {deck.sns_use_allowed ? "可" : "不可"}</option>)}</select></label>
+              {!activeSnsDecks.length ? <p className="rounded border border-[#b98043] bg-[#fff6e8] p-3 text-xs leading-5 text-[#7a451b]">3択動画の選出には、Deck Managerで「active」かつ「SNS可」のデッキと、有効なSNS可カードが3枚以上必要です。</p> : null}
+              <label className="grid gap-2 text-sm font-semibold">背景<input className="admin-field" value={threeChoiceBackground} onChange={(event) => setThreeChoiceBackground(event.target.value)} /></label>
+              <label className="grid gap-2 text-sm font-semibold">BGM<input className="admin-field" value={threeChoiceMusic} onChange={(event) => setThreeChoiceMusic(event.target.value)} /></label>
+              <label className="grid gap-2 text-sm font-semibold">CTA<input className="admin-field" value={threeChoiceCta} onChange={(event) => setThreeChoiceCta(event.target.value)} /></label>
+              <div className="flex flex-wrap gap-2">
+                <button className="rounded bg-[#222820] px-4 py-2 text-sm font-semibold text-[#fff8ed] disabled:opacity-60" type="button" onClick={generateThreeChoicePreview} disabled={activeAction !== "idle"}>プレビュー生成</button>
+                <button className="rounded bg-[#596d51] px-4 py-2 text-sm font-semibold text-[#fff8ed] disabled:opacity-60" type="button" onClick={renderThreeChoiceVideo} disabled={activeAction !== "idle" || !threeChoicePreview}>動画生成</button>
+              </div>
+            </div>
+            <div className="grid gap-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                {threeChoicePreview?.cards.map((card) => <article key={card.slot} className="rounded border border-[#d7cabc] bg-white p-3"><p className="text-xs font-semibold text-[#6c5f3d]">{card.slot}</p>{card.image && (card.image.startsWith("http") || card.image.startsWith("/")) ? <img className="mt-2 aspect-[3/4] w-full rounded border border-[#d7cabc] object-cover" src={card.image} alt={`${card.name}のカード画像`} /> : null}<h3 className="mt-3 font-semibold">{card.name}</h3><p className="mt-2 text-sm leading-6 text-[#5e625c]">{card.reading}</p>{card.image ? <p className="mt-2 break-all text-xs text-[#5e625c]">{card.image}</p> : <p className="mt-2 text-xs text-[#b55]">画像未設定</p>}</article>)}
+                {!threeChoicePreview ? <p className="rounded border border-dashed border-[#d7cabc] bg-white p-4 text-sm leading-7 text-[#5e625c] md:col-span-3">プレビュー生成後、A/B/Cのカードと4秒で読める短文がここに表示されます。</p> : null}
+              </div>
+              {threeChoicePreview ? <div className="rounded border border-[#d7cabc] bg-white p-3 text-xs leading-5 text-[#5e625c]"><p className="font-semibold text-[#20241f]">タイムライン</p>{threeChoicePreview.timeline.map((item) => <p key={item.id}>{item.start.toFixed(1)}-{item.end.toFixed(1)}秒: {item.label}</p>)}</div> : null}
+              <div className="grid gap-3">
+                {videoJobs.slice(0, 6).map((job) => <article key={job.id} className="rounded border border-[#d7cabc] bg-white p-3"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-semibold text-[#6c5f3d]">{job.status} / {job.category || "-"}</p><h3 className="mt-1 font-semibold">{job.theme}</h3><p className="mt-1 text-xs text-[#5e625c]">{job.created_at || "-"} / retry {job.retry_count || 0}</p>{job.error_message ? <p className="mt-2 text-xs text-red-700">{job.error_code}: {job.error_message}</p> : null}{job.output_url ? <p className="mt-2 break-all text-xs text-[#596d51]">{job.output_url}</p> : null}</div><div className="flex flex-wrap gap-2"><button className="rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold disabled:opacity-60" type="button" onClick={() => retryVideoJob(job.id)} disabled={activeAction !== "idle"}>Retry</button><button className="rounded border border-[#596d51] px-3 py-2 text-xs font-semibold text-[#596d51] disabled:opacity-60" type="button" onClick={() => queueVideoToSns(job.id)} disabled={activeAction !== "idle" || job.status !== "completed"}>SNSへ</button></div></div></article>)}
+                {!videoJobs.length ? <p className="rounded border border-dashed border-[#d7cabc] bg-white p-4 text-sm leading-7 text-[#5e625c]">動画ジョブはまだありません。</p> : null}
+              </div>
+            </div>
+          </div>
         </section>
         <section className="mt-8 grid gap-6 lg:grid-cols-[360px_1fr]">
           <aside className="rounded border border-[#d7cabc] bg-[#fffaf2] p-5">
