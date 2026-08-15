@@ -525,42 +525,52 @@ function jstLocalToUtcIso(date: string, time: string) {
   return new Date(`${date}T${time}:00+09:00`).toISOString();
 }
 
-function buildDailyHomepageArticle(date: string) {
-  const title = "占い師がホームページを持つメリット";
+function dateSeed(date: string) {
+  return date.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+}
+
+function pickDaily<T>(items: T[], date: string, offset = 0) {
+  return items[(dateSeed(date) + offset) % items.length];
+}
+
+function buildDailyFortuneArticle(date: string) {
+  const focus = pickDaily(["整える", "待つ", "選び直す", "伝える", "距離を測る", "始める", "手放す"], date);
+  const sign = pickDaily(["風が止み、次の音が聞こえる", "火種を守りながら歩く", "水面の揺れが本心を映す", "古い扉の鍵を確かめる", "小さな違和感が道案内になる"], date, 3);
+  const caution = pickDaily(["急いで結論を出さないこと", "相手の沈黙を悪い意味だけで読まないこと", "一度に全部を動かそうとしないこと", "説明不足のまま約束しないこと", "期待と事実を混ぜないこと"], date, 7);
+  const action = pickDaily(["返信前に一文だけ削る", "予定を一つだけ軽くする", "迷っている件を紙に三行で書く", "先に確認の連絡を入れる", "今日は保留するものを決める"], date, 11);
+  const title = `今日の占い ${date} - レイヴン・ブラックウッドの一日易断`;
   const body = [
-    "## SNSだけでは残りにくい情報",
-    "占い師の発信はSNSでも届きます。けれどSNSは流れが速く、料金、鑑定方針、得意な相談内容、予約方法のような大事な情報が、過去投稿の中に埋もれやすい場所でもあります。",
-    "ホームページは、その流れてしまう情報を落ち着いて置いておける拠点です。初めて来た人が、占い師の雰囲気や相談できる内容を一度で確認できます。",
-    "## 相談前の不安を減らす役割",
-    "相談者は、申し込む前に多くの小さな不安を抱えています。どんな人が鑑定するのか。料金はいくらか。相談してよい内容なのか。強く売り込まれないか。",
-    "ホームページに基本情報が整理されていると、その不安を一つずつ減らせます。これは派手な宣伝ではなく、相談者が安心して判断するための土台です。",
-    "## 予約までの道筋を整える",
-    "SNSで興味を持っても、次に何をすればよいか分からなければ、相談者はそこで止まります。プロフィール、鑑定メニュー、注意事項、予約ボタンが同じ場所にあるだけで、行動の迷いはかなり減ります。",
-    "占い師側にとっても、毎回同じ説明を繰り返す負担が減ります。事前に読んでほしいことをページに置けるからです。",
-    "## レイヴン・ブラックウッドでの考え方",
-    "レイヴン・ブラックウッドでは、ホームページを単なる看板ではなく、相談者が自分のペースで確かめるための静かな受付として考えます。SNSで出会い、ブログで理解し、必要な人だけが鑑定へ進む。",
-    "その流れが整うほど、占い師の言葉は一度きりの投稿ではなく、長く働く案内になります。",
+    "## 今日の兆し",
+    `今日の気配は「${sign}」です。大きな決断を無理に引き寄せる日ではなく、目の前の情報を静かに並べ直すことで流れが見えてきます。レイヴン・ブラックウッドの易断では、今日は「${focus}」を軸にして一日を読むと、余計な焦りがほどけやすいでしょう。`,
+    "## 仕事と対人運",
+    "仕事や連絡では、相手の反応を急がせるより、こちらの意図を短く整えることが助けになります。曖昧な依頼、途中で止まっている相談、返しづらいメッセージがあるなら、まず事実と感情を分けてください。そこから言葉を選ぶと、不要な摩擦を避けられます。",
+    "## 恋愛と心の距離",
+    "恋愛面では、近づきたい気持ちと確かめたい気持ちが混ざりやすい日です。答えを急ぐほど、相手の小さな態度が大きく見えます。今日は相手を試す言葉より、自分が本当に知りたいことを明確にする方が流れに合っています。",
+    "## 気をつけること",
+    `注意点は、${caution}です。占いは未来を固定するものではなく、選択の前に視界を整えるための道具です。不安から動くのか、必要だから動くのか。その違いを一度見分けるだけで、同じ一手でも結果の受け取り方が変わります。`,
+    "## 今日の一手",
+    `今日の一手は「${action}」です。小さな調整で十分です。大きく運命を変えようとするより、今日の言葉、今日の予定、今日の判断を一つだけ整える。その積み重ねが、明日の選択肢を広げていきます。`,
   ].join("\n\n");
   return {
     title,
-    slug: `fortune-teller-website-benefits-${date}`,
-    description: "占い師がホームページを持つことで、信頼情報、予約導線、ブログ資産をどう整えられるかを解説します。",
+    slug: `daily-fortune-${date}`,
+    description: `${date}の今日の占い。レイヴン・ブラックウッドが一日の流れ、仕事・対人、恋愛、今日の一手を読み解きます。`,
     body,
-    category: "占い師がホームページを持つメリット",
-    tags: ["占い師", "ホームページ", "集客", "レイヴン・ブラックウッド", "Fortune Studio"],
-    keyMessage: "ホームページは占い師の情報を一か所に整え、相談者が安心して判断するための拠点になる。",
+    category: "今日の占い",
+    tags: ["今日の占い", "易断", "レイヴン・ブラックウッド", "運勢", "Fortune Studio"],
+    keyMessage: `今日は「${focus}」を軸に、${caution}を意識すると流れが整います。`,
   };
 }
 
 async function createDueDailyBlogDraft(env: Env, autoPublish: boolean) {
   const { date, time } = jstParts();
-  if (time < "13:00") return 0;
-  const idempotencyKey = `daily:${TENANT_ID}:homepage-benefits:${date}`;
+  if (time < "07:00") return 0;
+  const idempotencyKey = `daily:${TENANT_ID}:today-fortune:${date}`;
   const existing = await env.DB.prepare("SELECT id FROM blog_engine_articles WHERE tenant_id = ? AND idempotency_key = ? LIMIT 1")
     .bind(TENANT_ID, idempotencyKey)
     .first<{ id: string }>();
   if (existing) return 0;
-  const article = buildDailyHomepageArticle(date);
+  const article = buildDailyFortuneArticle(date);
   const articleId = crypto.randomUUID();
   await env.DB.prepare(
     `INSERT INTO blog_engine_articles
@@ -579,11 +589,11 @@ async function createDueDailyBlogDraft(env: Env, autoPublish: boolean) {
       article.body,
       article.category,
       JSON.stringify(article.tags),
-      "占い師 ホームページ メリット",
-      JSON.stringify(["占い師 集客", "占い師 ブログ", "予約導線"]),
-      "占い師としてホームページを持つ実務的な利点を知りたい",
-      "SNS発信だけに限界を感じている占い師・個人鑑定者",
-      JSON.stringify(["SNSだけでは残りにくい情報", "相談前の不安を減らす役割", "予約までの道筋を整える", "レイヴン・ブラックウッドでの考え方"]),
+      "今日の占い",
+      JSON.stringify(["レイヴン・ブラックウッド 今日の占い", "易断 今日", "一日の運勢"]),
+      "今日の流れと注意点を短く確認したい",
+      "朝のうちに一日の判断軸を整えたい読者",
+      JSON.stringify(["今日の兆し", "仕事と対人運", "恋愛と心の距離", "気をつけること", "今日の一手"]),
       `${article.title} | レイヴン・ブラックウッド Blog`,
       article.description,
       `${article.title} | レイヴン・ブラックウッド Blog`,
@@ -594,15 +604,53 @@ async function createDueDailyBlogDraft(env: Env, autoPublish: boolean) {
       article.keyMessage,
       JSON.stringify({ warnings: [], blocked: false }),
       autoPublish ? "scheduled" : "draft",
-      autoPublish ? jstLocalToUtcIso(date, "17:00") : null,
+      autoPublish ? jstLocalToUtcIso(date, "07:00") : null,
       idempotencyKey,
     )
     .run();
   await env.DB.prepare("INSERT INTO blog_engine_events (event_id, event_type, tenant_id, article_id, payload_json) VALUES (?, 'article.created', ?, ?, ?)")
-    .bind(crypto.randomUUID(), TENANT_ID, articleId, JSON.stringify({ article_id: articleId, series_id: "homepage-benefits", draft_time: "13:00", publish_time: "17:00" }))
+    .bind(crypto.randomUUID(), TENANT_ID, articleId, JSON.stringify({ article_id: articleId, series_id: "today-fortune", draft_time: "07:00", publish_time: "07:00" }))
     .run();
   return 1;
 }
+
+async function queueAndPublishBlogSnsPost(env: Env, article: { id: string; slug?: string; title?: string; category?: string; key_message?: string }) {
+  const trackingId = `blog-sns:${article.id}:instagram`;
+  const existing = await env.DB.prepare("SELECT id FROM sns_posts WHERE tenant_id = ? AND duplicate_warning = ? LIMIT 1")
+    .bind(TENANT_ID, trackingId)
+    .first<{ id: string }>();
+  if (existing) return 0;
+
+  const id = crypto.randomUUID();
+  const title = sanitizeText(article.title || "今日の占い", 180);
+  const keyMessage = sanitizeText(article.key_message || "今日の流れを整える一手を確認しましょう。", 240);
+  const blogUrl = article.slug ? `https://raven.fortunestudios.jp/blog/${article.slug}/` : "https://raven.fortunestudios.jp/blog/";
+  const caption = `${title}\n\n${keyMessage}\n\n詳しくはブログ「今日の占い」へ。\n${blogUrl}\n\n#レイヴンブラックウッド #今日の占い #易断 #占い`;
+  await env.DB.prepare(
+    `INSERT INTO sns_posts
+      (id, tenant_id, platform, post_type, title, theme, category, character, purpose, cta, caption, hashtags, script, media_type, media_url, thumbnail_url, status, scheduled_at, ai_generated, duplicate_warning)
+      VALUES (?, ?, 'instagram', 'image', ?, ?, ?, 'レイヴン・ブラックウッド', 'ブログ「今日の占い」からSNS導線を作る', '詳しくはブログ「今日の占い」へ。', ?, ?, ?, 'image', ?, ?, 'scheduled', ?, 1, ?)`,
+  )
+    .bind(
+      id,
+      TENANT_ID,
+      `${title} / Instagram`.slice(0, 180),
+      title,
+      article.category || "今日の占い",
+      caption,
+      "#レイヴンブラックウッド #今日の占い #易断 #占い",
+      `${title}\n${keyMessage}\nブログへ誘導`,
+      "https://raven.fortunestudios.jp/raven-blackwood-cover.png",
+      "https://raven.fortunestudios.jp/raven-blackwood-cover.png",
+      new Date().toISOString(),
+      trackingId,
+    )
+    .run();
+  const post = await env.DB.prepare("SELECT * FROM sns_posts WHERE tenant_id = ? AND id = ? LIMIT 1").bind(TENANT_ID, id).first();
+  if (post) await publishSnsPost(env, post as Record<string, unknown>);
+  return 1;
+}
+
 async function publishDueBlogArticles(env: Env) {
   if (!env.DB) return 0;
   const settings = await env.DB.prepare("SELECT enabled, kill_switch, auto_post_enabled, automation_levels_json FROM blog_engine_settings WHERE tenant_id = ? LIMIT 1")
@@ -615,10 +663,10 @@ async function publishDueBlogArticles(env: Env) {
   if (articleGeneration) await createDueDailyBlogDraft(env, autoPublish);
   if (!autoPublish) return 0;
   const result = await env.DB.prepare(
-    "SELECT id FROM blog_engine_articles WHERE tenant_id = ? AND status IN ('draft', 'scheduled') AND scheduled_at IS NOT NULL AND datetime(scheduled_at) <= datetime('now') ORDER BY datetime(scheduled_at) ASC LIMIT 20",
+    "SELECT id, slug, title, category, key_message FROM blog_engine_articles WHERE tenant_id = ? AND status IN ('draft', 'scheduled') AND scheduled_at IS NOT NULL AND datetime(scheduled_at) <= datetime('now') ORDER BY datetime(scheduled_at) ASC LIMIT 20",
   )
     .bind(TENANT_ID)
-    .all<{ id: string }>();
+    .all<{ id: string; slug?: string; title?: string; category?: string; key_message?: string }>();
   let count = 0;
   for (const article of result.results || []) {
     await env.DB.prepare("UPDATE blog_engine_articles SET status = 'published', published_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
@@ -627,6 +675,7 @@ async function publishDueBlogArticles(env: Env) {
     await env.DB.prepare("INSERT INTO blog_engine_events (event_id, event_type, tenant_id, article_id, payload_json) VALUES (?, 'article.published', ?, ?, ?)")
       .bind(crypto.randomUUID(), TENANT_ID, article.id, JSON.stringify({ article_id: article.id, published_by: "worker_cron" }))
       .run();
+    await queueAndPublishBlogSnsPost(env, article);
     count += 1;
   }
   return count;
@@ -683,7 +732,10 @@ const worker = {
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   },
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(Promise.all([publishDueSnsPosts(env), publishDueBlogArticles(env)]));
+    ctx.waitUntil((async () => {
+      await publishDueBlogArticles(env);
+      await publishDueSnsPosts(env);
+    })());
   },
 };
 

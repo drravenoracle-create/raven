@@ -15,7 +15,7 @@ function jsonArray(value: unknown, fallback: string[]) {
 function normalizeAiDraft(raw: any, fallback: BlogEngineDraft, date: string): BlogEngineDraft {
   const draft: BlogEngineDraft = {
     title: String(raw?.title || fallback.title).slice(0, 180),
-    slug: String(raw?.slug || `fortune-teller-website-benefits-${date}`).slice(0, 160),
+    slug: String(raw?.slug || `daily-fortune-${date}`).slice(0, 160),
     description: String(raw?.description || fallback.description).slice(0, 220),
     body: String(raw?.body || fallback.body),
     category: String(raw?.category || fallback.category).slice(0, 120),
@@ -34,7 +34,7 @@ function normalizeAiDraft(raw: any, fallback: BlogEngineDraft, date: string): Bl
     safetyScore: 98,
     qualityReport: { warnings: [], blocked: false },
   };
-  draft.slug = slugify(draft.slug) || `fortune-teller-website-benefits-${date}`;
+  draft.slug = slugify(draft.slug) || `daily-fortune-${date}`;
   if (!draft.body.includes("##") || draft.body.length < 900) return fallback;
   return applyBrandGuard(draft);
 }
@@ -154,10 +154,10 @@ async function createDueDailyDraft(settingsRow: { schedule_json?: string | null 
   } catch {
     schedule = {};
   }
-  const series = (schedule.daily_series || []).find((item: any) => item?.enabled && item?.id === "homepage-benefits");
+  const series = (schedule.daily_series || []).find((item: any) => item?.enabled && item?.id === "today-fortune");
   if (!series) return 0;
-  const draftTime = series.draft_time || schedule.draft_time || "13:00";
-  const publishTime = series.publish_time || schedule.publish_time || "17:00";
+  const draftTime = series.draft_time || schedule.draft_time || "07:00";
+  const publishTime = series.publish_time || schedule.publish_time || "07:00";
   if (time < draftTime) return 0;
 
   const idempotencyKey = `daily:${BLOG_ENGINE_TENANT_ID}:${series.id}:${date}`;
@@ -167,11 +167,11 @@ async function createDueDailyDraft(settingsRow: { schedule_json?: string | null 
   if (existing) return 0;
 
   const generationInput = {
-    topic: series.title || "占い師がホームページを持つメリット",
-    category: series.category || "占い師がホームページを持つメリット",
-    primaryKeyword: "占い師 ホームページ メリット",
-    targetReader: "SNS発信だけに限界を感じている占い師・個人鑑定者",
-    searchIntent: "占い師としてホームページを持つ実務的な利点を知りたい",
+    topic: series.title || "今日の占い",
+    category: series.category || "今日の占い",
+    primaryKeyword: "今日の占い レイヴン・ブラックウッド",
+    targetReader: "朝のうちに一日の流れと判断軸を整えたい読者",
+    searchIntent: "今日の占いを読み、仕事・恋愛・対人の注意点を確認したい",
   };
   const fallbackDraft = buildBlogDraft(generationInput);
   const aiResult = await buildAiBlogDraft(generationInput, fallbackDraft, date);
