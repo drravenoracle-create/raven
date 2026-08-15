@@ -502,7 +502,7 @@ export default function DeckManagerPage() {
                 <label className="flex items-center gap-2 text-sm font-semibold">重複時<select className="admin-field max-w-40" value={driveDuplicatePolicy} onChange={(event) => setDriveDuplicatePolicy(event.target.value)}><option value="skip">skip</option><option value="replace">replace</option><option value="create_new">create new</option></select></label>
                 <button className="rounded bg-[#222820] px-4 py-2 text-sm font-semibold text-[#fff8ed] disabled:opacity-60" type="button" onClick={importDriveImages} disabled={busy || !driveImages.some((image) => image.selected)}>一括登録実行</button>
               </div>
-              <p className="mt-3 text-xs leading-5 text-[#5e625c]">Drive原本は削除・移動・変更しません。画像はR2などの運用Storageへコピーし、Card Libraryには画像URLまたはstorage keyのみ保存します。1回の取り込みは最大20件です。</p>
+              <p className="mt-3 text-xs leading-5 text-[#5e625c]">Drive原本は削除・移動・変更しません。R2が有効な環境では運用Storageへコピーし、R2未接続時はDrive画像をWorker経由で配信するフォールバックURLを登録します。1回の取り込みは最大20件です。</p>
               {driveImages.length ? <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {driveImages.map((image) => (
                   <article key={image.id} className={`rounded border bg-white p-3 ${image.selected ? "border-[#596d51]" : "border-[#d7cabc]"}`}>

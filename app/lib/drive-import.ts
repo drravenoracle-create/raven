@@ -216,9 +216,25 @@ async function getDriveImageMetadata(env: unknown, fileId: string) {
   return (await response.json()) as { id: string; name: string; mimeType: string; size?: string; webViewLink?: string };
 }
 
-async function downloadDriveImage(env: unknown, fileId: string) {
+export async function downloadDriveImage(env: unknown, fileId: string) {
   const response = await driveFetch(env, `files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`);
   return response.arrayBuffer();
+}
+
+export async function driveImageResponse(env: unknown, fileId: string) {
+  const metadata = await getDriveImageMetadata(env, fileId);
+  if (!allowedImageTypes.has(metadata.mimeType)) throw new Error("Unsupported Drive image MIME type.");
+  const buffer = await downloadDriveImage(env, fileId);
+  if (buffer.byteLength <= 0 || buffer.byteLength > MAX_DRIVE_IMAGE_BYTES) throw new Error("Drive image size is outside the allowed range.");
+  const actualMime = detectImageMime(buffer);
+  if (!allowedImageTypes.has(actualMime) || actualMime !== metadata.mimeType) throw new Error("Drive image MIME validation failed.");
+  return new Response(buffer, {
+    headers: {
+      "Content-Type": actualMime,
+      "Cache-Control": "public, max-age=86400",
+      "Content-Length": String(buffer.byteLength),
+    },
+  });
 }
 
 export function validateImportCandidate(candidate: DriveImportCandidate) {
@@ -240,7 +256,6 @@ export async function bulkImportDriveImages(db: D1, env: unknown, input: { deckI
   if (!deck) throw new Error("Deck not found.");
 
   const bucket = (env as RuntimeEnv).MEDIA_BUCKET as MediaBucket | undefined;
-  if (!bucket) throw new Error("R2 MEDIA_BUCKET is not configured. Drive images cannot be copied to operation storage yet.");
 
   const duplicatePolicy = clean(input.duplicatePolicy, 40) || "skip";
   if (!["skip", "replace", "create_new"].includes(duplicatePolicy)) throw new Error("Invalid duplicate_policy.");
@@ -302,28 +317,35 @@ export async function bulkImportDriveImages(db: D1, env: unknown, input: { deckI
       if (!allowedImageTypes.has(actualMime) || actualMime !== metadata.mimeType) throw new Error("Downloaded file MIME validation failed.");
 
       const checksum = await sha256Hex(buffer);
-      const assetId = crypto.randomUUID();
-      const storageKey = `card-library/${tenantId}/${deckId}/${safeCandidate.fileId}-${checksum.slice(0, 16)}.${extFromMime(actualMime)}`;
-      await bucket.put(storageKey, buffer, {
-        httpMetadata: { contentType: actualMime },
-        customMetadata: { tenant_id: tenantId, deck_id: deckId, source_provider: "google_drive", source_file_id: safeCandidate.fileId, checksum },
-      });
-      await db.prepare(
-        `INSERT INTO media_video_assets
-          (asset_id, tenant_id, source, storage_key, duration, width, height, tags_json, category, mood, license_type, mime_type, size_bytes, checksum, performance_score)
-          VALUES (?, ?, 'google_drive', ?, 0, 0, 0, ?, 'card-library', 'deck-card', 'owned', ?, ?, ?, 0)`,
-      )
-        .bind(assetId, tenantId, storageKey, JSON.stringify(["card-library", "google-drive", deckId]), actualMime, buffer.byteLength, checksum)
-        .run();
+      let assetId = "";
+      let storageKey = `google-drive:${safeCandidate.fileId}`;
+      let imageUrl = `/api/card-library/drive-image/${encodeURIComponent(safeCandidate.fileId)}`;
+      let storageProvider = "google_drive";
+      if (bucket) {
+        assetId = crypto.randomUUID();
+        storageKey = `card-library/${tenantId}/${deckId}/${safeCandidate.fileId}-${checksum.slice(0, 16)}.${extFromMime(actualMime)}`;
+        await bucket.put(storageKey, buffer, {
+          httpMetadata: { contentType: actualMime },
+          customMetadata: { tenant_id: tenantId, deck_id: deckId, source_provider: "google_drive", source_file_id: safeCandidate.fileId, checksum },
+        });
+        await db.prepare(
+          `INSERT INTO media_video_assets
+            (asset_id, tenant_id, source, storage_key, duration, width, height, tags_json, category, mood, license_type, mime_type, size_bytes, checksum, performance_score)
+            VALUES (?, ?, 'google_drive', ?, 0, 0, 0, ?, 'card-library', 'deck-card', 'owned', ?, ?, ?, 0)`,
+        )
+          .bind(assetId, tenantId, storageKey, JSON.stringify(["card-library", "google-drive", deckId]), actualMime, buffer.byteLength, checksum)
+          .run();
+        imageUrl = `/api/reel-engine/assets?assetId=${encodeURIComponent(assetId)}`;
+        storageProvider = "r2";
+      }
 
-      const imageUrl = `/api/reel-engine/assets?assetId=${encodeURIComponent(assetId)}`;
       let cardId = existingNumber?.id || "";
       let status: DriveImportResult["status"] = "imported";
       if (existingNumber && duplicatePolicy === "replace") {
         await db.prepare(
-          "UPDATE card_library_cards SET card_number = ?, name = ?, name_ja = ?, image_url = ?, storage_provider = 'r2', storage_key = ?, sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?",
+          "UPDATE card_library_cards SET card_number = ?, name = ?, name_ja = ?, image_url = ?, storage_provider = ?, storage_key = ?, sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?",
         )
-          .bind(safeCandidate.card_number, safeCandidate.name, safeCandidate.name_ja || safeCandidate.name, imageUrl, storageKey, safeCandidate.card_number * 10, tenantId, existingNumber.id)
+          .bind(safeCandidate.card_number, safeCandidate.name, safeCandidate.name_ja || safeCandidate.name, imageUrl, storageProvider, storageKey, safeCandidate.card_number * 10, tenantId, existingNumber.id)
           .run();
         status = "replaced";
       } else {
@@ -333,7 +355,7 @@ export async function bulkImportDriveImages(db: D1, env: unknown, input: { deckI
           name: safeCandidate.name,
           name_ja: safeCandidate.name_ja || safeCandidate.name,
           image_url: imageUrl,
-          storage_provider: "r2",
+          storage_provider: storageProvider,
           storage_key: storageKey,
           upright_meaning: "",
           reversed_meaning: "",
