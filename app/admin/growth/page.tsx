@@ -4,7 +4,7 @@ type Connector = { source: string; provider: string; enabled: number; sync_statu
 type Conversion = { event_name: string; goal_name?: string; goal_value?: number; attribution_type: string; occurred_at?: string };
 type Insight = { insight_type: string; topic?: string; summary: string; recommended_action: string; guard_status: string; status: string };
 type Segment = { segment_key: string; label: string; basis: string; estimated: number; sensitive_attribute_used: number; confidence: number };
-type Experiment = { experiment_id: string; hypothesis: string; primary_metric: string; sample_size: number; confidence: number; status: string };
+type Experiment = { experiment_id: string; experiment_code?: string; title?: string; hypothesis: string; primary_kpi?: string; primary_metric?: string; sample_size: number; confidence_score?: number; priority_score?: number; status: string; result_status?: string; estimated_revenue_impact?: number };
 type Customer = { customer_key: string; journey_stage: string; consent_status: string; opt_out: number; total_revenue: number; lifetime_value: number };
 type Revenue = { service_key?: string; revenue: number; attribution_type: string; revenue_kind: string; occurred_at?: string };
 type Action = { id: string; action_type: string; channel?: string; risk_level: string; requires_approval: number; guard_result: string; status: string };
@@ -33,6 +33,7 @@ export default async function GrowthAdminPage() {
   const actions = (dashboard.actions || []) as Action[];
   const reports = (dashboard.reports || []) as Report[];
   const calendar = (dashboard.calendar || []) as CalendarItem[];
+  const experimentSummary = dashboard.experimentSummary || {};
   const approvalCount = actions.filter((item) => item.requires_approval && item.status === "queued").length;
   const measuredRevenue = revenue.filter((item) => item.revenue_kind === "measured").reduce((sum, item) => sum + Number(item.revenue || 0), 0);
 
@@ -46,11 +47,12 @@ export default async function GrowthAdminPage() {
           <p className="mt-3 max-w-3xl leading-7 text-[#5e625c]">検索、SNS、CTA、顧客ジャーニー、売上、LTV、承認待ちActionを確認します。外部Provider未接続の値は実測として扱いません。</p>
         </header>
 
-        <section className="mt-8 grid gap-4 md:grid-cols-4">
+        <section className="mt-8 grid gap-4 md:grid-cols-5">
           <Summary title="Connector" value={`${connectors.filter((item) => item.enabled).length}/${connectors.length}`} note="有効なデータソース" />
           <Summary title="Conversion" value={`${conversions.length}`} note="直近イベント" />
           <Summary title="Measured Revenue" value={measuredRevenue.toLocaleString("ja-JP")} note="実測売上" />
           <Summary title="Approval" value={`${approvalCount}`} note="承認待ちAction" />
+          <Summary title="Experiment" value={`${experimentSummary.active || 0}/${experimentSummary.waiting || 0}`} note="実施中 / 承認待ち" />
         </section>
 
         <section className="mt-8 grid gap-5 lg:grid-cols-2">
@@ -90,8 +92,9 @@ export default async function GrowthAdminPage() {
           </Panel>
 
           <Panel title="Audience / Experiment">
+            <Link className="rounded border border-[#596d51] bg-white p-4 text-sm font-semibold text-[#596d51]" href="/admin/growth/experiments/">Experiment Managerを開く</Link>
             {segments.map((item) => <Row key={item.segment_key} title={item.label} meta={item.basis} body={`推定 ${item.estimated ? "yes" : "no"} / sensitive ${item.sensitive_attribute_used ? "yes" : "no"} / confidence ${item.confidence}`} />)}
-            {experiments.map((item) => <Row key={item.experiment_id} title={item.hypothesis} meta={item.status} body={`${item.primary_metric} / sample ${item.sample_size} / confidence ${item.confidence}`} />)}
+            {experiments.map((item) => <Row key={item.experiment_id} title={item.title || item.hypothesis} meta={`${item.experiment_code || "EXP"} / ${item.status} / ${item.result_status || "NOT_MEASURED"}`} body={`${item.primary_kpi || item.primary_metric} / sample ${item.sample_size} / ICE ${item.priority_score || 0} / 推定Impact ${item.estimated_revenue_impact || 0}`} />)}
             {!segments.length && !experiments.length ? <Empty text="Audience/Experimentデータはまだありません。" /> : null}
           </Panel>
         </section>

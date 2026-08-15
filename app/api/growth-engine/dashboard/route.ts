@@ -1,8 +1,9 @@
 import { env } from "cloudflare:workers";
 import { GROWTH_ENGINE_TENANT_ID } from "@/app/lib/growth-engine";
+import { experimentSummary } from "@/app/lib/growth-experiment-manager";
 
 export async function GET() {
-  const [settings, connectors, metrics, conversions, insights, calendar, segments, experiments, costs, customers, revenue, actions, reports] = await Promise.all([
+  const [settings, connectors, metrics, conversions, insights, calendar, segments, experiments, experimentStats, costs, customers, revenue, actions, reports] = await Promise.all([
     env.DB.prepare("SELECT * FROM growth_engine_settings WHERE tenant_id = ? LIMIT 1").bind(GROWTH_ENGINE_TENANT_ID).first(),
     env.DB.prepare("SELECT source, provider, enabled, sync_status, last_success_at, last_error FROM growth_data_connectors WHERE tenant_id = ? ORDER BY source").bind(GROWTH_ENGINE_TENANT_ID).all(),
     env.DB.prepare("SELECT source, entity_type, metric_name, metric_value, data_quality, measured_at FROM growth_metric_points WHERE tenant_id = ? ORDER BY datetime(created_at) DESC LIMIT 20").bind(GROWTH_ENGINE_TENANT_ID).all(),
@@ -10,7 +11,8 @@ export async function GET() {
     env.DB.prepare("SELECT insight_type, topic, summary, recommended_action, sample_size, confidence, guard_status, status FROM growth_content_insights WHERE tenant_id = ? ORDER BY datetime(created_at) DESC LIMIT 20").bind(GROWTH_ENGINE_TENANT_ID).all(),
     env.DB.prepare("SELECT channel, content_type, topic, scheduled_at, status, guard_status FROM growth_calendar_items WHERE tenant_id = ? ORDER BY datetime(scheduled_at) ASC LIMIT 20").bind(GROWTH_ENGINE_TENANT_ID).all(),
     env.DB.prepare("SELECT segment_key, label, basis, estimated, sensitive_attribute_used, confidence FROM growth_audience_segments WHERE tenant_id = ? ORDER BY label").bind(GROWTH_ENGINE_TENANT_ID).all(),
-    env.DB.prepare("SELECT experiment_id, hypothesis, primary_metric, sample_size, confidence, winner, status FROM growth_experiments WHERE tenant_id = ? ORDER BY datetime(created_at) DESC LIMIT 20").bind(GROWTH_ENGINE_TENANT_ID).all(),
+    env.DB.prepare("SELECT experiment_id, experiment_code, title, hypothesis, primary_kpi, primary_metric, sample_size, confidence_score, priority_score, winner, status, result_status, estimated_revenue_impact FROM growth_experiments WHERE tenant_id = ? ORDER BY datetime(created_at) DESC LIMIT 20").bind(GROWTH_ENGINE_TENANT_ID).all(),
+    experimentSummary(env.DB, GROWTH_ENGINE_TENANT_ID),
     env.DB.prepare("SELECT provider, action, units, estimated_cost, occurred_at FROM growth_cost_usage WHERE tenant_id = ? ORDER BY datetime(occurred_at) DESC LIMIT 20").bind(GROWTH_ENGINE_TENANT_ID).all(),
     env.DB.prepare("SELECT customer_key, journey_stage, consent_status, opt_out, total_orders, total_revenue, lifetime_value, updated_at FROM growth_customer_profiles WHERE tenant_id = ? ORDER BY datetime(updated_at) DESC LIMIT 20").bind(GROWTH_ENGINE_TENANT_ID).all(),
     env.DB.prepare("SELECT service_key, revenue, gross_margin, attribution_type, revenue_kind, occurred_at FROM growth_revenue_records WHERE tenant_id = ? ORDER BY datetime(occurred_at) DESC LIMIT 20").bind(GROWTH_ENGINE_TENANT_ID).all(),
@@ -28,6 +30,7 @@ export async function GET() {
       calendar: calendar.results || [],
       segments: segments.results || [],
       experiments: experiments.results || [],
+      experimentSummary: experimentStats,
       costs: costs.results || [],
       customers: customers.results || [],
       revenue: revenue.results || [],
