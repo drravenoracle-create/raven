@@ -77,6 +77,10 @@ type DriveImportJob = {
 
 const tenantId = "raven-oracle";
 
+function isSelectableDeck(deck: Deck) {
+  return deck.status === "active" && Boolean(deck.sns_use_allowed);
+}
+
 const emptyCard = {
   card_number: "1",
   name: "",
@@ -101,12 +105,13 @@ export default function DeckManagerPage() {
   const [selectedDeckId, setSelectedDeckId] = useState("");
   const [status, setStatus] = useState("読み込み中...");
   const [busy, setBusy] = useState(false);
+  const [deletingCardId, setDeletingCardId] = useState("");
   const [cardForm, setCardForm] = useState(emptyCard);
   const [cardFilter, setCardFilter] = useState({ q: "", enabled: "all", tag: "" });
   const [selection, setSelection] = useState<Card[]>([]);
   const [selectCount, setSelectCount] = useState(1);
   const [selectionMode, setSelectionMode] = useState("random");
-  const [excludeRecentDays, setExcludeRecentDays] = useState(14);
+  const [excludeRecentDays, setExcludeRecentDays] = useState(0);
   const [driveFolderQuery, setDriveFolderQuery] = useState("");
   const [driveFolderId, setDriveFolderId] = useState("");
   const [driveFolderName, setDriveFolderName] = useState("");
@@ -116,7 +121,7 @@ export default function DeckManagerPage() {
   const [driveJobs, setDriveJobs] = useState<DriveImportJob[]>([]);
 
   const selectedDeck = useMemo(
-    () => decks.find((deck) => deck.id === selectedDeckId) || decks[0],
+    () => decks.find((deck) => deck.id === selectedDeckId) || decks.find(isSelectableDeck) || decks[0],
     [decks, selectedDeckId],
   );
 
@@ -155,7 +160,13 @@ export default function DeckManagerPage() {
       setDecks(nextDecks);
       setCards(cardPayload.cards || []);
       setUsage(usagePayload.usage || []);
-      if (!selectedDeckId && nextDecks[0]) setSelectedDeckId(nextDecks[0].id);
+      const currentDeck = nextDecks.find((deck: Deck) => deck.id === selectedDeckId);
+      const activeDeck = nextDecks.find(isSelectableDeck);
+      if ((!selectedDeckId || !currentDeck || !isSelectableDeck(currentDeck)) && activeDeck) {
+        setSelectedDeckId(activeDeck.id);
+      } else if (!selectedDeckId && nextDecks[0]) {
+        setSelectedDeckId(nextDecks[0].id);
+      }
       setStatus("Card Libraryを読み込みました。");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "読み込みに失敗しました。");
@@ -232,9 +243,38 @@ export default function DeckManagerPage() {
     if (payload?.card) setCardForm(emptyCard);
   }
 
+  async function deleteRegisteredCard(card: Card) {
+    const cardName = card.name_ja || card.name || card.id;
+    if (!window.confirm(`${cardName} を削除します。よろしいですか？`)) return;
+    setBusy(true);
+    setDeletingCardId(card.id);
+    setStatus("カードを削除しています...");
+    try {
+      const response = await fetch("/api/card-library", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tenant_id: tenantId, action: "deleteCard", id: card.id }),
+      });
+      const payload = await readJson(response);
+      if (!response.ok || !payload.ok) throw new Error(payload.error || "カード削除に失敗しました。");
+      setSelection((current) => current.filter((item) => item.id !== card.id));
+      setStatus(`${cardName} を削除しました。`);
+      await loadAll(selectedDeck?.id || selectedDeckId);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "カード削除に失敗しました。");
+    } finally {
+      setDeletingCardId("");
+      setBusy(false);
+    }
+  }
+
   async function drawCards() {
     if (!selectedDeck?.id) {
       setStatus("先にデッキを選択してください。");
+      return;
+    }
+    if (!isSelectableDeck(selectedDeck)) {
+      setStatus("選出テストは active / SNS利用可 のデッキだけが対象です。デッキ一覧から active のデッキを選ぶか、このデッキを active / SNS利用可にしてください。");
       return;
     }
     setBusy(true);
@@ -260,7 +300,7 @@ export default function DeckManagerPage() {
       setStatus(
         selected.length
           ? `${selected.length}枚を選出しました。`
-          : "選出対象がありません。デッキを active にし、SNS利用可にして、カードも有効/SNS利用可にしてください。",
+          : "選出対象がありません。カードが有効/SNS利用可か確認してください。直近除外日数を入れている場合は0日に戻して試してください。",
       );
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "カード選出に失敗しました。");
@@ -544,7 +584,7 @@ export default function DeckManagerPage() {
               </p>
               {selection.length ? <div className="mt-4 rounded border border-[#d7cabc] bg-white p-4"><p className="text-sm font-semibold text-[#6c5f3d]">選出結果</p><div className="mt-3 grid gap-3 md:grid-cols-3">{selection.map((card) => <CardBox key={card.id} card={card} />)}</div></div> : null}
               <div className="mt-4 grid gap-3 md:grid-cols-3">
-                {selectedCards.map((card) => <CardBox key={card.id} card={card} />)}
+                {selectedCards.map((card) => <CardBox key={card.id} card={card} onDelete={deleteRegisteredCard} deleting={deletingCardId === card.id} />)}
               </div>
               {!selectedCards.length ? <p className="mt-4 rounded border border-dashed border-[#d7cabc] bg-white/70 p-4 text-sm text-[#5e625c]">このデッキには表示できるカードがありません。カードを登録するか、絞り込み条件を外してください。</p> : null}
             </Panel>
@@ -582,7 +622,7 @@ function formatBytes(value: number) {
   return `${size.toFixed(index ? 1 : 0)} ${units[index]}`;
 }
 
-function CardBox({ card }: { card: Card }) {
+function CardBox({ card, onDelete, deleting = false }: { card: Card; onDelete?: (card: Card) => void; deleting?: boolean }) {
   const imageRef = card.image_url || "";
   const detail = card.sns_summary || card.upright_meaning || card.love_meaning || card.work_meaning || card.money_meaning || "説明文は未登録です。";
   return (
@@ -594,6 +634,16 @@ function CardBox({ card }: { card: Card }) {
       <p className="mt-2 line-clamp-4 text-sm leading-6 text-[#5e625c]">{detail}</p>
       {card.tags?.length ? <p className="mt-2 text-xs text-[#6c5f3d]">{card.tags.join(", ")}</p> : null}
       <p className="mt-1 text-xs text-[#5e625c]">{card.enabled ? "有効" : "無効"} / SNS {card.sns_use_allowed ? "可" : "不可"}</p>
+      {onDelete ? (
+        <button
+          className="mt-3 w-full rounded border border-[#b96f5c] px-3 py-2 text-sm font-semibold text-[#8f3f31] disabled:opacity-60"
+          type="button"
+          onClick={() => onDelete(card)}
+          disabled={deleting}
+        >
+          {deleting ? "削除中..." : "削除"}
+        </button>
+      ) : null}
     </article>
   );
 }

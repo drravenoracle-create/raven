@@ -294,6 +294,17 @@ export async function updateCard(db: D1, input: Record<string, unknown>, tenantI
   return getCard(db, id, tenantId);
 }
 
+export async function deleteCard(db: D1, input: Record<string, unknown>, tenantId = CARD_LIBRARY_TENANT_ID) {
+  const id = clean(input.id ?? input.card_id ?? input.cardId, 120);
+  if (!id) throw new Error("id is required.");
+  const current = await getCard(db, id, tenantId);
+  if (!current) throw new Error("Card not found.");
+  await db.prepare("DELETE FROM card_library_cards WHERE tenant_id = ? AND id = ?").bind(tenantId, id).run();
+  await db.prepare("UPDATE card_library_decks SET updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?").bind(tenantId, current.deck_id).run();
+  await db.prepare("UPDATE card_drive_import_items SET status = 'deleted' WHERE tenant_id = ? AND card_id = ?").bind(tenantId, id).run();
+  return { id, deck_id: current.deck_id, deleted: true };
+}
+
 export async function selectCards(db: D1, input: Record<string, unknown>, tenantId = CARD_LIBRARY_TENANT_ID) {
   const deckId = clean(input.deck_id ?? input.deckId, 120);
   const count = Math.min(Math.max(Number(input.count || 1), 1), 12);

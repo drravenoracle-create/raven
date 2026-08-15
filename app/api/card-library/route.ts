@@ -4,6 +4,7 @@ import {
   CARD_LIBRARY_TENANT_ID,
   createCard,
   createDeck,
+  deleteCard,
   getCard,
   getCardUsageHistory,
   getDeck,
@@ -104,6 +105,7 @@ export async function POST(request: Request) {
     if (action === "archiveDeck") return Response.json({ ok: true, deck: await updateDeck(env.DB, { ...body, status: "archived" }, tenantId) });
     if (action === "createCard") return Response.json({ ok: true, card: await createCard(env.DB, body, tenantId) }, { status: 201 });
     if (action === "updateCard") return Response.json({ ok: true, card: await updateCard(env.DB, body, tenantId) });
+    if (action === "deleteCard") return Response.json({ ok: true, deleted: await deleteCard(env.DB, body, tenantId) });
     if (action === "selectCards") return Response.json({ ok: true, selection: await selectCards(env.DB, body, tenantId) });
     if (action === "recordUsage") {
       const cards = Array.isArray(body.cards) ? body.cards as { id: string; deck_id: string }[] : [];
