@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-type Theme = "today" | "love" | "work" | "money";
+type Theme = "today" | "love" | "work" | "money" | "yijing";
 
 type Reading = {
   source: "ai" | "fallback" | "safety";
@@ -19,18 +19,45 @@ type Reading = {
   luckyAction: string;
 };
 
-const themes: Array<{ id: Theme; label: string; description: string }> = [
-  { id: "today", label: "今日", description: "一日の流れ、整える順番、小さな開運行動" },
-  { id: "love", label: "恋愛・相性", description: "相手との距離感、連絡の温度、関係の流れ" },
-  { id: "work", label: "仕事", description: "動くタイミング、優先順位、避けたい進め方" },
-  { id: "money", label: "金運", description: "支出の見直し、回収できる価値、判断の置き所" },
+const themes: Array<{ id: Theme; label: string; description: string; prompt: string }> = [
+  {
+    id: "today",
+    label: "今日の流れ",
+    description: "一日のリズム、先に整えること、急がなくてよいことを見ます。",
+    prompt: "例: 今日を落ち着いて過ごすために、最初に意識することを知りたい",
+  },
+  {
+    id: "love",
+    label: "恋愛・相性",
+    description: "相手との距離感、連絡の温度、踏み込みすぎない一手を見ます。",
+    prompt: "例: 相手に連絡してよいか、少し待つべきか迷っている",
+  },
+  {
+    id: "work",
+    label: "仕事",
+    description: "優先順位、交渉姿勢、力を入れる場所と抜く場所を見ます。",
+    prompt: "例: 今の仕事で、どこに集中すれば流れが良くなるか知りたい",
+  },
+  {
+    id: "money",
+    label: "金運",
+    description: "支出、回収できる価値、衝動的な判断を避ける視点を見ます。",
+    prompt: "例: 買うか待つか、今のお金の使い方を見直したい",
+  },
+  {
+    id: "yijing",
+    label: "易断",
+    description: "今の変化、守るもの、手放すもの、小さな一手を見ます。",
+    prompt: "例: このまま進めるべきか、一度立ち止まるべきかを見たい",
+  },
 ];
 
 const themeNames: Record<Theme, string> = {
-  today: "今日",
+  today: "今日の流れ",
   love: "恋愛・相性",
   work: "仕事",
   money: "金運",
+  yijing: "易断",
 };
 
 export default function FreeFortuneClient() {
@@ -39,13 +66,15 @@ export default function FreeFortuneClient() {
   const [concern, setConcern] = useState("");
   const [reading, setReading] = useState<Reading | null>(null);
   const [model, setModel] = useState("");
-  const [status, setStatus] = useState("気になるテーマを選んで、いまの流れを確認できます。");
+  const [status, setStatus] = useState("テーマを選んで、今の流れを短く確認できます。");
   const [busy, setBusy] = useState(false);
+
+  const selectedTheme = themes.find((item) => item.id === theme) || themes[0];
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
-    setStatus("鑑定中です。問いの輪郭を整えています。");
+    setStatus("レイヴンがカードを開き、今の流れを整理しています。");
     setReading(null);
     setModel("");
 
@@ -55,11 +84,17 @@ export default function FreeFortuneClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: "fortune", theme, name, concern }),
       });
-      const payload = await response.json() as { reading?: Reading; model?: string; error?: string };
+      const payload = (await response.json()) as { reading?: Reading; model?: string; error?: string };
       if (!response.ok || !payload.reading) throw new Error(payload.error || "鑑定結果を取得できませんでした。");
       setReading(payload.reading);
       setModel(payload.model || "");
-      setStatus(payload.model ? `AI鑑定完了: ${payload.model}` : payload.reading.source === "safety" ? "安全確認を優先した結果です。" : "鑑定完了。現在は補助結果で表示しています。");
+      if (payload.model) {
+        setStatus(`AI鑑定完了: ${payload.model}`);
+      } else if (payload.reading.source === "safety") {
+        setStatus("安全確認を優先した結果を表示しています。");
+      } else {
+        setStatus("鑑定完了。現在は補助結果を表示しています。");
+      }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "鑑定中にエラーが発生しました。");
     } finally {
@@ -77,16 +112,16 @@ export default function FreeFortuneClient() {
             <p className="text-sm font-semibold text-[#6c5f3d]">AI無料占い</p>
             <h1 className="mt-2 text-[2rem] font-semibold leading-tight sm:text-5xl">今の流れを、短く確かめる</h1>
             <p className="mt-3 leading-7 text-[#5e625c]">
-              レイヴン・ブラックウッドが、選んだテーマに合わせて「兆し・読み・注意点・今日の一手」を整理します。
-              深刻に決めつけるためではなく、次の行動を軽く整えるための無料鑑定です。
+              レイヴン・ブラックウッドの鑑定室へ入る前に、今日の兆しを軽く確認できます。
+              無料占いは結論を決めつけるものではなく、今の気持ちと次の一手を整理する入口です。
             </p>
           </header>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {themes.map((item) => (
               <button
                 key={item.id}
-                className={`min-h-28 rounded border p-3 text-left ${theme === item.id ? "border-[#222820] bg-[#eef1e8]" : "border-[#d7cabc] bg-[#fffaf2]"}`}
+                className={`min-h-32 rounded border p-3 text-left ${theme === item.id ? "border-[#222820] bg-[#eef1e8]" : "border-[#d7cabc] bg-[#fffaf2]"}`}
                 type="button"
                 onClick={() => setTheme(item.id)}
               >
@@ -115,7 +150,7 @@ export default function FreeFortuneClient() {
                 className="min-h-32"
                 value={concern}
                 onChange={(event) => setConcern(event.target.value)}
-                placeholder="例: 返信するべきか、少し待つべきか迷っている"
+                placeholder={selectedTheme.prompt}
               />
             </label>
             <button className="raven-primary-button mt-4 disabled:opacity-60" type="submit" disabled={busy}>
@@ -132,7 +167,7 @@ export default function FreeFortuneClient() {
           {reading ? (
             <div className="mt-4">
               <div className="rounded border border-[#cbd4c4] bg-[#edf3e8] p-4">
-                <p className="text-xs font-semibold text-[#596d51]">選ばれたカード</p>
+                <p className="text-xs font-semibold text-[#596d51]">開かれたカード</p>
                 <h2 className="mt-1 text-2xl font-semibold leading-tight">{reading.card.nameJa}</h2>
                 <p className="mt-1 text-sm text-[#5e625c]">{reading.card.meaning}</p>
               </div>
@@ -159,7 +194,8 @@ export default function FreeFortuneClient() {
             </div>
           ) : (
             <div className="mt-4 rounded border border-[#d7cabc] bg-white/75 p-4 leading-7 text-[#586052]">
-              結果はここに表示されます。テーマごとに視点が変わるため、同じ相談でも「恋愛」「仕事」「金運」では読みの焦点が変わります。
+              結果はここに表示されます。テーマごとに、見る角度と次の一手が変わります。
+              もっと具体的に読みたい場合は、AIテキスト占いで相談文や相手の文章を貼って確認できます。
             </div>
           )}
         </aside>

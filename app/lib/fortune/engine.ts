@@ -2,7 +2,7 @@
 import { checkFortuneSafety } from "@/app/lib/fortune/safety";
 import { tarotCards, type TarotCard } from "@/app/lib/fortune/tarot";
 
-export type FortuneTheme = "love" | "work" | "money" | "today";
+export type FortuneTheme = "love" | "work" | "money" | "today" | "yijing";
 
 export type FortuneRequest = {
   mode: "fortune";
@@ -33,6 +33,7 @@ const themeLabels: Record<FortuneTheme, string> = {
   work: "仕事",
   money: "金運",
   today: "今日",
+  yijing: "易断",
 };
 
 const themeInstructions: Record<FortuneTheme, string> = {
@@ -40,6 +41,7 @@ const themeInstructions: Record<FortuneTheme, string> = {
   love: "Focus on emotional distance, communication temperature, timing of contact, and how to avoid pushing the other person.",
   work: "Focus on priorities, timing, where effort is leaking, negotiation posture, and the next concrete work action.",
   money: "Focus on spending, recovery of value, small financial decisions, avoiding impulsive purchases, and one practical money action.",
+  yijing: "Focus on change, the current phase, what to preserve, what to release, and one small action that follows the flow without forcing it.",
 };
 
 const luckyActions = [
@@ -60,7 +62,7 @@ function hashText(text: string) {
 }
 
 export function normalizeTheme(theme: unknown): FortuneTheme {
-  return theme === "love" || theme === "work" || theme === "money" || theme === "today" ? theme : "today";
+  return theme === "love" || theme === "work" || theme === "money" || theme === "today" || theme === "yijing" ? theme : "today";
 }
 
 export function drawServerCard(input: { theme: FortuneTheme; name?: string; concern?: string }): TarotCard {

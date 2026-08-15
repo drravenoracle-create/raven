@@ -12,7 +12,7 @@ const modes: Array<{ id: ReadingMode; label: string; description: string; placeh
     id: "message",
     label: "受け取った文章",
     description: "相手の文章の温度、意図、距離感を整理します。",
-    placeholder: "相手から届いた文章を貼ってください。相手との関係や、気になっている点を少し添えると読みやすくなります。",
+    placeholder: "相手から届いた文章を貼ってください。関係性や気になっている点を少し添えると読みやすくなります。",
   },
   {
     id: "reply",
@@ -38,13 +38,13 @@ const divinationMenus: Array<{
     id: "integrated",
     label: "統合鑑定",
     description: "文章、感情、状況、次の一手を総合的に読みます。",
-    output: "意図 / 温度 / 注意点 / 次の一手",
+    output: "感情 / 温度 / 注意点 / 次の一手",
   },
   {
     id: "qimen",
     label: "奇門遁甲",
-    description: "動く時期、待つべきか、連絡の順番を見ます。",
-    output: "時機 / 動く方針 / 避ける動き / 一手",
+    description: "動く時期、待つべき場面、連絡の順番を見ます。",
+    output: "時機 / 動き方 / 避ける動き / 一手",
   },
   {
     id: "liuren",
@@ -89,7 +89,7 @@ export default function TextReadingPage() {
     setBusy(true);
     setResult("");
     setModel("");
-    setStatus(`レイヴンが「${selectedDivination.label}」で読んでいます...`);
+    setStatus(`レイヴンが「${selectedDivination.label}」で読んでいます。`);
     try {
       const response = await fetch("/api/raven", {
         method: "POST",
@@ -128,11 +128,8 @@ export default function TextReadingPage() {
               占術別に読む
             </h1>
             <p className="mt-3 leading-7 text-[#5e625c]">
-              受け取った文章、送る前の文章、相談文を、
-              <br className="sm:hidden" />
-              レイヴン・ブラックウッドの視点で整理します。
-              <br className="sm:hidden" />
-              選んだ占術ごとに、見る場所と結果の構造が変わります。
+              受け取った文章、送る前の文章、相談文を、レイヴン・ブラックウッドの視点で整理します。
+              統合鑑定のほか、奇門遁甲・六壬神課・太乙神数・易経の読み分けを選べます。
             </p>
           </header>
 
@@ -140,11 +137,7 @@ export default function TextReadingPage() {
             <p className="text-sm font-semibold text-[#6c5f3d]">トライアル価格</p>
             <p className="mt-1 text-3xl font-semibold text-[#20241f]">{trialPrice}</p>
             <p className="mt-2 leading-7 text-[#5e625c]">
-              現在は全メニューを0円で試せます。
-              <br className="sm:hidden" />
-              出力品質と導線を確認したうえで、
-              <br className="sm:hidden" />
-              有料化やメニュー拡張を進めます。
+              現在は全メニューを0円で試せます。出力品質と導線を確認したうえで、今後メニュー拡張や有料化を進めます。
             </p>
           </section>
 
@@ -191,7 +184,7 @@ export default function TextReadingPage() {
           <form className="raven-card raven-fortune-form p-4" onSubmit={submit}>
             <div className="rounded border border-[#d7cabc] bg-white/70 p-3 text-sm leading-6 text-[#5e625c]">
               <p className="font-semibold text-[#20241f]">現在の読み方: {selectedMode.label} / {selectedDivination.label}</p>
-              <p className="mt-1">出力構造: {selectedDivination.output}</p>
+              <p className="mt-1">出力構成: {selectedDivination.output}</p>
             </div>
             <label className="mt-4 flex flex-col gap-2">
               <span className="text-sm font-semibold">鑑定したい文章・相談内容</span>

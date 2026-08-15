@@ -200,6 +200,7 @@ a {
 .raven-profile-panel,
 .raven-home-card,
 .raven-home-method,
+.raven-route-card,
 .raven-dictionary-card,
 .raven-dictionary-section {
   border: 1px solid #d5c4a9;
@@ -224,6 +225,22 @@ a {
 
 .raven-home-method {
   border-left: 5px solid #8d6a2f;
+}
+
+.raven-route-card {
+  display: block;
+  min-height: 13rem;
+  border-top: 4px solid #596d51;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.raven-route-card:hover {
+  transform: translateY(-2px);
+  border-color: #8d6a2f;
+  box-shadow: 0 18px 42px rgba(44, 37, 28, 0.14);
 }
 
 .raven-dictionary {
@@ -402,8 +419,8 @@ a {
     max-width: 100%;
     font-size: 2rem;
     line-height: 1.18;
-    overflow-wrap: anywhere;
-    word-break: break-all;
+    overflow-wrap: break-word;
+    word-break: normal;
   }
 
   .raven-page p,
@@ -414,8 +431,8 @@ a {
   .raven-page label,
   .raven-page button {
     max-width: 100%;
-    overflow-wrap: anywhere;
-    word-break: break-all;
+    overflow-wrap: break-word;
+    word-break: normal;
   }
 
   .raven-text-shell {
@@ -469,7 +486,7 @@ a {
     width: calc(100vw - 4rem) !important;
     max-width: calc(100vw - 4rem) !important;
     white-space: normal !important;
-    word-break: break-all;
+    word-break: normal;
   }
 
   .raven-path-card {

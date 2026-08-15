@@ -1,6 +1,24 @@
-﻿import { getSortedBlogPosts } from "./lib/blog";
+import { env } from "cloudflare:workers";
+import { getSortedBlogPosts } from "./lib/blog";
 
-const latestPosts = getSortedBlogPosts().filter((post) => post.slug !== "timed-chat-review-flow").slice(0, 3);
+type HomePost = {
+  slug: string;
+  title: string;
+  description: string;
+  pubDate: string;
+  category: string;
+};
+
+type DbPost = {
+  slug: string;
+  title: string;
+  description: string;
+  published_at?: string;
+  created_at?: string;
+  category: string;
+};
+
+export const dynamic = "force-dynamic";
 
 const navLinks = [
   { href: "/guild/", label: "ギルド" },
@@ -34,7 +52,57 @@ const serviceLinks = [
   },
 ];
 
-export default function Home() {
+const routeLinks = [
+  {
+    href: "/free-fortune/",
+    title: "まず軽く確かめたい",
+    label: "AI無料占い",
+    body: "名前と気になることを入れて、今日・恋愛・仕事・金運・易断の短い兆しを確認します。",
+  },
+  {
+    href: "/text-reading/",
+    title: "文章や相談を具体的に見たい",
+    label: "AIテキスト占い",
+    body: "相手の文章、送る前の返事、相談文を貼り、占術別に読み分けます。",
+  },
+  {
+    href: "/divination-methods/",
+    title: "占術の考え方から知りたい",
+    label: "レイヴンの占術",
+    body: "奇門遁甲、六壬神課、太乙神数、易経を、現実の判断に戻す視点で解説します。",
+  },
+];
+
+async function loadLatestPosts(): Promise<HomePost[]> {
+  try {
+    const result = await env.DB.prepare(
+      "SELECT slug, title, description, published_at, created_at, category FROM blog_engine_articles WHERE tenant_id = 'raven-oracle' AND status = 'published' ORDER BY datetime(COALESCE(published_at, created_at)) DESC LIMIT 3",
+    ).all<DbPost>();
+    const posts = (result.results || []).map((post) => ({
+      slug: post.slug,
+      title: post.title,
+      description: post.description,
+      pubDate: (post.published_at || post.created_at || "").slice(0, 10),
+      category: post.category,
+    }));
+    if (posts.length) return posts;
+  } catch {}
+
+  return getSortedBlogPosts()
+    .filter((post) => post.slug !== "timed-chat-review-flow")
+    .slice(0, 3)
+    .map((post) => ({
+      slug: post.slug,
+      title: post.title,
+      description: post.description,
+      pubDate: post.pubDate,
+      category: post.category,
+    }));
+}
+
+export default async function Home() {
+  const latestPosts = await loadLatestPosts();
+
   return (
     <main className="raven-page min-h-screen text-[#20241f]">
       <section className="raven-home-hero">
@@ -47,7 +115,7 @@ export default function Home() {
 
         <div className="mx-auto grid max-w-7xl gap-8 px-5 pb-10 pt-4 lg:grid-cols-[1fr_420px] lg:items-end">
           <div className="max-w-3xl pb-3">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#d8b15f]">Raven Blackwood Oracle Room</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#d8b15f]">レイヴン・ブラックウッド 鑑定室</p>
             <h1 className="mt-4 text-5xl font-semibold leading-tight text-[#fff8e7] sm:text-7xl">
               古典占術で、<br />
               迷いを次の一手へ。
@@ -66,7 +134,7 @@ export default function Home() {
             <div className="raven-hero-trust mt-7 grid gap-3 sm:grid-cols-3">
               <div><strong>4系統</strong><span>古典占術の視点</span></div>
               <div><strong>64卦</strong><span>易経ページを個別解説</span></div>
-              <div><strong>0円</strong><span>無料占い・テキスト鑑定導線</span></div>
+              <div><strong>5入口</strong><span>無料占いから占術別鑑定へ</span></div>
             </div>
           </div>
 
@@ -101,6 +169,23 @@ export default function Home() {
             <h2>易経 六十四卦</h2>
             <span>各卦の意味、変爻、変卦、物語上の位置を個別に読めます。</span>
           </a>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 py-8">
+        <div className="mb-4">
+          <p className="text-sm font-semibold text-[#8d6a2f]">どこから入るか</p>
+          <h2 className="mt-1 text-3xl font-semibold">迷いの深さで入口を選ぶ</h2>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {routeLinks.map((route) => (
+            <a key={route.href} className="raven-route-card p-5" href={route.href}>
+              <p className="text-sm font-semibold text-[#8d6a2f]">{route.title}</p>
+              <h3 className="mt-2 text-2xl font-semibold">{route.label}</h3>
+              <p className="mt-3 leading-7 text-[#5e625c]">{route.body}</p>
+              <span className="mt-4 inline-block text-sm font-semibold text-[#596d51] underline underline-offset-4">この入口へ進む</span>
+            </a>
+          ))}
         </div>
       </section>
 
