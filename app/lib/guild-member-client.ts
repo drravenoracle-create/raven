@@ -211,6 +211,22 @@ export async function recordMemberEvent(env: GuildMemberEnv, request: Request | 
   }).catch(() => null);
 }
 
+export async function exchangeMemberSession(env: GuildMemberEnv, request: Request, transferToken: string) {
+  return guildMemberRequest<{
+    return_to?: string;
+    session_cookie?: {
+      name?: string;
+      value?: string;
+      domain?: string;
+      expires_at?: string;
+    };
+  }>(env, "/api/member/auth/exchange", {
+    method: "POST",
+    request,
+    body: { transfer_token: transferToken },
+  });
+}
+
 export function menuIdForRavenReading(input: { mode?: string; theme?: unknown; divination?: unknown }) {
   if (input.mode === "fortune") return `raven-free-${String(input.theme || "today")}`;
   if (input.mode === "reading") return `raven-text-${String(input.divination || "integrated")}`;
