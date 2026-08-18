@@ -11,7 +11,9 @@ type ConnectorRow = { source: string; provider: string; enabled: number; sync_st
 
 function daysFromPeriod(period: string | null) {
   const value = Number(period || 30);
-  return [7, 30, 90].includes(value) ? value : 30;
+  if (!Number.isFinite(value)) return 30;
+  const normalized = Math.floor(value);
+  return normalized >= 1 && normalized <= 365 ? normalized : 30;
 }
 
 export async function GET(request: Request) {
@@ -36,6 +38,11 @@ export async function GET(request: Request) {
       periodDays: days,
       visits: count("page_view"),
       readings: count("raven_text_reading"),
+      readingFormViews: count("reading_form_viewed"),
+      readingSubmitClicks: count("reading_submit_clicked"),
+      readingInputEmpty: count("reading_input_empty"),
+      readingApiFailures: count("reading_api_failed"),
+      readingCompletions: count("reading_completed"),
       chatStarts: count("timed_chat_start"),
       noteViews: count("admin_note_view"),
       primaryActions: count("raven_primary_action"),

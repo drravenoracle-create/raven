@@ -13,6 +13,10 @@ const allowedEvents = new Set([
   "trial_offer_viewed",
   "trial_started",
   "trial_completed",
+  "reading_form_viewed",
+  "reading_submit_clicked",
+  "reading_input_empty",
+  "reading_api_failed",
   "reading_started",
   "reading_completed",
   "reading_history_viewed",
@@ -31,6 +35,16 @@ function hostFrom(value: string) {
   } catch {
     return "";
   }
+}
+
+function cloudflareGeo(request: Request) {
+  const cf = (request as Request & { cf?: { country?: string; colo?: string; region?: string; city?: string } }).cf;
+  return {
+    country: clean(cf?.country || request.headers.get("cf-ipcountry"), 8).toUpperCase(),
+    colo: clean(cf?.colo, 16).toUpperCase(),
+    region: clean(cf?.region, 120),
+    city: clean(cf?.city, 120),
+  };
 }
 
 async function visitorHash(request: Request) {
@@ -53,10 +67,11 @@ export async function POST(request: Request) {
   if (!allowedEvents.has(eventName)) return Response.json({ error: "Invalid event_name" }, { status: 400 });
 
   const referrer = clean(body.referrer, 500);
+  const geo = cloudflareGeo(request);
   await env.DB.prepare(
     `INSERT INTO analytics_events
-      (id, tenant_id, event_name, page_path, page_title, referrer, referrer_host, source, medium, campaign, link_url, link_text, visitor_hash, user_agent)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, tenant_id, event_name, page_path, page_title, referrer, referrer_host, source, medium, campaign, link_url, link_text, visitor_hash, user_agent, country, cf_colo, region, city)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       crypto.randomUUID(),
@@ -73,6 +88,10 @@ export async function POST(request: Request) {
       clean(body.linkText ?? body.link_text, 180),
       await visitorHash(request),
       clean(request.headers.get("user-agent"), 500),
+      geo.country,
+      geo.colo,
+      geo.region,
+      geo.city,
     )
     .run();
 

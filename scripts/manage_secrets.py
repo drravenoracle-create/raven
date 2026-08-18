@@ -33,7 +33,7 @@ DEFAULT_CONFIG = ROOT / "dist" / "server" / "wrangler.json"
 SOURCE_CONFIG = ROOT / "wrangler.toml"
 DEFAULT_SERVICE_ACCOUNT = Path.home() / "Downloads" / "raven-502815-2e1466ba2a60.json"
 
-EXPECTED_ACCOUNT_ID = "cfda786a82241adf6b21f772dbc87544"
+EXPECTED_ACCOUNT_ID = "c7ce2613bf30affed8d2caae0068beb5"
 EXPECTED_ZONE_ID = "65356f2d324639213440b57fbd06d1e2"
 EXPECTED_GA4_PROPERTY_ID = "546077100"
 EXPECTED_SEARCH_CONSOLE_SITE_URL = "https://raven.fortunestudios.jp/"
@@ -322,6 +322,51 @@ def graph_json(path: str, token: str, params: dict | None = None) -> dict:
         raise SecretError(f"Meta Graph API error {exc.code}: {raw}") from exc
 
 
+def graph_public_json(path: str, params: dict) -> dict:
+    url = f"https://graph.facebook.com/{GRAPH_VERSION}/{path.lstrip('/')}?{urllib.parse.urlencode(params)}"
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "RavenSecretManager/1.0 (+https://raven.fortunestudios.jp/)",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raw = exc.read().decode("utf-8", errors="replace")
+        raise SecretError(f"Meta Graph API error {exc.code}: {raw}") from exc
+
+
+def exchange_long_lived_meta_user_token(args: argparse.Namespace) -> str:
+    app_id = args.meta_app_id or os.environ.get("META_APP_ID")
+    app_secret = args.meta_app_secret or os.environ.get("META_APP_SECRET")
+    short_token = args.meta_user_token or os.environ.get("META_USER_ACCESS_TOKEN")
+    if not app_id or not app_secret or not short_token:
+        raise SecretError("META_APP_ID, META_APP_SECRET, and META_USER_ACCESS_TOKEN are required.")
+
+    payload = graph_public_json(
+        "oauth/access_token",
+        {
+            "grant_type": "fb_exchange_token",
+            "client_id": app_id,
+            "client_secret": app_secret,
+            "fb_exchange_token": short_token,
+        },
+    )
+    token = payload.get("access_token")
+    if not token:
+        raise SecretError(f"Long-lived token exchange did not return access_token: {payload}")
+    expires_in = int(payload.get("expires_in") or 0)
+    if expires_in:
+        expires_at = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(time.time() + expires_in))
+        print(f"OK long-lived Meta user token created. Expires at approx: {expires_at}")
+    else:
+        print("OK long-lived Meta user token created. Expiration was not returned.")
+    return token
+
+
 def register_instagram_from_user_token(args: argparse.Namespace) -> None:
     token = args.meta_user_token or os.environ.get("META_USER_ACCESS_TOKEN")
     if not token:
@@ -360,6 +405,15 @@ def register_instagram_from_user_token(args: argparse.Namespace) -> None:
 
     put_secret("INSTAGRAM_ACCESS_TOKEN", page_token)
     put_secret("INSTAGRAM_ACCOUNT_ID", ig_id)
+
+
+def register_instagram_long_lived(args: argparse.Namespace) -> None:
+    long_user_token = exchange_long_lived_meta_user_token(args)
+    register_args = argparse.Namespace(
+        meta_user_token=long_user_token,
+        page_name=args.page_name,
+    )
+    register_instagram_from_user_token(register_args)
 
 
 def google_console_urls() -> dict[str, str]:
@@ -526,6 +580,12 @@ def main() -> int:
     meta.add_argument("--meta-user-token", default="")
     meta.add_argument("--page-name", default="")
 
+    meta_long = sub.add_parser("register-instagram-long-lived")
+    meta_long.add_argument("--meta-app-id", default="")
+    meta_long.add_argument("--meta-app-secret", default="")
+    meta_long.add_argument("--meta-user-token", default="")
+    meta_long.add_argument("--page-name", default="")
+
     google_open = sub.add_parser("google-open-console")
     google_open.add_argument(
         "--target",
@@ -572,6 +632,8 @@ def main() -> int:
             register_instagram(args)
         elif args.command == "register-instagram-from-meta":
             register_instagram_from_user_token(args)
+        elif args.command == "register-instagram-long-lived":
+            register_instagram_long_lived(args)
         elif args.command == "google-open-console":
             open_google_console(args)
         elif args.command == "google-register-latest-key":

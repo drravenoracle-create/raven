@@ -30,7 +30,7 @@ async function logRetryableAuthFailure(input: { tenantId: string; id: string; pl
 
 function isInstagramAuthError(body: unknown) {
   const error = (body as { error?: { code?: number; type?: string; error_subcode?: number } })?.error;
-  return error?.code === 190 || error?.type === "OAuthException";
+  return error?.code === 190;
 }
 
 function parseMediaUrls(post: { media_url?: string; thumbnail_url?: string }) {

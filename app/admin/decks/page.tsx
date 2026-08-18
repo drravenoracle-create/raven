@@ -126,8 +126,8 @@ export default function DeckManagerPage() {
   );
 
   const selectedCards = useMemo(
-    () => cards.filter((card) => !selectedDeck?.id || card.deck_id === selectedDeck.id),
-    [cards, selectedDeck],
+    () => cards.filter((card) => !selectedDeckId || !selectedDeck?.id || card.deck_id === selectedDeck.id),
+    [cards, selectedDeck, selectedDeckId],
   );
 
   async function readJson(response: Response) {

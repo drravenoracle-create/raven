@@ -79,7 +79,7 @@ export const blogPosts: BlogPost[] = [
     slug: "timed-chat-review-flow",
     title: "時間制チャットで相談を絞る流れ",
     description:
-      "5分、10分、20分、30分の枠で、相談の焦点を絞って会話するための運用メモです。",
+      "5分、10分、20分、30分の枠で、相談の焦点を絞って会話するための案内です。",
     pubDate: "2026-07-27",
     category: "時間制チャット",
     tags: ["チャット", "相談整理", "レイヴン・ブラックウッド"],

@@ -64,7 +64,7 @@ export default function HistoryPageClient() {
               return (
                 <article key={id || item.created_at} className="raven-card p-5">
                   <p className="text-xs font-semibold text-[#6c5f3d]">
-                    {item.created_at || "日時未取得"} / {item.menu_id || "raven-reading"} / {item.is_trial ? "trial" : "reading"}
+                    {item.created_at || "日時未取得"} / {item.is_trial ? "無料トライアル" : "鑑定"}
                   </p>
                   <h2 className="mt-2 text-2xl font-semibold">{item.title || "レイヴン鑑定"}</h2>
                   {item.summary ? <p className="mt-2 leading-7 text-[#5e625c]">{item.summary}</p> : null}
@@ -79,7 +79,7 @@ export default function HistoryPageClient() {
           ) : (
             <section className="raven-card p-5 leading-7 text-[#5e625c]">
               <p>{payload?.error || "まだ表示できる鑑定履歴がありません。"}</p>
-              <p className="mt-2">Member Core未接続時は、履歴はここには保存されません。</p>
+              <p className="mt-2">履歴機能の準備中は、ここに履歴が表示されない場合があります。</p>
             </section>
           )}
         </div>

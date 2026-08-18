@@ -54,13 +54,13 @@ export default async function BlogIndex() {
           <p className="text-sm font-semibold uppercase text-[#6c5f3d]">Blog</p>
           <h1 className="mt-2 text-4xl font-semibold">レイヴン・ブラックウッド ブログ</h1>
           <p className="mt-3 max-w-2xl leading-7 text-[#5e625c]">
-            古典占術、鑑定の考え方、運用メモを公開しています。記事ごとの閲覧数もここで確認できます。
+            古典占術、鑑定の考え方、ギルドの日々の記録を公開しています。
           </p>
         </header>
         <section className="mt-8 grid gap-4">
           {posts.map((post) => (
             <article key={post.slug} className="raven-card p-5">
-              <div className="flex flex-wrap gap-2 text-xs font-semibold text-[#6c5f3d]"><span>{post.pubDate}</span><span>{post.category}</span><span>{post.viewCount} views</span></div>
+              <div className="flex flex-wrap gap-2 text-xs font-semibold text-[#6c5f3d]"><span>{post.pubDate}</span><span>{post.category}</span><span>閲覧 {post.viewCount}</span></div>
               <h2 className="mt-2 text-2xl font-semibold"><Link href={`/blog/${post.slug}/`}>{post.title}</Link></h2>
               <p className="mt-2 leading-7 text-[#5e625c]">{post.description}</p>
               <div className="mt-4 flex flex-wrap gap-2">

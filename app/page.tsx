@@ -49,7 +49,7 @@ const serviceLinks = [
     href: "/text-reading/",
     label: "AIテキスト占い",
     title: "文章の温度と次の一手を見る",
-    body: "相手から来た文章、送る前の文章、相談文を貼り、意図・注意点・整え方を確認できます。現在は全メニューをトライアル価格0円で提供中です。",
+    body: "相手から来た文章、送る前の文章、相談文を貼り、意図・注意点・整え方を確認できます。現在は無料トライアルとして利用できます。",
   },
 ];
 
@@ -133,9 +133,9 @@ export default async function Home() {
               <a className="raven-hero-button raven-hero-button-secondary" href="/divination-methods/">占術を読む</a>
             </div>
             <div className="raven-hero-trust mt-7 grid gap-3 sm:grid-cols-3">
-              <div><strong>4系統</strong><span>古典占術の視点</span></div>
+              <div><strong>4系統</strong><span>問いに合わせて占術を選択</span></div>
               <div><strong>64卦</strong><span>易経ページを個別解説</span></div>
-              <div><strong>5入口</strong><span>無料占いから占術別鑑定へ</span></div>
+              <div><strong>5入口</strong><span>軽い確認から具体相談まで</span></div>
             </div>
           </div>
 

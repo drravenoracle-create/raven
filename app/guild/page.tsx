@@ -57,7 +57,7 @@ export default function GuildPage() {
           <nav className="mb-5 flex flex-wrap gap-3 text-sm font-semibold text-[#596d51]">
             <Link href="/">レイヴン・ブラックウッド</Link>
             <Link href="/divination-methods/">レイヴンの占術</Link>
-            <Link href="/blog/">運用メモ</Link>
+            <Link href="/blog/">ギルド日記</Link>
           </nav>
           <p className="text-sm font-semibold uppercase text-[#6c5f3d]">Guild Profile</p>
           <h1 className="mt-2 text-4xl font-semibold leading-tight sm:text-5xl">レイヴン・ブラックウッドのギルド</h1>
@@ -78,11 +78,11 @@ export default function GuildPage() {
             </Link>
           </aside>
           <div className="raven-card p-5">
-            <h2 className="text-2xl font-semibold">確認済みの正式表記</h2>
+            <h2 className="text-2xl font-semibold">ギルドを支える仲間たち</h2>
             <ul className="mt-4 grid gap-3 text-sm leading-7 text-[#4b574e] sm:grid-cols-3">
-              <li className="rounded bg-white/70 p-3">レイヴン: レイヴン・ブラックウッド</li>
-              <li className="rounded bg-white/70 p-3">ルナ: <a className="font-semibold text-[#315f70] underline" href={lunaUrl}>ルナ・スターウィンド</a></li>
-              <li className="rounded bg-white/70 p-3">スカーレット: <a className="font-semibold text-[#8c2637] underline" href={scarletUrl}>スカーレット・ドノバン</a></li>
+              <li className="rounded bg-white/70 p-3">ギルド創設者<br /><strong>レイヴン・ブラックウッド</strong></li>
+              <li className="rounded bg-white/70 p-3">月と花の相談役<br /><a className="font-semibold text-[#315f70] underline" href={lunaUrl}>ルナ・スターウィンド</a></li>
+              <li className="rounded bg-white/70 p-3">境界線と守りの相談役<br /><a className="font-semibold text-[#8c2637] underline" href={scarletUrl}>スカーレット・ドノバン</a></li>
             </ul>
           </div>
         </section>

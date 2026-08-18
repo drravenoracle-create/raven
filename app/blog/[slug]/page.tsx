@@ -70,7 +70,7 @@ export default async function BlogPostPage({ params }: { params: BlogParams }) {
       <article className="mx-auto max-w-3xl">
         <Link className="text-sm font-semibold text-[#596d51]" href="/blog/">ブログ一覧</Link>
         <header className="mt-5 border-b border-[#d7cabc] pb-6">
-          <p className="text-sm font-semibold text-[#6c5f3d]">{post.pubDate} / {post.category} / {post.viewCount} views</p>
+          <p className="text-sm font-semibold text-[#6c5f3d]">{post.pubDate} / {post.category} / 閲覧 {post.viewCount}</p>
           <h1 className="mt-2 text-4xl font-semibold leading-tight">{post.title}</h1>
           <p className="mt-3 leading-7 text-[#5e625c]">{post.description}</p>
         </header>

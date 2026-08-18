@@ -79,9 +79,9 @@ export default function FreeFortuneClient() {
       .then((payload) => {
         setAuthLinks(payload.auth_links || {});
         if (payload.flags?.member_system_enabled && payload.flags?.configured && !payload.session?.authenticated) {
-          setMemberNotice("無料トライアルを履歴に残すには、ギルド共通アカウントへの登録またはログインが必要です。");
+          setMemberNotice("結果をあとで見返すには、ギルド共通アカウントへの登録またはログインが必要です。");
         } else if (payload.flags?.member_system_enabled && payload.session?.authenticated) {
-          setMemberNotice("ギルド共通アカウントにログイン済みです。結果は履歴保存の対象になります。");
+          setMemberNotice("ログイン中です。結果をあとで見返せます。");
         } else {
           setMemberNotice("");
         }
@@ -193,7 +193,7 @@ export default function FreeFortuneClient() {
         <aside className="raven-card p-5 lg:sticky lg:top-5 lg:self-start">
           <p className="text-sm font-semibold text-[#596d51]">鑑定結果</p>
           <p className="mt-1 text-sm leading-6 text-[#5e625c]">{status}</p>
-          {model ? <p className="mt-1 text-xs font-semibold text-[#596d51]">AI生成 / {model}</p> : null}
+          {model ? <p className="mt-1 text-xs font-semibold text-[#596d51]">鑑定完了</p> : null}
 
           {reading ? (
             <div className="mt-4">

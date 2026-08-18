@@ -7,7 +7,12 @@ interface Env {
   DB: D1Database;
   INSTAGRAM_ACCESS_TOKEN?: string;
   INSTAGRAM_ACCOUNT_ID?: string;
+  INSTAGRAM_TOKEN_EXPIRES_AT?: string;
+  INSTAGRAM_TOKEN_RENEWAL_TARGET_AT?: string;
   SNS_PROVIDER_MODE?: string;
+  SNS_DAILY_THREE_CHOICE_ENABLED?: string;
+  SNS_DAILY_THREE_CHOICE_TIME_JST?: string;
+  SNS_DAILY_THREE_CHOICE_GENERATION_LEAD_MINUTES?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -51,8 +56,71 @@ function getReferrerHost(referrer: string) {
   }
 }
 
+function getCloudflareGeo(request: Request) {
+  const cf = (request as Request & { cf?: { country?: string; colo?: string; region?: string; city?: string } }).cf;
+  return {
+    country: sanitizeText(cf?.country || request.headers.get("cf-ipcountry"), 8).toUpperCase(),
+    colo: sanitizeText(cf?.colo, 16).toUpperCase(),
+    region: sanitizeText(cf?.region, 120),
+    city: sanitizeText(cf?.city, 120),
+  };
+}
+
 function toIsoDate(date = new Date()) {
   return date.toISOString().slice(0, 10);
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function parseJstDateEnd(value: string) {
+  const normalized = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return null;
+  const parsed = new Date(`${normalized}T23:59:59+09:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function instagramTokenStatus(env: Env) {
+  const expiresAt = String(env.INSTAGRAM_TOKEN_EXPIRES_AT || "").trim();
+  const expiresAtDate = parseJstDateEnd(expiresAt);
+  const renewalTargetAt = String(env.INSTAGRAM_TOKEN_RENEWAL_TARGET_AT || "").trim()
+    || (expiresAtDate ? toIsoDate(addDays(expiresAtDate, -7)) : "");
+  const configured = Boolean(env.INSTAGRAM_ACCESS_TOKEN && env.INSTAGRAM_ACCOUNT_ID);
+
+  if (!expiresAtDate) {
+    return {
+      configured,
+      expires_at: null,
+      renewal_target_at: renewalTargetAt || null,
+      days_remaining: null,
+      level: "unknown",
+      message: configured
+        ? "Instagramトークン期限が未設定です。INSTAGRAM_TOKEN_EXPIRES_ATを設定してください。"
+        : "Instagram APIが未設定です。",
+    };
+  }
+
+  const daysRemaining = Math.ceil((expiresAtDate.getTime() - Date.now()) / 86_400_000);
+  const level = daysRemaining < 0 ? "expired" : daysRemaining <= 7 ? "critical" : daysRemaining <= 30 ? "warning" : "ok";
+  const message = daysRemaining < 0
+    ? "Instagramトークン期限が切れています。再取得が必要です。"
+    : daysRemaining <= 7
+      ? "Instagramトークン期限が近いです。すぐに更新してください。"
+      : daysRemaining <= 30
+        ? "Instagramトークン期限が30日以内です。更新準備をしてください。"
+        : "Instagramトークンは有効期限内です。";
+
+  return {
+    configured,
+    expires_at: expiresAt,
+    renewal_target_at: renewalTargetAt || null,
+    days_remaining: daysRemaining,
+    level,
+    message,
+  };
 }
 
 function toJsonText(value: unknown, maxLength: number) {
@@ -122,12 +190,13 @@ async function handleAnalyticsEvent(request: Request, env: Env) {
   const userAgent = sanitizeText(request.headers.get("user-agent"), 300);
   const ip = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "";
   const visitorHash = await sha256Hex(`${toIsoDate()}|${ip}|${userAgent}`);
+  const geo = getCloudflareGeo(request);
 
   await env.DB.prepare(
     `INSERT INTO analytics_events
       (id, created_at, tenant_id, event_name, page_path, page_title, referrer, referrer_host,
-       source, medium, campaign, link_url, link_text, visitor_hash, user_agent)
-      VALUES (?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       source, medium, campaign, link_url, link_text, visitor_hash, user_agent, country, cf_colo, region, city)
+      VALUES (?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       crypto.randomUUID(),
@@ -144,6 +213,10 @@ async function handleAnalyticsEvent(request: Request, env: Env) {
       sanitizeText(body.linkText, 160),
       visitorHash,
       userAgent,
+      geo.country,
+      geo.colo,
+      geo.region,
+      geo.city,
     )
     .run();
 
@@ -257,7 +330,7 @@ function parseMediaUrls(post: Record<string, unknown>) {
 
 function isInstagramAuthError(body: unknown) {
   const error = (body as { error?: { code?: number; type?: string } })?.error;
-  return error?.code === 190 || error?.type === "OAuthException";
+  return error?.code === 190;
 }
 
 async function logRetryableInstagramAuthFailure(env: Env, input: { tenantId: string; id: string; platform: string; code: number; body?: unknown }) {
@@ -269,6 +342,17 @@ async function logRetryableInstagramAuthFailure(env: Env, input: { tenantId: str
   await env.DB.prepare("UPDATE sns_posts SET status = 'scheduled', updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
     .bind(input.tenantId, input.id)
     .run();
+}
+
+async function waitForInstagramContainer(env: Env, containerId: string) {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const response = await fetch(`https://graph.facebook.com/v26.0/${containerId}?fields=status_code&access_token=${env.INSTAGRAM_ACCESS_TOKEN}`);
+    const body = (await response.json().catch(() => ({}))) as { status_code?: string; error?: unknown };
+    if (body.status_code === "FINISHED") return { ok: true, body };
+    if (body.status_code === "ERROR" || body.error) return { ok: false, body };
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+  }
+  return { ok: false, body: { status_code: "TIMEOUT" } };
 }
 
 async function publishInstagramContainer(env: Env, post: Record<string, unknown>, creationId: string, providerMode: string) {
@@ -426,6 +510,20 @@ async function publishSnsPost(env: Env, post: Record<string, unknown>) {
       .run();
     return { ok: false, error: "Instagram media container creation failed", details: createBody };
   }
+  if (isReel) {
+    const ready = await waitForInstagramContainer(env, createBody.id);
+    if (!ready.ok) {
+      await env.DB.prepare(
+        "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?, ?)",
+      )
+        .bind(crypto.randomUUID(), tenantId, id, platform, 502, JSON.stringify(ready.body), "Instagram Reel container was not ready.")
+        .run();
+      await env.DB.prepare("UPDATE sns_posts SET status = 'failed', retry_count = retry_count + 1, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
+        .bind(tenantId, id)
+        .run();
+      return { ok: false, error: "Instagram Reel container was not ready.", details: ready.body };
+    }
+  }
   return publishInstagramContainer(env, post, createBody.id, providerMode || "instagram");
 }
 
@@ -445,28 +543,58 @@ async function publishSnsNow(request: Request, env: Env) {
   return json(await publishSnsPost(env, post));
 }
 
-async function createDueDailySnsPost(env: Env, scheduleJson: unknown) {
-  const { date, time } = jstParts();
-  const schedule = parseSnsSchedule(scheduleJson);
-  const window = schedule.windows.find((item) => time >= item.start && time <= item.end);
-  if (!window) return 0;
+function envEnabled(value: unknown, fallback = true) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) return fallback;
+  return !["0", "false", "off", "no"].includes(normalized);
+}
 
-  const idempotencyKey = `daily-sns:${TENANT_ID}:${date}:${window.start}`;
+function validTimeOr(value: unknown, fallback: string) {
+  const text = String(value ?? "").trim();
+  return /^\d{2}:\d{2}$/.test(text) ? text : fallback;
+}
+
+function positiveIntOr(value: unknown, fallback: number) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+async function createDueDailySnsPost(env: Env) {
+  const { date, time } = jstParts();
+  if (!envEnabled(env.SNS_DAILY_THREE_CHOICE_ENABLED, true)) return 0;
+  const postTime = validTimeOr(env.SNS_DAILY_THREE_CHOICE_TIME_JST, "07:00");
+  const generationLeadMinutes = positiveIntOr(env.SNS_DAILY_THREE_CHOICE_GENERATION_LEAD_MINUTES, 60);
+  const currentMinutes = timeToMinutes(time);
+  const postMinutes = timeToMinutes(postTime);
+  const generationStartMinutes = Math.max(0, postMinutes - generationLeadMinutes);
+  if (currentMinutes < generationStartMinutes || currentMinutes > generationStartMinutes + 45) return 0;
+
+  const idempotencyKey = `daily-three-choice-reel:${TENANT_ID}:${date}:${postTime}`;
   const existing = await env.DB.prepare("SELECT id FROM sns_posts WHERE tenant_id = ? AND duplicate_warning = ? LIMIT 1")
     .bind(TENANT_ID, idempotencyKey)
     .first<{ id: string }>();
   if (existing) return 0;
 
   const id = crypto.randomUUID();
-  const title = `今日のレイヴン・ブラックウッド鑑定メモ ${date}`;
-  const theme = time < "07:00" ? "夜明け前に整える、今日の判断" : "午後に見直す、迷いのほどき方";
-  const cta = "詳しく整理したい時は、レイヴン・ブラックウッドのAIテキスト鑑定へ。";
-  const caption = `${theme}\n\n急いで答えを決める前に、気持ち・状況・本当に知りたいことを分けて見直します。\n\n${cta}\n\n#レイヴンブラックウッド #占い #文章鑑定 #相談整理`;
+  const title = `今日の3択占い ${date}`;
+  const theme = "あの人が今、あなたに隠している本音";
+  const cta = "もっと詳しく占うなら、プロフィールからRaven Oracleへ。";
+  const videoUrl = "https://raven.fortunestudios.jp/api/sns/sample-video";
+  const caption = [
+    "今日の3択占い",
+    "",
+    "A / B / C から直感で1枚選んでください。",
+    "結果は動画の中で確認できます。",
+    "",
+    cta,
+    "",
+    "#レイヴンブラックウッド #3択占い #オラクルカード #占い #恋愛占い",
+  ].join("\n");
 
   await env.DB.prepare(
     `INSERT INTO sns_posts
       (id, tenant_id, platform, post_type, title, theme, category, character, purpose, cta, caption, hashtags, script, media_type, media_url, thumbnail_url, status, scheduled_at, ai_generated, duplicate_warning)
-      VALUES (?, ?, 'instagram', 'image', ?, ?, '自動投稿', 'レイヴン・ブラックウッド', 'AIテキスト鑑定への案内', ?, ?, ?, ?, 'image', ?, ?, 'scheduled', ?, 1, ?)`,
+      VALUES (?, ?, 'instagram', 'reel', ?, ?, '3択動画', 'レイヴン・ブラックウッド', 'Instagram ReelsからRaven Oracleへ誘導', ?, ?, ?, ?, 'video', ?, ?, 'scheduled', ?, 1, ?)`,
   )
     .bind(
       id,
@@ -475,11 +603,11 @@ async function createDueDailySnsPost(env: Env, scheduleJson: unknown) {
       theme,
       cta,
       caption,
-      "#レイヴンブラックウッド #占い #文章鑑定 #相談整理",
-      `0-5秒: ${theme}\n5-15秒: 迷いを気持ち、状況、問いに分ける\n15-25秒: 今日決めることと保留することを分ける\n25-30秒: ${cta}`,
-      "https://raven.fortunestudios.jp/raven-blackwood-cover.png",
-      "https://raven.fortunestudios.jp/raven-blackwood-cover.png",
-      new Date().toISOString(),
+      "#レイヴンブラックウッド #3択占い #オラクルカード #占い #恋愛占い",
+      "0-2秒: HOOK\n2-5秒: 裏面カードA/B/C\n5-17秒: A/B/Cの結果\n17-20秒: CTA",
+      videoUrl,
+      "https://raven.fortunestudios.jp/api/sns/sample-card?card=knight",
+      jstLocalToUtcIso(date, postTime),
       idempotencyKey,
     )
     .run();
@@ -491,19 +619,289 @@ async function publishDueSnsPosts(env: Env) {
   const settings = await env.DB.prepare("SELECT automation_level, emergency_stop_all, schedule_json FROM sns_automation_settings WHERE tenant_id = ? LIMIT 1").bind(TENANT_ID).first<{ automation_level?: number; emergency_stop_all?: number; schedule_json?: string }>();
   if (settings?.emergency_stop_all) return 0;
   if (!settings?.automation_level) return 0;
-  const publishWindow = currentSnsPublishWindow(settings.schedule_json);
-  if (!publishWindow) return 0;
-  await createDueDailySnsPost(env, settings.schedule_json);
+  await createDueDailySnsPost(env);
   const result = await env.DB.prepare(
-    "SELECT * FROM sns_posts WHERE tenant_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL AND datetime(scheduled_at) >= datetime(?) AND datetime(scheduled_at) <= datetime(?) AND retry_count < 3 ORDER BY datetime(scheduled_at) ASC LIMIT 3",
+    "SELECT * FROM sns_posts WHERE tenant_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL AND datetime(scheduled_at) <= datetime('now') AND retry_count < 3 ORDER BY datetime(scheduled_at) ASC LIMIT 3",
   )
-    .bind(TENANT_ID, publishWindow.startIso, publishWindow.endIso)
+    .bind(TENANT_ID)
     .all();
   let count = 0;
   for (const post of result.results || []) {
     await publishSnsPost(env, post as Record<string, unknown>);
     count += 1;
   }
+  return count;
+}
+
+function metricValueFromInsights(data: unknown, names: string[]) {
+  const rows = Array.isArray((data as { data?: unknown[] })?.data) ? (data as { data: unknown[] }).data : [];
+  for (const name of names) {
+    const row = rows.find((item) => String((item as { name?: unknown }).name || "") === name) as { values?: { value?: unknown }[] } | undefined;
+    const value = row?.values?.[0]?.value;
+    if (typeof value === "number") return value;
+    if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))) return Number(value);
+  }
+  return null;
+}
+
+async function fetchInstagramInsights(env: Env, externalPostId: string, postType: string) {
+  if (!env.INSTAGRAM_ACCESS_TOKEN) return { ok: false, error: "Instagram API is not configured." };
+  const candidates = postType === "reel" || postType === "video"
+    ? [
+        ["plays", "reach", "likes", "comments", "shares", "saved"],
+        ["ig_reels_video_view_total_time", "ig_reels_avg_watch_time"],
+        ["impressions", "reach", "likes", "comments", "saved", "shares"],
+      ]
+    : [
+        ["impressions", "reach", "likes", "comments", "saved", "shares"],
+        ["reach", "likes", "comments", "saved"],
+      ];
+  const merged: unknown[] = [];
+  const errors: unknown[] = [];
+  for (const metrics of candidates) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3500);
+    const response = await fetch(`https://graph.facebook.com/v26.0/${externalPostId}/insights?metric=${encodeURIComponent(metrics.join(","))}&access_token=${encodeURIComponent(env.INSTAGRAM_ACCESS_TOKEN)}`, { signal: controller.signal }).catch((error) => error as Error);
+    clearTimeout(timeout);
+    if (response instanceof Error) {
+      errors.push({ message: response.message });
+      continue;
+    }
+    const body = await response.json().catch(() => ({}));
+    if (response.ok && Array.isArray((body as { data?: unknown[] }).data)) {
+      merged.push(...((body as { data: unknown[] }).data));
+    } else {
+      errors.push(body);
+    }
+  }
+  if (!merged.length) return { ok: false, error: "Instagram insights unavailable", details: errors.slice(0, 3) };
+  return {
+    ok: true,
+    data: { data: merged },
+    metrics: {
+      impressions: metricValueFromInsights({ data: merged }, ["impressions"]),
+      reach: metricValueFromInsights({ data: merged }, ["reach"]),
+      likes: metricValueFromInsights({ data: merged }, ["likes"]),
+      comments: metricValueFromInsights({ data: merged }, ["comments"]),
+      saves: metricValueFromInsights({ data: merged }, ["saved", "saves"]),
+      shares: metricValueFromInsights({ data: merged }, ["shares"]),
+      plays: metricValueFromInsights({ data: merged }, ["plays"]),
+      watch_time: metricValueFromInsights({ data: merged }, ["ig_reels_video_view_total_time"]),
+      profile_visits: metricValueFromInsights({ data: merged }, ["profile_visits"]),
+      link_clicks: metricValueFromInsights({ data: merged }, ["website_clicks", "link_clicks"]),
+      follower_delta: null,
+    },
+  };
+}
+
+async function syncInstagramPostMetrics(env: Env) {
+  if (!env.DB) return 0;
+  if (!env.INSTAGRAM_ACCESS_TOKEN) return 0;
+  const posts = await env.DB.prepare(
+    `SELECT id, external_post_id, post_type, media_type
+       FROM sns_posts
+      WHERE tenant_id = ? AND platform = 'instagram' AND status = 'published'
+        AND external_post_id IS NOT NULL AND external_post_id != ''
+      ORDER BY datetime(published_at) DESC
+      LIMIT 3`,
+  ).bind(TENANT_ID).all<{ id: string; external_post_id: string; post_type: string; media_type: string }>();
+  let count = 0;
+  for (const post of posts.results || []) {
+    const result = await fetchInstagramInsights(env, post.external_post_id, post.post_type || post.media_type || "image");
+    if (!result.ok || !("metrics" in result)) {
+      await env.DB.prepare(
+        "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, 'instagram', 'metrics_sync', 'failed', ?, ?, ?)",
+      )
+        .bind(crypto.randomUUID(), TENANT_ID, post.id, 502, JSON.stringify(result), String(result.error || "Instagram insights sync failed"))
+        .run();
+      continue;
+    }
+    const metrics = result.metrics;
+    await env.DB.prepare(
+      `INSERT INTO sns_metrics
+        (id, tenant_id, post_id, impressions, reach, likes, comments, saves, shares, plays, watch_time, profile_visits, link_clicks, follower_delta, fetched_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+    )
+      .bind(
+        crypto.randomUUID(),
+        TENANT_ID,
+        post.id,
+        metrics.impressions,
+        metrics.reach,
+        metrics.likes,
+        metrics.comments,
+        metrics.saves,
+        metrics.shares,
+        metrics.plays,
+        metrics.watch_time,
+        metrics.profile_visits,
+        metrics.link_clicks,
+        metrics.follower_delta,
+      )
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body) VALUES (?, ?, ?, 'instagram', 'metrics_sync', 'success', 200, ?)",
+    )
+      .bind(crypto.randomUUID(), TENANT_ID, post.id, JSON.stringify({ external_post_id: post.external_post_id, metrics }))
+      .run();
+    count += 1;
+  }
+  return count;
+}
+
+async function syncInstagramMetricsNow(request: Request, env: Env) {
+  if (request.method !== "POST") return json({ error: "Method Not Allowed" }, { status: 405 });
+  const count = await syncInstagramPostMetrics(env);
+  await syncSnsEngineToGrowth(env);
+  return json({ ok: true, syncedPosts: count });
+}
+
+async function upsertGrowthMetric(env: Env, input: {
+  source: string;
+  entityType: string;
+  entityId: string;
+  metricName: string;
+  metricValue: number;
+  measuredAt: string;
+  windowStart?: string | null;
+  windowEnd?: string | null;
+  dataQuality?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  const idempotencyKey = `${input.source}:${input.entityType}:${input.entityId}:${input.metricName}:${input.windowStart || ""}:${input.windowEnd || ""}`;
+  await env.DB.prepare(
+    `INSERT OR REPLACE INTO growth_metric_points
+      (id, tenant_id, source, entity_type, entity_id, metric_name, metric_value, measured_at, window_start, window_end, data_quality, provider_metadata_json, idempotency_key)
+      VALUES (COALESCE((SELECT id FROM growth_metric_points WHERE tenant_id = ? AND idempotency_key = ?), ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      TENANT_ID,
+      idempotencyKey,
+      crypto.randomUUID(),
+      TENANT_ID,
+      input.source,
+      input.entityType,
+      input.entityId,
+      input.metricName,
+      input.metricValue,
+      input.measuredAt,
+      input.windowStart || null,
+      input.windowEnd || null,
+      input.dataQuality || "measured",
+      JSON.stringify(input.metadata || {}),
+      idempotencyKey,
+    )
+    .run();
+}
+
+async function syncSnsEngineToGrowth(env: Env) {
+  if (!env.DB) return 0;
+  const now = new Date().toISOString();
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  let count = 0;
+
+  const statusRows = await env.DB.prepare(
+    "SELECT platform, status, COUNT(*) AS count FROM sns_posts WHERE tenant_id = ? AND datetime(created_at) >= datetime(?) GROUP BY platform, status",
+  ).bind(TENANT_ID, since).all<{ platform: string; status: string; count: number }>();
+  for (const row of statusRows.results || []) {
+    await upsertGrowthMetric(env, {
+      source: "sns_engine",
+      entityType: "tenant",
+      entityId: TENANT_ID,
+      metricName: `sns_posts_${row.platform}_${row.status}`,
+      metricValue: Number(row.count || 0),
+      measuredAt: now,
+      windowStart: since,
+      windowEnd: now,
+      metadata: { platform: row.platform, status: row.status },
+    });
+    count += 1;
+  }
+
+  const typeRows = await env.DB.prepare(
+    "SELECT platform, post_type, COUNT(*) AS count FROM sns_posts WHERE tenant_id = ? AND datetime(created_at) >= datetime(?) GROUP BY platform, post_type",
+  ).bind(TENANT_ID, since).all<{ platform: string; post_type: string; count: number }>();
+  for (const row of typeRows.results || []) {
+    await upsertGrowthMetric(env, {
+      source: "sns_engine",
+      entityType: "tenant",
+      entityId: TENANT_ID,
+      metricName: `sns_posts_${row.platform}_${row.post_type}`,
+      metricValue: Number(row.count || 0),
+      measuredAt: now,
+      windowStart: since,
+      windowEnd: now,
+      metadata: { platform: row.platform, post_type: row.post_type },
+    });
+    count += 1;
+  }
+
+  const logRows = await env.DB.prepare(
+    "SELECT platform, action, status, COUNT(*) AS count FROM sns_publish_logs WHERE tenant_id = ? AND datetime(created_at) >= datetime(?) GROUP BY platform, action, status",
+  ).bind(TENANT_ID, since).all<{ platform: string; action: string; status: string; count: number }>();
+  for (const row of logRows.results || []) {
+    await upsertGrowthMetric(env, {
+      source: "sns_engine",
+      entityType: "tenant",
+      entityId: TENANT_ID,
+      metricName: `sns_${row.action}_${row.platform}_${row.status}`,
+      metricValue: Number(row.count || 0),
+      measuredAt: now,
+      windowStart: since,
+      windowEnd: now,
+      metadata: { platform: row.platform, action: row.action, status: row.status },
+    });
+    count += 1;
+  }
+
+  const postRows = await env.DB.prepare(
+    `SELECT id, platform, post_type, status, title, category, character, ai_generated, retry_count, scheduled_at, published_at, external_post_id, created_at
+       FROM sns_posts
+      WHERE tenant_id = ? AND datetime(created_at) >= datetime(?)
+      ORDER BY datetime(created_at) DESC
+      LIMIT 200`,
+  ).bind(TENANT_ID, since).all<Record<string, unknown>>();
+  for (const post of postRows.results || []) {
+    const postId = String(post.id || "");
+    if (!postId) continue;
+    await upsertGrowthMetric(env, {
+      source: "sns_engine",
+      entityType: String(post.post_type || "") === "reel" ? "sns_reel" : "sns_post",
+      entityId: postId,
+      metricName: `status_${String(post.status || "unknown")}`,
+      metricValue: 1,
+      measuredAt: String(post.published_at || post.created_at || now),
+      windowStart: since,
+      windowEnd: now,
+      metadata: {
+        title: post.title,
+        platform: post.platform,
+        post_type: post.post_type,
+        status: post.status,
+        category: post.category,
+        character: post.character,
+        ai_generated: post.ai_generated,
+        retry_count: post.retry_count,
+        scheduled_at: post.scheduled_at,
+        published_at: post.published_at,
+        external_post_id: post.external_post_id,
+      },
+    });
+    count += 1;
+  }
+
+  await env.DB.prepare(
+    `INSERT INTO growth_data_connectors
+      (id, tenant_id, source, provider, enabled, sync_status, last_success_at, last_attempt_at, retry_count, provider_metadata_json, updated_at)
+      VALUES ('raven-sns-engine', ?, 'sns_engine', 'sns_engine', 1, 'available', ?, ?, 0, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(id) DO UPDATE SET sync_status = 'available', enabled = 1, last_success_at = excluded.last_success_at, last_attempt_at = excluded.last_attempt_at, retry_count = 0, provider_metadata_json = excluded.provider_metadata_json, updated_at = CURRENT_TIMESTAMP`,
+  )
+    .bind(TENANT_ID, now, now, JSON.stringify({ synced_metrics: count, window_start: since, window_end: now }))
+    .run();
+
+  await env.DB.prepare("INSERT OR IGNORE INTO growth_events (event_id, tenant_id, event_type, source_engine, entity_refs_json, payload_json, idempotency_key) VALUES (?, ?, 'sns_engine.synced', 'sns_engine', ?, ?, ?)")
+    .bind(crypto.randomUUID(), TENANT_ID, JSON.stringify({ entity_type: "tenant", entity_id: TENANT_ID }), JSON.stringify({ synced_metrics: count }), `sns-engine-sync:${now.slice(0, 13)}`)
+    .run();
   return count;
 }
 
@@ -811,7 +1209,17 @@ const worker = {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/admin/sns/ping") {
-      return json({ ok: true, worker: "raven-oracle", tenantId: TENANT_ID, version: "sns-engine-raven-2026-08-09" });
+      return json({
+        ok: true,
+        worker: "raven-oracle",
+        tenantId: TENANT_ID,
+        version: "sns-engine-raven-2026-08-09",
+        instagram: {
+          access_token_configured: Boolean(env.INSTAGRAM_ACCESS_TOKEN),
+          account_id_configured: Boolean(env.INSTAGRAM_ACCOUNT_ID),
+          token: instagramTokenStatus(env),
+        },
+      });
     }
 
     if (url.pathname === "/api/analytics/event") {
@@ -834,6 +1242,10 @@ const worker = {
       return publishSnsNow(request, env);
     }
 
+    if (url.pathname === "/api/admin/sns/metrics-sync") {
+      return syncInstagramMetricsNow(request, env);
+    }
+
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
       return handleImageOptimization(request, {
@@ -854,6 +1266,8 @@ const worker = {
     ctx.waitUntil((async () => {
       await publishDueBlogArticles(env);
       await publishDueSnsPosts(env);
+      await syncInstagramPostMetrics(env);
+      await syncSnsEngineToGrowth(env);
     })());
   },
 };

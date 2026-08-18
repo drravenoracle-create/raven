@@ -7,6 +7,14 @@ type DivinationMenu = "integrated" | "qimen" | "liuren" | "taiyi" | "yijing";
 
 const trialPrice = "0円";
 
+declare global {
+  interface Window {
+    ravenAnalytics?: {
+      track: (eventName: string, extra?: Record<string, unknown>) => void;
+    };
+  }
+}
+
 const modes: Array<{ id: ReadingMode; label: string; description: string; placeholder: string }> = [
   {
     id: "message",
@@ -80,15 +88,29 @@ export default function TextReadingPage() {
   const selectedMode = useMemo(() => modes.find((item) => item.id === mode) || modes[0], [mode]);
   const selectedDivination = useMemo(() => divinationMenus.find((item) => item.id === divination) || divinationMenus[0], [divination]);
 
+  function trackReadingEvent(eventName: string, extra: Record<string, unknown> = {}) {
+    window.ravenAnalytics?.track(eventName, {
+      eventTarget: "text-reading-submit",
+      eventLabel: `${selectedMode.label} / ${selectedDivination.label}`,
+      readingMode: mode,
+      divination,
+      ...extra,
+    });
+  }
+
+  useEffect(() => {
+    trackReadingEvent("reading_form_viewed", { eventTarget: "text-reading-form" });
+  }, []);
+
   useEffect(() => {
     fetch(`/api/member/status?return_to=/text-reading/&menu_id=raven-text-${divination}`)
       .then((response) => response.json())
       .then((payload) => {
         setAuthLinks(payload.auth_links || {});
         if (payload.flags?.member_system_enabled && payload.flags?.configured && !payload.session?.authenticated) {
-          setMemberNotice("トライアル利用と鑑定履歴保存には、ギルド共通アカウントへの登録またはログインが必要です。");
+          setMemberNotice("結果をあとで見返すには、ギルド共通アカウントへの登録またはログインが必要です。");
         } else if (payload.flags?.member_system_enabled && payload.session?.authenticated) {
-          setMemberNotice("ギルド共通アカウントにログイン済みです。鑑定結果は履歴に保存されます。");
+          setMemberNotice("ログイン中です。鑑定結果をあとで見返せます。");
         } else {
           setMemberNotice("");
         }
@@ -99,8 +121,10 @@ export default function TextReadingPage() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = sourceText.trim();
+    trackReadingEvent("reading_submit_clicked", { inputLength: text.length });
     if (!text) {
       setStatus("鑑定したい文章・相談内容を入力してください。");
+      trackReadingEvent("reading_input_empty");
       return;
     }
 
@@ -124,13 +148,17 @@ export default function TextReadingPage() {
       const payload = await response.json();
       if (!response.ok) {
         if (payload.auth_url || payload.register_url) setAuthLinks({ login_url: payload.auth_url, register_url: payload.register_url });
+        trackReadingEvent("reading_api_failed", { statusCode: response.status, errorMessage: String(payload.error || "").slice(0, 120) });
         throw new Error(payload.error || "AI鑑定に失敗しました。");
       }
       setResult(payload.text || "");
       setModel(payload.model || "");
       setStatus(payload.model ? `AI鑑定完了: ${payload.model}` : "AI鑑定完了");
+      trackReadingEvent("raven_text_reading", { inputLength: text.length });
+      trackReadingEvent("reading_completed", { inputLength: text.length });
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "AI鑑定に失敗しました。");
+      if (!(error instanceof Error) || !error.message) trackReadingEvent("reading_api_failed", { errorMessage: "unknown_error" });
     } finally {
       setBusy(false);
     }
@@ -158,7 +186,7 @@ export default function TextReadingPage() {
             <p className="text-sm font-semibold text-[#6c5f3d]">トライアル価格</p>
             <p className="mt-1 text-3xl font-semibold text-[#20241f]">{trialPrice}</p>
             <p className="mt-2 leading-7 text-[#5e625c]">
-              現在は全メニューを0円で試せます。出力品質と導線を確認したうえで、今後メニュー拡張や有料化を進めます。
+              現在は全メニューを無料トライアルとして利用できます。気になる文章を貼り、今の状況と次の一手を落ち着いて整理できます。
             </p>
           </section>
 
@@ -235,7 +263,7 @@ export default function TextReadingPage() {
         <aside className="raven-card p-5 lg:sticky lg:top-5 lg:self-start">
           <p className="text-sm font-semibold text-[#596d51]">テキスト鑑定結果</p>
           <p className="mt-2 text-sm leading-6 text-[#5e625c]">{status}</p>
-          {model ? <p className="mt-1 text-xs font-semibold text-[#596d51]">AI生成 / {model}</p> : null}
+          {model ? <p className="mt-1 text-xs font-semibold text-[#596d51]">鑑定完了</p> : null}
           {result ? (
             <div className="mt-4 whitespace-pre-wrap rounded border border-[#d7cabc] bg-white/75 p-4 leading-8 text-[#20241f]">
               {result}

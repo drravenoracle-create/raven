@@ -3,10 +3,10 @@ import { existsSync, readFileSync } from "node:fs";
 
 const EXPECTED = {
   worker: "raven-oracle",
-  accountId: "cfda786a82241adf6b21f772dbc87544",
-  accountName: "Fortune.kanri@gmail.com's Account",
+  accountId: "c7ce2613bf30affed8d2caae0068beb5",
+  accountName: "Dr.ravenoracle@gmail.com's Account",
   d1Name: "raven-oracle",
-  d1Id: "a8a69ddd-2d8b-4e76-81f1-29abbb619a38",
+  d1Id: "b5d2b96a-c574-47fa-b582-1063b05595bd",
   route: "raven.fortunestudios.jp/*",
   origin: "https://raven.fortunestudios.jp",
 };
