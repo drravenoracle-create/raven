@@ -606,7 +606,7 @@ async function createDueDailySnsPost(env: Env) {
   await env.DB.prepare(
     `INSERT INTO sns_posts
       (id, tenant_id, platform, post_type, title, theme, category, character, purpose, cta, caption, hashtags, script, media_type, media_url, thumbnail_url, status, scheduled_at, ai_generated, duplicate_warning)
-      VALUES (?, ?, 'instagram', 'reel', ?, ?, '3択動画', 'レイヴン・ブラックウッド', 'Instagram ReelsからRaven Oracleへ誘導', ?, ?, ?, ?, 'video', ?, ?, 'scheduled', ?, 1, ?)`,
+      VALUES (?, ?, 'instagram', 'reel', ?, ?, '3択動画', 'レイヴン・ブラックウッド', 'Instagram ReelsからRaven Oracleへ誘導', ?, ?, ?, ?, 'video', ?, ?, 'draft', NULL, 1, ?)`,
   )
     .bind(
       id,
