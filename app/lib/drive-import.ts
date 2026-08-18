@@ -1,4 +1,5 @@
 import { CARD_LIBRARY_TENANT_ID, createCard, getDeck } from "@/app/lib/card-library";
+import { decryptDriveRefreshToken } from "@/app/lib/google-drive-oauth";
 
 const DRIVE_READONLY_SCOPE = "https://www.googleapis.com/auth/drive.readonly";
 const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
@@ -94,6 +95,21 @@ function pemToArrayBuffer(pem: string) {
 async function googleAccessToken(env: unknown) {
   const directToken = envValue(env, "GOOGLE_DRIVE_ACCESS_TOKEN");
   if (directToken) return directToken;
+
+  const db = (env as RuntimeEnv)?.DB as D1 | undefined;
+  if (db) {
+    const credential = await db.prepare("SELECT refresh_token_ciphertext FROM google_drive_credentials WHERE tenant_id = ? LIMIT 1").bind(CARD_LIBRARY_TENANT_ID).first<{ refresh_token_ciphertext?: string }>();
+    if (credential?.refresh_token_ciphertext) {
+      const refreshToken = await decryptDriveRefreshToken(credential.refresh_token_ciphertext);
+      const clientId = envValue(env, "GOOGLE_CLIENT_ID") || String(process.env.GOOGLE_CLIENT_ID || "");
+      const clientSecret = envValue(env, "GOOGLE_CLIENT_SECRET") || String(process.env.GOOGLE_CLIENT_SECRET || "");
+      if (!clientId || !clientSecret) throw new Error("Google OAuth credentials are not configured.");
+      const response = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken, grant_type: "refresh_token" }) });
+      const payload = await response.json().catch(() => ({})) as { access_token?: string; error?: string; error_description?: string };
+      if (!response.ok || !payload.access_token) throw new Error(payload.error_description || payload.error || `google_refresh_${response.status}`);
+      return payload.access_token;
+    }
+  }
 
   const clientEmail = envValue(env, "GOOGLE_SERVICE_ACCOUNT_EMAIL");
   const privateKey = envValue(env, "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY");
