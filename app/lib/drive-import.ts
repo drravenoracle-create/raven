@@ -1,6 +1,7 @@
 import { CARD_LIBRARY_TENANT_ID, createCard, getDeck } from "@/app/lib/card-library";
 
 const DRIVE_READONLY_SCOPE = "https://www.googleapis.com/auth/drive.readonly";
+const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const MAX_DRIVE_IMAGE_BYTES = 25 * 1024 * 1024;
 
 const allowedImageTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
@@ -101,7 +102,7 @@ async function googleAccessToken(env: unknown) {
   const now = Math.floor(Date.now() / 1000);
   const unsigned = `${base64Url(JSON.stringify({ alg: "RS256", typ: "JWT" }))}.${base64Url(JSON.stringify({
     iss: clientEmail,
-    scope: DRIVE_READONLY_SCOPE,
+    scope: `${DRIVE_READONLY_SCOPE} ${DRIVE_FILE_SCOPE}`,
     aud: "https://oauth2.googleapis.com/token",
     exp: now + 3600,
     iat: now,
@@ -129,6 +130,25 @@ async function driveFetch(env: unknown, path: string, init?: RequestInit) {
     throw new Error(payload.error?.message || `drive_${response.status}`);
   }
   return response;
+}
+
+export async function uploadDriveVideo(env: unknown, input: { fileName: string; contentType: string; body: ArrayBuffer; folderId: string }) {
+  const fileName = clean(input.fileName, 180) || "raven-video.mp4";
+  const contentType = clean(input.contentType, 100) || "video/mp4";
+  const folderId = clean(input.folderId, 200);
+  if (!folderId) throw new Error("GOOGLE_DRIVE_VIDEO_FOLDER_ID is not configured.");
+  if (!input.body.byteLength || input.body.byteLength > 200 * 1024 * 1024) throw new Error("Video size must be between 1 byte and 200MB.");
+  const token = await googleAccessToken(env);
+  const metadata = JSON.stringify({ name: fileName, mimeType: contentType, parents: [folderId] });
+  const boundary = `raven-${crypto.randomUUID()}`;
+  const header = new TextEncoder().encode(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: ${contentType}\r\n\r\n`);
+  const footer = new TextEncoder().encode(`\r\n--${boundary}--`);
+  const body = new Uint8Array(header.byteLength + input.body.byteLength + footer.byteLength);
+  body.set(header, 0); body.set(new Uint8Array(input.body), header.byteLength); body.set(footer, header.byteLength + input.body.byteLength);
+  const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,webViewLink,webContentLink", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": `multipart/related; boundary=${boundary}` }, body });
+  const payload = await response.json().catch(() => ({})) as { id?: string; name?: string; mimeType?: string; size?: string; webViewLink?: string; webContentLink?: string; error?: { message?: string } };
+  if (!response.ok || !payload.id) throw new Error(payload.error?.message || `drive_upload_${response.status}`);
+  return { id: payload.id, name: payload.name || fileName, mimeType: payload.mimeType || contentType, size: Number(payload.size || input.body.byteLength), webViewLink: payload.webViewLink || null, webContentLink: payload.webContentLink || null };
 }
 
 function driveQuery(value: string) {
