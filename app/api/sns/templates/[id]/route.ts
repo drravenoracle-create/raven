@@ -27,6 +27,27 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   return Response.json({ ok: true, id, version });
 }
 
+export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+  const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+  const tenantId = text(body?.tenant_id ?? body?.tenantId, 80) || TENANT_ID;
+  if (tenantId !== TENANT_ID) return Response.json({ error: "Invalid tenant_id" }, { status: 400 });
+  const template = await env.DB.prepare("SELECT * FROM sns_post_templates WHERE tenant_id = ? AND id = ? AND status != 'archived' LIMIT 1").bind(tenantId, id).first<any>();
+  if (!template) return Response.json({ error: "Template not found." }, { status: 404 });
+  const action = text(body?.action, 40) || "preview";
+  if (action === "duplicate") {
+    const copyId = crypto.randomUUID();
+    const slug = `${template.slug}-copy-${copyId.slice(0, 6)}`;
+    await env.DB.prepare("INSERT INTO sns_post_templates (id,tenant_id,name,slug,format_type,category,description,version,status,duration_seconds,aspect_ratio,renderer_type,scene_schema,content_schema,default_media,default_cta,supported_platforms,supported_characters,tags,ai_enabled,growth_enabled) SELECT ?,tenant_id,name || ' コピー',?,format_type,category,description,1,'active',duration_seconds,aspect_ratio,renderer_type,scene_schema,content_schema,default_media,default_cta,supported_platforms,supported_characters,tags,ai_enabled,growth_enabled FROM sns_post_templates WHERE tenant_id=? AND id=?").bind(copyId, slug, tenantId, id).run();
+    return Response.json({ ok: true, id: copyId, slug }, { status: 201 });
+  }
+  const content = body?.content && typeof body.content === "object" ? body.content : {};
+  const sceneSchema = JSON.parse(template.scene_schema || "{}");
+  const plan = { templateId: id, templateVersion: template.version, formatType: template.format_type, rendererType: template.renderer_type, duration: template.duration_seconds, aspectRatio: template.aspect_ratio, scenes: sceneSchema.scenes || [], content, supportedPlatforms: JSON.parse(template.supported_platforms || "[]") };
+  if (action === "render") return Response.json({ ok: true, status: "planned", renderPlan: plan, message: "Render Planを作成しました。既存Rendererへ渡せます。" });
+  return Response.json({ ok: true, status: "preview", preview: plan });
+}
+
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const tenantId = new URL(request.url).searchParams.get("tenantId") || TENANT_ID;

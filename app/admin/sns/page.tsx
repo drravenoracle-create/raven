@@ -574,7 +574,10 @@ export default function SnsAdminPage() {
     <main className="min-h-screen bg-[#f5f0e8] px-5 py-8 text-[#20241f]">
       <div className="mx-auto max-w-6xl">
         <nav className="flex flex-wrap gap-3">
-          <Link className="text-sm font-semibold text-[#596d51]" href="/admin/">管理ダッシュボード</Link>
+          <div className="flex flex-wrap gap-4">
+            <Link className="text-sm font-semibold text-[#596d51]" href="/admin/">管理ダッシュボード</Link>
+            <Link className="text-sm font-semibold text-[#596d51]" href="/admin/sns/templates">投稿テンプレート</Link>
+          </div>
           <Link className="text-sm font-semibold text-[#596d51]" href="/admin/decks/">Deck Manager</Link>
         </nav>
         <header className="mt-5 border-b border-[#d7cabc] pb-6">
