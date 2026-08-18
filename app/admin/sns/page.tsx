@@ -34,6 +34,7 @@ type GrowthLoopState = {
   metrics: Array<{ metric_id: string; variant_id?: string; video_job_id?: string; views?: number; completion_rate?: number; performance_score?: number; fetched_at?: string }>;
   winningPatterns: Array<{ pattern_id: string; character_id: string; topic_category: string; hook_style: string; confidence: number; performance_summary?: string }>;
 };
+type DriveVideo = { id: string; name: string; mimeType: string; size: number; modifiedTime?: string | null };
 
 const ideas = [
   "返信前の文章を整える3つの視点",
@@ -77,6 +78,7 @@ export default function SnsAdminPage() {
   const [threeChoicePreview, setThreeChoicePreview] = useState<ThreeChoicePayload | null>(null);
   const [videoJobs, setVideoJobs] = useState<VideoJob[]>([]);
   const [growthLoop, setGrowthLoop] = useState<GrowthLoopState>({ topics: [], backgrounds: [], bgm: [], variants: [], metrics: [], winningPatterns: [] });
+  const [driveVideos, setDriveVideos] = useState<DriveVideo[]>([]);
   const postCounts = {
     draft: posts.filter((post) => post.status === "draft").length,
     scheduled: posts.filter((post) => post.status === "scheduled").length,
@@ -143,6 +145,20 @@ export default function SnsAdminPage() {
     } catch {}
   }
 
+  async function loadDriveVideos() {
+    const response = await fetch("/api/sns/backgrounds/drive", { cache: "no-store" });
+    const payload = await response.json().catch(() => ({}));
+    if (response.ok) setDriveVideos(payload.videos || []);
+  }
+
+  async function registerDriveVideo(video: DriveVideo) {
+    setStatus(`${video.name} を背景ライブラリへ登録中...`);
+    const response = await fetch("/api/sns/backgrounds/drive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ file_id: video.id, name: video.name, category: "Drive", duration: 20, resolution: "1080x1920" }) });
+    const payload = await response.json().catch(() => ({}));
+    setStatus(response.ok ? `${video.name} を背景ライブラリへ登録しました。` : (payload.error || "背景動画の登録に失敗しました。"));
+    if (response.ok) await loadGrowthLoop();
+  }
+
   function suggestTheme() {
     const nextTopic = ideas[Math.floor(Math.random() * ideas.length)];
     setTopic(nextTopic);
@@ -169,6 +185,7 @@ export default function SnsAdminPage() {
         if (active) setActiveAction("idle");
       });
     loadDecks();
+    loadDriveVideos().catch(() => {});
     loadVideoJobs();
     loadGrowthLoop();
     loadSnsPing();
@@ -669,6 +686,10 @@ export default function SnsAdminPage() {
               </div>
             </div>
           </div>
+        </section>
+        <section className="mt-8 rounded border border-[#d7cabc] bg-white p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold text-[#20241f]">Drive背景動画ライブラリ</h2><p className="mt-1 text-sm text-[#5e625c]">指定Driveフォルダの動画を一覧し、三択動画の背景として登録します。</p></div><button className="rounded border border-[#596d51] px-3 py-2 text-sm font-semibold text-[#596d51]" type="button" onClick={() => loadDriveVideos()}>Driveを再読込</button></div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">{driveVideos.map((video) => <article key={video.id} className="rounded border border-[#d7cabc] p-3"><p className="font-semibold text-[#20241f]">{video.name}</p><p className="mt-1 text-xs text-[#5e625c]">{video.mimeType} / {Math.round(video.size / 1024 / 1024)}MB</p><button className="mt-3 rounded bg-[#596d51] px-3 py-2 text-xs font-semibold text-white" type="button" onClick={() => registerDriveVideo(video)}>背景に登録</button></article>)}{!driveVideos.length ? <p className="rounded border border-dashed border-[#d7cabc] p-4 text-sm text-[#5e625c] md:col-span-2 lg:col-span-3">Driveフォルダに対応動画がありません。</p> : null}</div>
         </section>
         <section className="mt-8 grid gap-6 lg:grid-cols-[360px_1fr]">
           <aside className="rounded border border-[#d7cabc] bg-[#fffaf2] p-5">

@@ -6,6 +6,7 @@ const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const MAX_DRIVE_IMAGE_BYTES = 25 * 1024 * 1024;
 
 const allowedImageTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
+const allowedVideoTypes = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 
 type RuntimeEnv = Record<string, unknown>;
 
@@ -255,6 +256,27 @@ async function getDriveImageMetadata(env: unknown, fileId: string) {
 export async function downloadDriveImage(env: unknown, fileId: string) {
   const response = await driveFetch(env, `files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`);
   return response.arrayBuffer();
+}
+
+export async function listDriveVideos(env: unknown, input: { folderId: string }) {
+  const folderId = clean(input.folderId, 160);
+  if (!folderId) throw new Error("folderId is required.");
+  const params = new URLSearchParams({
+    q: `'${driveQuery(folderId)}' in parents and trashed = false and (mimeType = 'video/mp4' or mimeType = 'video/webm' or mimeType = 'video/quicktime')`,
+    pageSize: "100", fields: "files(id,name,mimeType,size,webViewLink,modifiedTime)", orderBy: "name",
+  });
+  const response = await driveFetch(env, `files?${params.toString()}`);
+  const payload = await response.json() as { files?: Array<{ id: string; name: string; mimeType: string; size?: string; webViewLink?: string; modifiedTime?: string }> };
+  return (payload.files || []).map((file) => ({ id: file.id, name: file.name, mimeType: file.mimeType, size: Number(file.size || 0), webViewLink: file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`, modifiedTime: file.modifiedTime || null }));
+}
+
+export async function driveVideoResponse(env: unknown, fileId: string) {
+  const metadata = await getDriveImageMetadata(env, fileId);
+  if (!allowedVideoTypes.has(metadata.mimeType)) throw new Error("Unsupported Drive video MIME type.");
+  const response = await driveFetch(env, `files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`);
+  const buffer = await response.arrayBuffer();
+  if (!buffer.byteLength || buffer.byteLength > 200 * 1024 * 1024) throw new Error("Drive video size is outside the allowed range.");
+  return new Response(buffer, { headers: { "Content-Type": metadata.mimeType, "Cache-Control": "public, max-age=3600", "Content-Length": String(buffer.byteLength) } });
 }
 
 export async function driveImageResponse(env: unknown, fileId: string) {
