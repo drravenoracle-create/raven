@@ -162,6 +162,18 @@ async function ensureSnsTenant(body: Record<string, unknown> | null) {
   return tenantId;
 }
 
+async function handleSnsTemplateList(request: Request, env: Env) {
+  const url = new URL(request.url);
+  const tenantId = sanitizeText(url.searchParams.get("tenantId"), 80) || TENANT_ID;
+  if (tenantId !== TENANT_ID) return json({ error: "Invalid tenant_id" }, { status: 400 });
+  if (request.method === "GET") {
+    const result = await env.DB.prepare("SELECT * FROM sns_post_templates WHERE tenant_id = ? AND status != 'archived' ORDER BY category, name").bind(tenantId).all();
+    const settings = await env.DB.prepare("SELECT * FROM sns_template_settings WHERE tenant_id = ? LIMIT 1").bind(tenantId).first().catch(() => null);
+    return json({ templates: result.results || [], settings });
+  }
+  return json({ error: "Template creation is available through the application route." }, { status: 405 });
+}
+
 async function sha256Hex(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -1244,6 +1256,10 @@ const worker = {
 
     if (url.pathname === "/api/admin/sns/metrics-sync") {
       return syncInstagramMetricsNow(request, env);
+    }
+
+    if (url.pathname === "/api/sns/templates" && request.method === "GET") {
+      return handleSnsTemplateList(request, env);
     }
 
     if (url.pathname === "/_vinext/image") {
