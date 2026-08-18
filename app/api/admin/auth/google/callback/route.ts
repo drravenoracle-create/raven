@@ -8,9 +8,12 @@ import {
   googleRedirectUri,
   publicOrigin,
 } from "@/app/lib/google-admin-auth";
+import { env } from "cloudflare:workers";
+import { encryptDriveRefreshToken } from "@/app/lib/google-drive-oauth";
 
 type TokenResponse = {
   access_token?: string;
+  refresh_token?: string;
   error?: string;
   error_description?: string;
 };
@@ -34,7 +37,8 @@ export async function GET(request: Request) {
     return new Response("Invalid Google OAuth state.", { status: 400 });
   }
 
-  const returnTo = decodeURIComponent(state.split(".").slice(1).join(".")) || "/admin/";
+  const isDriveConnection = state.startsWith("drive.");
+  const returnTo = isDriveConnection ? "/admin/sns" : decodeURIComponent(state.split(".").slice(1).join(".")) || "/admin/";
   const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -60,6 +64,12 @@ export async function GET(request: Request) {
   }
   if (user.email.toLowerCase() !== adminEmail().toLowerCase()) {
     return new Response("This Google account is not allowed to access Raven admin.", { status: 403 });
+  }
+
+  if (isDriveConnection) {
+    if (!token.refresh_token) return new Response("Google did not return a refresh token. Retry the Drive connection with consent.", { status: 502 });
+    const encrypted = await encryptDriveRefreshToken(token.refresh_token);
+    await (env as any).DB.prepare(`INSERT INTO google_drive_credentials (id, tenant_id, google_email, refresh_token_ciphertext) VALUES (?, ?, ?, ?) ON CONFLICT(tenant_id) DO UPDATE SET google_email=excluded.google_email, refresh_token_ciphertext=excluded.refresh_token_ciphertext, updated_at=CURRENT_TIMESTAMP`).bind(crypto.randomUUID(), "raven-oracle", user.email, encrypted).run();
   }
 
   const response = NextResponse.redirect(new URL(returnTo, origin));
