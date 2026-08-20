@@ -22,6 +22,19 @@ function rendererUrl() {
   return clean((env as any).VIDEO_RENDERER_URL, 1000);
 }
 
+function normalizeRendererOutputUrl(outputUrl: string | undefined) {
+  if (!outputUrl) return "";
+  const raw = clean(outputUrl, 1000);
+  if (!raw) return "";
+  if (/^https?:\/\/\S+/.test(raw) && !raw.includes("localhost")) return raw;
+  const fallback = rendererUrl();
+  const path = /^https?:\/\/[^/]+(\/.*)$/.test(raw) ? raw.replace(/^https?:\/\/[^/]+/, "") : raw.startsWith("/outputs/") ? raw : "/outputs/";
+  if (fallback && path) {
+    return `${fallback.replace(/\/+$/, "")}${path}`;
+  }
+  return raw;
+}
+
 async function logJob(jobId: string, action: string, status: string, detail: unknown, durationMs?: number) {
   await env.DB.prepare(
     "INSERT INTO three_choice_video_job_logs (id, tenant_id, job_id, action, status, detail_json, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -68,14 +81,16 @@ async function submitRenderer(jobId: string, payload: ThreeChoiceVideoJobPayload
     return { status: "failed", error: data.error || "Renderer submit failed." };
   }
 
-  const completed = data.outputUrl ? "completed" : "rendering";
+  const normalizedOutputUrl = normalizeRendererOutputUrl(data.outputUrl);
+  const normalizedThumbnailUrl = normalizeRendererOutputUrl(data.thumbnailUrl);
+  const completed = normalizedOutputUrl ? "completed" : "rendering";
   await env.DB.prepare(
     "UPDATE three_choice_video_jobs SET status = ?, renderer_job_id = ?, output_url = ?, thumbnail_url = ?, completed_at = CASE WHEN ? = 'completed' THEN CURRENT_TIMESTAMP ELSE completed_at END, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?",
   )
-    .bind(completed, clean(data.rendererJobId, 200), clean(data.outputUrl, 1000), clean(data.thumbnailUrl, 1000), completed, THREE_CHOICE_TENANT_ID, jobId)
+    .bind(completed, clean(data.rendererJobId, 200), normalizedOutputUrl, normalizedThumbnailUrl, completed, THREE_CHOICE_TENANT_ID, jobId)
     .run();
-  await logJob(jobId, "render.submitted", completed, data, elapsed);
-  return { status: completed, rendererJobId: data.rendererJobId, outputUrl: data.outputUrl };
+  await logJob(jobId, "render.submitted", completed, { ...data, outputUrl: normalizedOutputUrl, thumbnailUrl: normalizedThumbnailUrl }, elapsed);
+  return { status: completed, rendererJobId: data.rendererJobId, outputUrl: normalizedOutputUrl };
 }
 
 export async function POST(request: Request) {

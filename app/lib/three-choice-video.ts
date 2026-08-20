@@ -54,6 +54,41 @@ export function timeline20s() {
   ];
 }
 
+function normalizeTimeline(value: unknown) {
+  if (!Array.isArray(value)) return undefined;
+  const parsed = value
+    .map((item, index) => {
+      const timelineItem = item as {
+        id?: unknown;
+        start?: unknown;
+        end?: unknown;
+        label?: unknown;
+      };
+      return {
+        id: String(timelineItem.id || `scene-${index}`).slice(0, 40) || `scene-${index}`,
+        start: Number(timelineItem.start ?? 0),
+        end: Number(timelineItem.end ?? 0),
+        label: String(timelineItem.label || "").slice(0, 80),
+      };
+    })
+    .filter((entry) => Number.isFinite(entry.start) && Number.isFinite(entry.end));
+  return parsed;
+}
+
+function validateTimeline(timeline: Array<{ id: string; start: number; end: number; label: string }>) {
+  if (timeline.length !== 6) return false;
+  const sorted = [...timeline].sort((a, b) => a.start - b.start);
+  if (sorted[0]?.start !== 0) return false;
+  if (sorted[sorted.length - 1]?.end !== 20) return false;
+  for (let i = 0; i < sorted.length; i += 1) {
+    const item = sorted[i];
+    if (!item.id || !item.label) return false;
+    if (item.start < 0 || item.end <= item.start || item.end > 20) return false;
+    if (i > 0 && item.start < sorted[i - 1].end) return false;
+  }
+  return true;
+}
+
 export function validateVideoJobPayload(payload: ThreeChoiceVideoJobPayload) {
   const errors: string[] = [];
   if (payload.type !== "three_choice_reading") errors.push("invalid_type");
@@ -79,7 +114,7 @@ export function validateVideoJobPayload(payload: ThreeChoiceVideoJobPayload) {
   if (payload.background && !isSafeMediaReference(payload.background)) errors.push("unsafe_background");
   if (payload.music && !isSafeMediaReference(payload.music)) errors.push("unsafe_music");
   const timeline = payload.timeline || [];
-  if (timeline.length !== 6 || timeline[0]?.start !== 0 || timeline[timeline.length - 1]?.end !== 20) errors.push("invalid_timeline");
+  if (!validateTimeline(timeline)) errors.push("invalid_timeline");
   return { valid: errors.length === 0, errors: Array.from(new Set(errors)) };
 }
 
@@ -160,6 +195,7 @@ export function composeThreeChoicePayload(input: {
   backgroundId?: string;
   bgmId?: string;
   readings?: string[];
+  timeline?: Array<{ id: string; start: number; end: number; label: string }>;
 }): ThreeChoiceVideoJobPayload {
   const slots = ["A", "B", "C"] as const;
   const cards = input.cards.slice(0, 3).map((card, index) => ({
@@ -191,7 +227,7 @@ export function composeThreeChoicePayload(input: {
     bgmId: cleanVideoText(input.bgmId, 120) || undefined,
     safeArea: { top: 180, bottom: 260, left: 72, right: 72 },
     templateId: THREE_CHOICE_TEMPLATE_ID,
-    timeline: timeline20s(),
+    timeline: validateTimeline(input.timeline || []) ? input.timeline as Array<{ id: string; start: number; end: number; label: string }> : timeline20s(),
   };
 }
 
@@ -220,6 +256,7 @@ export async function buildThreeChoicePreview(db: D1, input: Record<string, unkn
     variantId: cleanVideoText(input.variant_id ?? input.variantId, 120),
     backgroundId: cleanVideoText(input.background_id ?? input.backgroundId, 120),
     bgmId: cleanVideoText(input.bgm_id ?? input.bgmId, 120),
+    timeline: normalizeTimeline(input.timeline),
   });
   const validation = validateVideoJobPayload(payload);
   if (!validation.valid) throw new Error(`Invalid video job: ${validation.errors.join(", ")}`);
