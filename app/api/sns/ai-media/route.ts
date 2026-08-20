@@ -10,6 +10,7 @@ import {
   type AiMediaSettings,
   type MediaGenerationRequest,
 } from "@/app/lib/ai-media/generator";
+import { RAVEN_CHARACTER_CONFIG } from "@/app/lib/character-config";
 
 type MediaBucket = {
   put(key: string, value: ArrayBuffer | Blob | ReadableStream, options?: Record<string, unknown>): Promise<unknown>;
@@ -100,14 +101,14 @@ export async function POST(request: Request) {
   const requestPayload: MediaGenerationRequest = {
     tenantId: AI_MEDIA_TENANT_ID,
     theme: cleanAiMediaText(body.theme, 180) || "今日のメッセージ",
-    characterId: cleanAiMediaText(body.character_id ?? body.characterId, 80) || "raven",
+    characterId: cleanAiMediaText(body.character_id ?? body.characterId, 80) || RAVEN_CHARACTER_CONFIG.id,
     divinationType: cleanAiMediaText(body.divination_type ?? body.divinationType, 80) || "oracle",
     season: cleanAiMediaText(body.season, 80),
     mood: cleanAiMediaText(body.mood, 80) || "quiet mystical",
     scene: cleanAiMediaText(body.scene, 160) || "oracle cards on a quiet desk",
     platform: cleanAiMediaText(body.platform, 80) || "instagram",
     aspectRatio,
-    brandStyle: cleanAiMediaText(body.brand_style ?? body.brandStyle, 240) || "Raven Oracle, refined, readable, calm",
+    brandStyle: cleanAiMediaText(body.brand_style ?? body.brandStyle, 240) || RAVEN_CHARACTER_CONFIG.sns.brandStyle,
     negativeInstructions: cleanAiMediaText(body.negative_instructions ?? body.negativeInstructions, 300) || "no gore, no medical/legal/financial claims, no readable text",
     postId: clean(body.post_id ?? body.postId, 120),
     experimentId: clean(body.experiment_id ?? body.experimentId, 120),
