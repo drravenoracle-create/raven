@@ -1,5 +1,6 @@
 import ravenOracle from "../../config/personas/raven-oracle.json";
 import ravenOracleHearingSheet from "../../config/hearing-sheets/raven-oracle.json";
+import { RAVEN_TENANT_CONFIG } from "./tenant-config";
 
 export type PersonaConfig = {
   id: string;
@@ -64,8 +65,8 @@ const personas: Record<string, PersonaConfig> = {
   ),
 };
 
-export function getPersona(id = "raven-oracle") {
-  return personas[id] ?? personas["raven-oracle"];
+export function getPersona(id = RAVEN_TENANT_CONFIG.id) {
+  return personas[id] ?? personas[RAVEN_TENANT_CONFIG.id];
 }
 
 export function personaSystemPrompt(persona: PersonaConfig) {

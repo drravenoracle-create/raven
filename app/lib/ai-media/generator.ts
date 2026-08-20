@@ -1,4 +1,6 @@
-export const AI_MEDIA_TENANT_ID = "raven-oracle";
+import { RAVEN_TENANT_CONFIG } from "../tenant-config";
+
+export const AI_MEDIA_TENANT_ID = RAVEN_TENANT_CONFIG.id;
 
 export type AiMediaSettings = {
   tenant_id: string;
