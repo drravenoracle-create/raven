@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { THREE_CHOICE_TENANT_ID, captionFromThreeChoice, type ThreeChoiceVideoJobPayload } from "@/app/lib/three-choice-video";
+import { RAVEN_CHARACTER_CONFIG } from "@/app/lib/character-config";
 
 type Params = Promise<{ id: string }>;
 
@@ -40,9 +41,9 @@ export async function POST(_request: Request, { params }: { params: Params }) {
   await env.DB.prepare(
     `INSERT INTO sns_posts
       (id, tenant_id, platform, post_type, title, theme, category, character, purpose, cta, caption, hashtags, script, media_type, media_url, thumbnail_url, status, ai_generated, duplicate_warning)
-      VALUES (?, ?, 'instagram', 'reel', ?, ?, ?, 'レイヴン・ブラックウッド', '3択動画から鑑定導線を作る', ?, ?, ?, ?, 'video', ?, ?, 'draft', 1, ?)`,
+      VALUES (?, ?, 'instagram', 'reel', ?, ?, ?, ?, '3択動画から鑑定導線を作る', ?, ?, ?, ?, 'video', ?, ?, 'draft', 1, ?)`,
   )
-    .bind(snsPostId, THREE_CHOICE_TENANT_ID, payload.theme, payload.theme, "3択動画", payload.cta, captionFromThreeChoice(payload), "#レイヴンブラックウッド #3択占い #占い #オラクルカード", JSON.stringify(payload.timeline), job.output_url, job.thumbnail_url || "", `three-choice-video:${jobId}`)
+    .bind(snsPostId, THREE_CHOICE_TENANT_ID, payload.theme, payload.theme, "3択動画", RAVEN_CHARACTER_CONFIG.displayName, payload.cta, captionFromThreeChoice(payload), RAVEN_CHARACTER_CONFIG.threeChoicePostHashtags.join(" "), JSON.stringify(payload.timeline), job.output_url, job.thumbnail_url || "", `three-choice-video:${jobId}`)
     .run();
   await env.DB.prepare("INSERT INTO three_choice_video_job_logs (id, tenant_id, job_id, action, status, detail_json) VALUES (?, ?, ?, 'sns.queued', 'draft', ?)")
     .bind(crypto.randomUUID(), THREE_CHOICE_TENANT_ID, jobId, JSON.stringify({ snsPostId }))

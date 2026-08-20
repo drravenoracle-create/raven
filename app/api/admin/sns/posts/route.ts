@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { findSnsDuplicate, fingerprintSnsContent, type SnsDuplicateCandidate } from "@/app/lib/sns-dedupe";
 import { recordCardUsage, selectCards } from "@/app/lib/card-library";
+import { RAVEN_CHARACTER_CONFIG } from "@/app/lib/character-config";
 
 const TENANT_ID = "raven-oracle";
 const DUPLICATE_LOOKBACK_DAYS = 45;
@@ -114,8 +115,8 @@ export async function POST(request: Request) {
   }
 
   const theme = clean(body.theme, 180) || "返信前の文章を整える3つの視点";
-  const cta = clean(body.cta, 240) || "必要なら、レイヴン・ブラックウッドのテキスト鑑定で一緒に整理します。";
-  const captionBase = clean(body.caption, 2200) || `${theme}\n\n送る前に、気持ち・目的・相手に伝えたいことを分けて見直します。\n\n${cta}\n\n#レイヴンブラックウッド #文章鑑定 #相談整理`;
+  const cta = clean(body.cta, 240) || RAVEN_CHARACTER_CONFIG.defaultCta;
+  const captionBase = clean(body.caption, 2200) || `${theme}\n\n送る前に、気持ち・目的・相手に伝えたいことを分けて見直します。\n\n${cta}\n\n${RAVEN_CHARACTER_CONFIG.sns.hashtags.join(" ")}`;
   const caption = selectedCardPayload ? clean(`${captionBase}\n\n今日のカード\n${selectedCardPayload}`, 2200) : captionBase;
   const title = clean(body.title, 180) || theme;
   const scriptBase = clean(body.script, 4000);
@@ -165,11 +166,11 @@ export async function POST(request: Request) {
       title,
       theme,
       clean(body.category, 120) || "SNS投稿",
-      clean(body.character, 120) || "レイヴン・ブラックウッド",
+      clean(body.character, 120) || RAVEN_CHARACTER_CONFIG.displayName,
       clean(body.purpose, 180) || "テキスト鑑定への案内",
       cta,
       caption,
-      clean(body.hashtags, 500) || "#レイヴンブラックウッド #文章鑑定 #相談整理",
+      clean(body.hashtags, 500) || RAVEN_CHARACTER_CONFIG.sns.hashtags.join(" "),
       script,
       clean(body.media_type ?? body.mediaType, 40),
       clean(body.media_url ?? body.mediaUrl, 1000),
