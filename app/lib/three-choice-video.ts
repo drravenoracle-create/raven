@@ -1,7 +1,8 @@
 import { recordCardUsage, selectCards, type SelectedCard } from "@/app/lib/card-library";
 import { RAVEN_CHARACTER_CONFIG } from "@/app/lib/character-config";
+import { RAVEN_TENANT_CONFIG } from "@/app/lib/tenant-config";
 
-export const THREE_CHOICE_TENANT_ID = "raven-oracle";
+export const THREE_CHOICE_TENANT_ID = RAVEN_TENANT_CONFIG.id;
 export const THREE_CHOICE_TEMPLATE_ID = "raven_three_choice_v1";
 export const THREE_CHOICE_VERSION = "three-choice-video-v1.0";
 

@@ -15,6 +15,17 @@ async function logJob(jobId: string, action: string, status: string, detail: unk
     .run();
 }
 
+function normalizeRendererOutputUrl(outputUrl: string | undefined, fallbackRendererUrl: string) {
+  if (!outputUrl) return "";
+  const raw = String(outputUrl).trim().slice(0, 1000);
+  if (/^https?:\/\/\S+/.test(raw) && !raw.includes("localhost")) return raw;
+  const path = /^https?:\/\/[^/]+(\/.*)$/.test(raw) ? raw.replace(/^https?:\/\/[^/]+/, "") : raw.startsWith("/outputs/") ? raw : "/outputs/";
+  if (fallbackRendererUrl && path) {
+    return `${fallbackRendererUrl.replace(/\/+$/, "")}${path}`;
+  }
+  return raw;
+}
+
 export async function POST(_request: Request, { params }: { params: Params }) {
   const { id } = await params;
   const jobId = clean(id, 120);
@@ -58,10 +69,12 @@ export async function POST(_request: Request, { params }: { params: Params }) {
     await logJob(jobId, "retry.failed", "failed", { responseStatus: response.status, data });
     return Response.json({ ok: false, status: "failed", error: data.error || "Renderer submit failed." }, { status: 202 });
   }
-  const status = data.outputUrl ? "completed" : "rendering";
+  const outputUrl = normalizeRendererOutputUrl(data.outputUrl, rendererUrl);
+  const thumbnailUrl = normalizeRendererOutputUrl(data.thumbnailUrl, rendererUrl);
+  const status = outputUrl ? "completed" : "rendering";
   await env.DB.prepare("UPDATE three_choice_video_jobs SET status = ?, renderer_job_id = ?, output_url = ?, thumbnail_url = ?, completed_at = CASE WHEN ? = 'completed' THEN CURRENT_TIMESTAMP ELSE completed_at END, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
-    .bind(status, clean(data.rendererJobId, 200), clean(data.outputUrl, 1000), clean(data.thumbnailUrl, 1000), status, THREE_CHOICE_TENANT_ID, jobId)
+    .bind(status, clean(data.rendererJobId, 200), clean(outputUrl, 1000), clean(thumbnailUrl, 1000), status, THREE_CHOICE_TENANT_ID, jobId)
     .run();
-  await logJob(jobId, "retry.submitted", status, data);
-  return Response.json({ ok: true, status, ...data }, { status: 202, headers: { "Cache-Control": "no-store" } });
+  await logJob(jobId, "retry.submitted", status, { ...data, outputUrl, thumbnailUrl });
+  return Response.json({ ok: true, status, outputUrl, thumbnailUrl, rendererJobId: data?.rendererJobId }, { status: 202, headers: { "Cache-Control": "no-store" } });
 }
