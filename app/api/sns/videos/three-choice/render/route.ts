@@ -7,6 +7,7 @@ import {
   validateVideoJobPayload,
   type ThreeChoiceVideoJobPayload,
 } from "@/app/lib/three-choice-video";
+import { RAVEN_CHARACTER_CONFIG } from "@/app/lib/character-config";
 
 function clean(value: unknown, maxLength: number) {
   return String(value ?? "").trim().slice(0, maxLength);
@@ -134,9 +135,9 @@ export async function POST(request: Request) {
       await env.DB.prepare(
         `INSERT INTO sns_posts
           (id, tenant_id, platform, post_type, title, theme, category, character, purpose, cta, caption, hashtags, script, media_type, media_url, thumbnail_url, status, ai_generated, duplicate_warning)
-          VALUES (?, ?, 'instagram', 'reel', ?, ?, ?, 'レイヴン・ブラックウッド', '3択動画から鑑定導線を作る', ?, ?, ?, ?, 'video', ?, ?, 'draft', 1, ?)`,
+          VALUES (?, ?, 'instagram', 'reel', ?, ?, ?, ?, '3択動画から鑑定導線を作る', ?, ?, ?, ?, 'video', ?, ?, 'draft', 1, ?)`,
       )
-        .bind(snsPostId, THREE_CHOICE_TENANT_ID, typedPayload.theme, typedPayload.theme, "3択動画", typedPayload.cta, captionFromThreeChoice(typedPayload), "#レイヴンブラックウッド #3択占い #占い #オラクルカード", JSON.stringify(typedPayload.timeline), outputUrl, "", `three-choice-video:${jobId}`)
+        .bind(snsPostId, THREE_CHOICE_TENANT_ID, typedPayload.theme, typedPayload.theme, "3択動画", RAVEN_CHARACTER_CONFIG.displayName, typedPayload.cta, captionFromThreeChoice(typedPayload), RAVEN_CHARACTER_CONFIG.threeChoicePostHashtags.join(" "), JSON.stringify(typedPayload.timeline), outputUrl, "", `three-choice-video:${jobId}`)
         .run();
       await logJob(jobId, "sns.queued", "draft", { snsPostId });
     }

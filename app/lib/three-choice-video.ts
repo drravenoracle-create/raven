@@ -1,4 +1,5 @@
 import { recordCardUsage, selectCards, type SelectedCard } from "@/app/lib/card-library";
+import { RAVEN_CHARACTER_CONFIG } from "@/app/lib/character-config";
 
 export const THREE_CHOICE_TENANT_ID = "raven-oracle";
 export const THREE_CHOICE_TEMPLATE_ID = "raven_three_choice_v1";
@@ -220,7 +221,7 @@ export function composeThreeChoicePayload(input: {
     cards,
     background: cleanVideoText(input.background, 1000) || "media://raven/default-background",
     music: cleanVideoText(input.music, 1000) || "media://raven/default-bgm",
-    cta: cleanVideoText(input.cta, 160) || "詳しい鑑定はプロフィールへ",
+    cta: cleanVideoText(input.cta, 160) || RAVEN_CHARACTER_CONFIG.threeChoiceCta,
     experimentId: cleanVideoText(input.experimentId, 120) || undefined,
     variantId: cleanVideoText(input.variantId, 120) || undefined,
     backgroundId: cleanVideoText(input.backgroundId, 120) || undefined,
@@ -283,6 +284,6 @@ export function captionFromThreeChoice(payload: ThreeChoiceVideoJobPayload) {
     "",
     payload.cta,
     "",
-    "#レイヴンブラックウッド #3択占い #オラクルカード #今日のメッセージ",
+    RAVEN_CHARACTER_CONFIG.threeChoiceHashtags.join(" "),
   ].join("\n");
 }
