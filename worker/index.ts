@@ -1,6 +1,7 @@
 ﻿/** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import { buildCalendarBlog, buildCalendarSocial, buildDailyAlmanac } from "../app/lib/calendar/daily-almanac";
 
 interface Env {
   ASSETS: Fetcher;
@@ -13,6 +14,10 @@ interface Env {
   SNS_DAILY_THREE_CHOICE_ENABLED?: string;
   SNS_DAILY_THREE_CHOICE_TIME_JST?: string;
   SNS_DAILY_THREE_CHOICE_GENERATION_LEAD_MINUTES?: string;
+  SNS_DAILY_CALENDAR_ENABLED?: string;
+  SNS_DAILY_CALENDAR_TIME_JST?: string;
+  SNS_DAILY_CALENDAR_GENERATION_LEAD_MINUTES?: string;
+  SNS_DAILY_CALENDAR_FORMAT?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -639,8 +644,15 @@ async function publishDueSnsPosts(env: Env) {
     .all();
   let count = 0;
   for (const post of result.results || []) {
-    await publishSnsPost(env, post as Record<string, unknown>);
-    count += 1;
+    const published = await publishSnsPost(env, post as Record<string, unknown>);
+    if (published?.ok) {
+      count += 1;
+      if (String((post as Record<string, unknown>).category || "") === "今日の暦") {
+        await env.DB.prepare("UPDATE daily_calendar_runs SET sns_status = 'published', published_at = COALESCE(published_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND local_date = ? AND content_type = 'daily_calendar'")
+          .bind(TENANT_ID, String((post as Record<string, unknown>).title || "").match(/(20\d{2}-\d{2}-\d{2})/)?.[1] || "")
+          .run();
+      }
+    }
   }
   return count;
 }
@@ -1180,6 +1192,58 @@ async function queueAndPublishBlogSnsPost(env: Env, article: { id: string; slug?
   return 1;
 }
 
+function calendarFormatFor(env: Env, date: string): "short_video" | "carousel" {
+  const configured = String(env.SNS_DAILY_CALENDAR_FORMAT || "auto").toLowerCase();
+  if (configured === "short_video") return "short_video";
+  if (configured === "carousel") return "carousel";
+  return Number(date.replace(/-/g, "")) % 2 ? "short_video" : "carousel";
+}
+
+async function processDailyCalendar(env: Env) {
+  if (!env.DB || !envEnabled(env.SNS_DAILY_CALENDAR_ENABLED, true)) return 0;
+  const { date, time } = jstParts();
+  const publishTime = validTimeOr(env.SNS_DAILY_CALENDAR_TIME_JST, "07:30");
+  const leadMinutes = positiveIntOr(env.SNS_DAILY_CALENDAR_GENERATION_LEAD_MINUTES, 10);
+  const nowMinutes = timeToMinutes(time);
+  const publishMinutes = timeToMinutes(publishTime);
+  const generationStart = Math.max(0, publishMinutes - leadMinutes);
+  if (nowMinutes < generationStart || nowMinutes > publishMinutes + 5) return 0;
+  const almanac = buildDailyAlmanac(date, TENANT_ID);
+  const format = calendarFormatFor(env, date);
+  const runKey = `daily-calendar:${TENANT_ID}:${date}`;
+  const existing = await env.DB.prepare("SELECT id FROM daily_calendar_runs WHERE tenant_id = ? AND local_date = ? AND content_type = 'daily_calendar' LIMIT 1").bind(TENANT_ID, date).first<{ id: string }>();
+  if (existing) return 0;
+
+  const runId = crypto.randomUUID();
+  const articleId = crypto.randomUUID();
+  const blog = buildCalendarBlog(almanac);
+  const social = buildCalendarSocial(almanac, format);
+  const scheduledAt = jstLocalToUtcIso(date, publishTime);
+  await env.DB.prepare("INSERT OR IGNORE INTO daily_calendar_runs (id, tenant_id, local_date, content_type, sexagenary_cycle_index, almanac_json, blog_article_id, media_format, generated_at) VALUES (?, ?, ?, 'daily_calendar', ?, ?, ?, ?, CURRENT_TIMESTAMP)")
+    .bind(runId, TENANT_ID, date, almanac.sexagenary.index, JSON.stringify(almanac), articleId, format).run();
+  const inserted = await env.DB.prepare("SELECT id FROM daily_calendar_runs WHERE tenant_id = ? AND local_date = ? AND content_type = 'daily_calendar' LIMIT 1").bind(TENANT_ID, date).first<{ id: string }>();
+  if (inserted?.id !== runId) return 0;
+  await env.DB.prepare(`INSERT OR IGNORE INTO blog_engine_articles
+    (id, tenant_id, title, slug, description, body, category, tags_json, primary_keyword, secondary_keywords_json,
+     search_intent, target_reader, outline_json, seo_title, meta_description, og_title, og_description, faq_json,
+     internal_links_json, related_articles_json, key_message, recommended_social_angle, quality_score, brand_score,
+     safety_score, quality_report_json, status, scheduled_at, generation_version, idempotency_key)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'educational', 92, 96, 98, ?, 'scheduled', ?, 'daily-calendar-v1.0', ?)`)
+    .bind(articleId, TENANT_ID, blog.title, blog.slug, blog.description, blog.body, blog.category, JSON.stringify(blog.tags), "今日の暦", JSON.stringify([almanac.sexagenary.name, "日干支", "レイヴン・ブラックウッド"]), "今日の暦と一日の行動ヒントを確認したい", "朝に一日の判断軸を整えたい読者", JSON.stringify(["今日の日干支", "今日のテーマ", "行動ヒント", "運勢", "注意点"]), `${blog.title} | レイヴン・ブラックウッド Blog`, blog.description, `${blog.title} | レイヴン・ブラックウッド Blog`, blog.description, JSON.stringify([]), JSON.stringify([]), JSON.stringify([]), blog.keyMessage, JSON.stringify({ warnings: [], blocked: false }), scheduledAt, runKey).run();
+  await env.DB.prepare("INSERT INTO blog_engine_events (event_id, event_type, tenant_id, article_id, payload_json) VALUES (?, 'article.created', ?, ?, ?)").bind(crypto.randomUUID(), TENANT_ID, articleId, JSON.stringify({ article_id: articleId, content_type: "daily_calendar", local_date: date, media_format: format })).run();
+  await env.DB.prepare(`INSERT OR IGNORE INTO sns_posts
+    (id, tenant_id, platform, post_type, title, theme, category, character, purpose, cta, caption, hashtags, script, media_type, media_url, thumbnail_url, status, scheduled_at, ai_generated, duplicate_warning)
+    VALUES (?, ?, 'instagram', ?, ?, ?, '今日の暦', 'レイヴン・ブラックウッド', '今日の暦を毎朝届ける', '詳しくはRaven Oracleへ。', ?, ?, ?, ?, ?, ?, 'scheduled', ?, 0, ?)`)
+    .bind(crypto.randomUUID(), TENANT_ID, social.postType, blog.title, almanac.theme, social.caption, "#レイヴンブラックウッド #今日の暦 #干支 #占い", social.script, social.mediaType, "https://raven.fortunestudios.jp/raven-blackwood-cover.png", "https://raven.fortunestudios.jp/raven-blackwood-cover.png", scheduledAt, `${runKey}:instagram:${format}`).run();
+  await env.DB.prepare("UPDATE daily_calendar_runs SET blog_status = 'scheduled', sns_status = 'scheduled', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(runId).run();
+  if (nowMinutes >= publishMinutes) {
+    await env.DB.prepare("UPDATE blog_engine_articles SET status = 'published', published_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ? AND status = 'scheduled'").bind(TENANT_ID, articleId).run();
+    await env.DB.prepare("INSERT INTO blog_engine_events (event_id, event_type, tenant_id, article_id, payload_json) VALUES (?, 'article.published', ?, ?, ?)").bind(crypto.randomUUID(), TENANT_ID, articleId, JSON.stringify({ article_id: articleId, content_type: "daily_calendar", published_by: "worker_cron" })).run();
+    await env.DB.prepare("UPDATE daily_calendar_runs SET blog_status = 'published', published_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(runId).run();
+  }
+  return 1;
+}
+
 async function publishDueBlogArticles(env: Env) {
   if (!env.DB) return 0;
   const settings = await env.DB.prepare("SELECT enabled, kill_switch, auto_post_enabled, automation_levels_json FROM blog_engine_settings WHERE tenant_id = ? LIMIT 1")
@@ -1192,7 +1256,7 @@ async function publishDueBlogArticles(env: Env) {
   if (articleGeneration) await createDueDailyBlogDraft(env, autoPublish);
   if (!autoPublish) return 0;
   const result = await env.DB.prepare(
-    "SELECT id, slug, title, category, key_message FROM blog_engine_articles WHERE tenant_id = ? AND status IN ('draft', 'scheduled') AND scheduled_at IS NOT NULL AND datetime(scheduled_at) <= datetime('now') ORDER BY datetime(scheduled_at) ASC LIMIT 20",
+    "SELECT id, slug, title, category, key_message FROM blog_engine_articles WHERE tenant_id = ? AND category != '今日の暦' AND status IN ('draft', 'scheduled') AND scheduled_at IS NOT NULL AND datetime(scheduled_at) <= datetime('now') ORDER BY datetime(scheduled_at) ASC LIMIT 20",
   )
     .bind(TENANT_ID)
     .all<{ id: string; slug?: string; title?: string; category?: string; key_message?: string }>();
@@ -1280,6 +1344,7 @@ const worker = {
   },
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil((async () => {
+      await processDailyCalendar(env);
       await publishDueBlogArticles(env);
       await publishDueSnsPosts(env);
       await syncInstagramPostMetrics(env);
