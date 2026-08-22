@@ -18,6 +18,8 @@ interface Env {
   SNS_DAILY_CALENDAR_TIME_JST?: string;
   SNS_DAILY_CALENDAR_GENERATION_LEAD_MINUTES?: string;
   SNS_DAILY_CALENDAR_FORMAT?: string;
+  READING_LOG_RETENTION_DAYS?: string;
+  READING_LOG_RETENTION_DAYS?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -655,6 +657,14 @@ async function publishDueSnsPosts(env: Env) {
     }
   }
   return count;
+}
+
+async function purgeExpiredReadingLogs(env: Env) {
+  const configuredDays = Number(env.READING_LOG_RETENTION_DAYS || "90");
+  const retentionDays = Number.isFinite(configuredDays) ? Math.max(1, Math.min(3650, Math.floor(configuredDays))) : 90;
+  await env.DB.prepare("DELETE FROM raven_reading_logs WHERE tenant_id = ? AND created_at < datetime('now', ?)")
+    .bind(TENANT_ID, `-${retentionDays} days`)
+    .run();
 }
 
 function metricValueFromInsights(data: unknown, names: string[]) {
@@ -1344,6 +1354,7 @@ const worker = {
   },
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil((async () => {
+      await purgeExpiredReadingLogs(env);
       await processDailyCalendar(env);
       await publishDueBlogArticles(env);
       await publishDueSnsPosts(env);
