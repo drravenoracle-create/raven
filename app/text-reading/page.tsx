@@ -191,14 +191,14 @@ export default function TextReadingPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">文章タイプ</h2>
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
-              {modes.map((item) => (
+            <h2 className="text-lg font-semibold">占術メニュー</h2>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              {divinationMenus.map((item) => (
                 <button
                   key={item.id}
-                  className={`min-h-28 rounded border p-3 text-left ${mode === item.id ? "border-[#222820] bg-[#eef1e8]" : "border-[#d7cabc] bg-[#fffaf2]"}`}
+                  className={`min-h-36 rounded border p-3 text-left ${divination === item.id ? "border-[#222820] bg-[#eef1e8]" : "border-[#d7cabc] bg-[#fffaf2]"}`}
                   type="button"
-                  onClick={() => setMode(item.id)}
+                  onClick={() => setDivination(item.id)}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <p className="font-semibold">{item.label}</p>
@@ -211,14 +211,14 @@ export default function TextReadingPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold">占術メニュー</h2>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-              {divinationMenus.map((item) => (
+            <h2 className="text-lg font-semibold">相談の種類</h2>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              {modes.map((item) => (
                 <button
                   key={item.id}
-                  className={`min-h-36 rounded border p-3 text-left ${divination === item.id ? "border-[#222820] bg-[#eef1e8]" : "border-[#d7cabc] bg-[#fffaf2]"}`}
+                  className={`min-h-28 rounded border p-3 text-left ${mode === item.id ? "border-[#222820] bg-[#eef1e8]" : "border-[#d7cabc] bg-[#fffaf2]"}`}
                   type="button"
-                  onClick={() => setDivination(item.id)}
+                  onClick={() => setMode(item.id)}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <p className="font-semibold">{item.label}</p>
