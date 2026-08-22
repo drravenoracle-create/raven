@@ -75,6 +75,33 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
+function readingSourceText(payload: RavenRequest) {
+  return String(payload.sourceText || payload.concern || payload.message || "").trim().slice(0, 12000);
+}
+
+async function createReadingLog(payload: RavenRequest) {
+  const sourceText = readingSourceText(payload);
+  const id = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO raven_reading_logs
+      (id, tenant_id, mode, reading_mode, divination, source_text, input_length)
+      VALUES (?, 'raven-oracle', ?, ?, ?, ?, ?)`,
+  )
+    .bind(id, String(payload.mode || ""), String(payload.readingMode || ""), String(payload.divination || ""), sourceText, sourceText.length)
+    .run();
+  return id;
+}
+
+async function finishReadingLog(id: string, result: { status: "completed" | "failed"; httpStatus?: number; errorCode?: string; errorMessage?: string; trialLimitReached?: boolean; model?: string }) {
+  await env.DB.prepare(
+    `UPDATE raven_reading_logs
+     SET status = ?, http_status = ?, error_code = ?, error_message = ?, trial_limit_reached = ?, model = ?, completed_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+  )
+    .bind(result.status, result.httpStatus ?? null, result.errorCode ?? null, String(result.errorMessage || "").slice(0, 500) || null, result.trialLimitReached ? 1 : 0, result.model ?? null, id)
+    .run();
+}
+
 function buildPrompt(payload: RavenRequest) {
   const persona = getPersona(process.env.RAVEN_PERSONA_ID);
   const personaPrompt = personaSystemPrompt(persona);
@@ -265,9 +292,11 @@ export async function POST(request: Request) {
     });
   }
 
+  const readingLogId = await createReadingLog(payload);
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
+    await finishReadingLog(readingLogId, { status: "failed", httpStatus: 503, errorCode: "missing_api_key", errorMessage: "OPENAI_API_KEY is not configured." });
     return jsonResponse(
       {
         error: "OPENAI_API_KEY is not configured.",
@@ -277,19 +306,25 @@ export async function POST(request: Request) {
   }
 
   if (payload.mode !== "reading" && payload.mode !== "chat") {
+    await finishReadingLog(readingLogId, { status: "failed", httpStatus: 400, errorCode: "invalid_mode", errorMessage: "mode must be fortune, reading, or chat." });
     return jsonResponse({ error: "mode must be fortune, reading, or chat." }, 400);
   }
 
   if (payload.mode === "reading" && !payload.sourceText?.trim()) {
+    await finishReadingLog(readingLogId, { status: "failed", httpStatus: 400, errorCode: "missing_source_text", errorMessage: "sourceText is required for reading mode." });
     return jsonResponse({ error: "sourceText is required for reading mode." }, 400);
   }
 
   if (payload.mode === "chat" && !payload.message?.trim()) {
+    await finishReadingLog(readingLogId, { status: "failed", httpStatus: 400, errorCode: "missing_message", errorMessage: "message is required for chat mode." });
     return jsonResponse({ error: "message is required for chat mode." }, 400);
   }
 
   const memberContext = payload.mode === "reading" ? await reserveMemberReading(request, payload) : null;
-  if (memberContext instanceof Response) return memberContext;
+  if (memberContext instanceof Response) {
+    await finishReadingLog(readingLogId, { status: "failed", httpStatus: memberContext.status, errorCode: "member_entitlement_failed", errorMessage: "Member entitlement reservation failed." });
+    return memberContext;
+  }
 
   const model = process.env.OPENAI_MODEL || DEFAULT_MODEL;
   const openAIResponse = await fetch(OPENAI_ENDPOINT, {
@@ -309,6 +344,7 @@ export async function POST(request: Request) {
 
   if (!openAIResponse.ok) {
     if (memberContext) await releaseReadingEntitlement(env, request, { reservationId: memberContext.reservation.reservation_id, reason: "ai_request_failed" });
+    await finishReadingLog(readingLogId, { status: "failed", httpStatus: openAIResponse.status, errorCode: "openai_request_failed", errorMessage: data.error?.message || "OpenAI request failed." });
     return jsonResponse(
       {
         error: data.error?.message || "OpenAI request failed.",
@@ -321,11 +357,17 @@ export async function POST(request: Request) {
 
   if (!text) {
     if (memberContext) await releaseReadingEntitlement(env, request, { reservationId: memberContext.reservation.reservation_id, reason: "empty_ai_response" });
+    await finishReadingLog(readingLogId, { status: "failed", httpStatus: 502, errorCode: "empty_ai_response", errorMessage: "OpenAI returned an empty response." });
     return jsonResponse({ error: "OpenAI returned an empty response." }, 502);
   }
 
   const member = await commitMemberReading(request, payload, memberContext, { text }, model);
-  if (member instanceof Response) return member;
+  if (member instanceof Response) {
+    await finishReadingLog(readingLogId, { status: "failed", httpStatus: member.status, errorCode: "member_commit_failed", errorMessage: "Member reading commit failed." });
+    return member;
+  }
+
+  await finishReadingLog(readingLogId, { status: "completed", httpStatus: 200, model });
 
   return jsonResponse({
     text,
