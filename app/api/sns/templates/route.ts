@@ -1,7 +1,8 @@
 import { env } from "cloudflare:workers";
+import { RAVEN_TENANT_CONFIG } from "@/app/lib/tenant-config";
 
-const TENANT_ID = "raven-oracle";
 const allowedFormats = new Set(["three_choice_reading", "yes_no", "one_card", "ranking", "card_meaning", "guild_dialogue", "multi_divination", "community_prompt", "behind_scenes", "custom"]);
+const TENANT_ID = RAVEN_TENANT_CONFIG.id;
 
 function tenant(value: string | null | undefined) {
   if ((value || TENANT_ID) !== TENANT_ID) throw new Error("Invalid tenant_id");

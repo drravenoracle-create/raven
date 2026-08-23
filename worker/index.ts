@@ -4,6 +4,8 @@ import handler from "vinext/server/app-router-entry";
 import { decryptDriveRefreshToken } from "../app/lib/google-drive-oauth";
 import { buildCalendarBlog, buildCalendarSocial, buildDailyAlmanac } from "../app/lib/calendar/daily-almanac";
 import { observeInstagramContainer, readInstagramMetaError, sanitizeInstagramResponse, type InstagramReelState } from "../app/lib/instagram-reel-state";
+import { RAVEN_CHARACTER_CONFIG } from "../app/lib/character-config";
+import { RAVEN_TENANT_CONFIG } from "../app/lib/tenant-config";
 
 interface Env {
   ASSETS: Fetcher;
@@ -36,7 +38,9 @@ interface ExecutionContext {
   passThroughOnException(): void;
 }
 
-const TENANT_ID = "raven-oracle";
+const TENANT_ID = RAVEN_TENANT_CONFIG.id;
+const CHARACTER_CONFIG = RAVEN_TENANT_CONFIG.character;
+const PUBLIC_URL = RAVEN_TENANT_CONFIG.publicUrl;
 const DEFAULT_SNS_SCHEDULE = { windows: [{ start: "01:00", end: "07:00" }, { start: "13:00", end: "17:00" }] };
 
 function json(body: unknown, init: ResponseInit = {}) {
@@ -290,8 +294,8 @@ async function listSnsPosts(request: Request, env: Env) {
 function buildSnsDraft(input: Record<string, unknown>) {
   const theme = toJsonText(input.theme, 180) || "返信前の文章を整える3つの視点";
   const purpose = toJsonText(input.purpose, 180) || "テキスト鑑定への案内";
-  const character = toJsonText(input.character, 120) || "レイヴン・ブラックウッド";
-  const cta = toJsonText(input.cta, 240) || "必要なら、レイヴン・ブラックウッドのテキスト鑑定で一緒に整理できます。";
+  const character = toJsonText(input.character, 120) || CHARACTER_CONFIG.displayName;
+  const cta = toJsonText(input.cta, 240) || CHARACTER_CONFIG.defaultCta;
   const title = toJsonText(input.title, 180) || theme;
   const caption =
     toJsonText(input.caption, 2200) ||
@@ -331,7 +335,7 @@ async function createSnsPost(request: Request, env: Env) {
       draft.purpose,
       draft.cta,
       draft.caption,
-      toJsonText(body.hashtags, 500) || "#レイヴンブラックウッド #文章鑑定 #相談整理",
+      toJsonText(body.hashtags, 500) || CHARACTER_CONFIG.sns.hashtags.join(" "),
       draft.script,
       toJsonText(body.media_type ?? body.mediaType, 40),
       toJsonText(body.media_url ?? body.mediaUrl, 1000),
@@ -750,22 +754,22 @@ async function createDueDailySnsPost(env: Env) {
   if (scheduledForDate) return 0;
 
   const id = crypto.randomUUID();
-  const dailyThemes = [
+  const dailyTheme = [
     { theme: "今日あなたに届く嬉しい知らせ", cta: "続きはRaven Oracleへ。" },
     { theme: "明日ひらく新しい流れ", cta: "プロフィールから詳しく占えます。" },
     { theme: "今のあなたを支える一言", cta: "あなた専用の結果を確認する。" },
     { theme: "近いうちに起きる小さな変化", cta: "Raven Oracleで続きを見る。" },
   ][Number(date.replace(/-/g, "")) % 4];
   const title = `今日の3択占い ${date}`;
-  const theme = dailyThemes.theme;
-  const cta = dailyThemes.cta;
+  const theme = dailyTheme.theme;
+  const cta = CHARACTER_CONFIG.dailyThreeChoiceCta;
   const videoAsset = await env.DB.prepare(
     "SELECT asset_id FROM media_video_assets WHERE tenant_id = ? AND mime_type = 'video/mp4' AND deleted_at IS NULL AND category <> 'fireplace' ORDER BY CASE WHEN category = 'three_choice_background' THEN 0 ELSE 1 END, CASE WHEN category = 'three_choice_background' THEN datetime(created_at) END DESC, usage_count ASC, datetime(created_at) ASC LIMIT 1",
   )
     .bind(TENANT_ID)
     .first<{ asset_id: string }>();
   if (!videoAsset?.asset_id) return 0;
-  const videoUrl = `https://raven.fortunestudios.jp/api/reel-engine/assets?assetId=${encodeURIComponent(videoAsset.asset_id)}`;
+  const videoUrl = `${PUBLIC_URL}/api/reel-engine/assets?assetId=${encodeURIComponent(videoAsset.asset_id)}`;
   await env.DB.prepare("UPDATE media_video_assets SET usage_count = usage_count + 1, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND asset_id = ?")
     .bind(TENANT_ID, videoAsset.asset_id)
     .run();
@@ -777,7 +781,7 @@ async function createDueDailySnsPost(env: Env) {
     "",
     cta,
     "",
-    "#レイヴンブラックウッド #3択占い #オラクルカード #占い #恋愛占い",
+    CHARACTER_CONFIG.dailyThreeChoiceHashtags.join(" "),
   ].join("\n");
 
   await env.DB.prepare(
@@ -790,12 +794,14 @@ async function createDueDailySnsPost(env: Env) {
       TENANT_ID,
       title,
       theme,
+      CHARACTER_CONFIG.displayName,
+      "Instagram ReelsからRaven Oracleへ誘導",
       cta,
       caption,
-      "#レイヴンブラックウッド #3択占い #オラクルカード #占い #恋愛占い",
+      CHARACTER_CONFIG.dailyThreeChoiceHashtags.join(" "),
       "0-2秒: HOOK\n2-5秒: 裏面カードA/B/C\n5-17秒: A/B/Cの結果\n17-20秒: CTA",
       videoUrl,
-      "https://raven.fortunestudios.jp/api/sns/sample-card?card=knight",
+      `${PUBLIC_URL}/api/sns/sample-card?card=knight`,
       scheduledAt,
       idempotencyKey,
     )
@@ -1351,7 +1357,7 @@ async function queueAndPublishBlogSnsPost(env: Env, article: { id: string; slug?
   const id = crypto.randomUUID();
   const title = sanitizeText(article.title || "今日の占い", 180);
   const keyMessage = sanitizeText(article.key_message || "今日の流れを整える一手を確認しましょう。", 240);
-  const blogUrl = article.slug ? `https://raven.fortunestudios.jp/blog/${article.slug}/` : "https://raven.fortunestudios.jp/blog/";
+  const blogUrl = article.slug ? `${PUBLIC_URL}/blog/${article.slug}/` : `${PUBLIC_URL}/blog/`;
   const caption = `${title}\n\n${keyMessage}\n\n詳しくはブログ「今日の占い」へ。\n${blogUrl}\n\n#レイヴンブラックウッド #今日の占い #易断 #占い`;
   await env.DB.prepare(
     `INSERT INTO sns_posts
@@ -1367,8 +1373,8 @@ async function queueAndPublishBlogSnsPost(env: Env, article: { id: string; slug?
       caption,
       "#レイヴンブラックウッド #今日の占い #易断 #占い",
       `${title}\n${keyMessage}\nブログへ誘導`,
-      "https://raven.fortunestudios.jp/raven-blackwood-cover.png",
-      "https://raven.fortunestudios.jp/raven-blackwood-cover.png",
+      `${PUBLIC_URL}/raven-blackwood-cover.png`,
+      `${PUBLIC_URL}/raven-blackwood-cover.png`,
       new Date().toISOString(),
       trackingId,
     )

@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
+import { RAVEN_TENANT_CONFIG } from "@/app/lib/tenant-config";
 
-const TENANT_ID = "raven-oracle";
+const TENANT_ID = RAVEN_TENANT_CONFIG.id;
 
 export async function GET(request: Request) {
   const tenantId = new URL(request.url).searchParams.get("tenantId") || TENANT_ID;
