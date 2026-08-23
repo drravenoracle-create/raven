@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
+import { RAVEN_TENANT_CONFIG } from "@/app/lib/tenant-config";
 
-const TENANT_ID = "raven-oracle";
+const TENANT_ID = RAVEN_TENANT_CONFIG.id;
 
 function clean(value: unknown, maxLength: number) {
   return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, maxLength);

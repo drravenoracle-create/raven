@@ -2,8 +2,9 @@ import { env } from "cloudflare:workers";
 import { findSnsDuplicate, fingerprintSnsContent, type SnsDuplicateCandidate } from "@/app/lib/sns-dedupe";
 import { recordCardUsage, selectCards } from "@/app/lib/card-library";
 import { RAVEN_CHARACTER_CONFIG } from "@/app/lib/character-config";
+import { RAVEN_TENANT_CONFIG } from "@/app/lib/tenant-config";
 
-const TENANT_ID = "raven-oracle";
+const TENANT_ID = RAVEN_TENANT_CONFIG.id;
 const DUPLICATE_LOOKBACK_DAYS = 45;
 const DEFAULT_SCHEDULE = { windows: [{ start: "01:00", end: "07:00" }, { start: "13:00", end: "17:00" }] };
 

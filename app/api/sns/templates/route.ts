@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
+import { RAVEN_TENANT_CONFIG } from "@/app/lib/tenant-config";
 
-const TENANT_ID = "raven-oracle";
+const TENANT_ID = RAVEN_TENANT_CONFIG.id;
 const allowedFormats = new Set(["three_choice_reading", "yes_no", "one_card", "ranking", "card_meaning", "guild_dialogue", "custom"]);
 
 function tenant(value: string | null | undefined) {
