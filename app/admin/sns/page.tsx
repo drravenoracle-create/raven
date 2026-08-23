@@ -2,6 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { RAVEN_CHARACTER_CONFIG } from "@/app/lib/character-config";
+import { RAVEN_TENANT_CONFIG } from "@/app/lib/tenant-config";
+
+const TENANT_ID = RAVEN_TENANT_CONFIG.id;
 
 type Slide = { heading: string; body: string };
 type SnsPost = { id: string; title: string; status: string; platform: string; post_type: string; scheduled_at?: string; created_at?: string; container_id?: string; container_status?: string; container_last_checked_at?: string; meta_status?: string; meta_error_code?: number | null; meta_error_subcode?: number | null; retry_count?: number; reconciliation_reason?: string };
@@ -54,7 +58,7 @@ const defaultThreeChoiceTimeline: ThreeChoiceScene[] = [
 
 export default function SnsAdminPage() {
   const [topic, setTopic] = useState(ideas[0]);
-  const [goal, setGoal] = useState("テキスト鑑定への案内");
+  const [goal, setGoal] = useState(RAVEN_CHARACTER_CONFIG.sns.defaultPurpose);
   const [tone, setTone] = useState("静かで知的");
   const [slides, setSlides] = useState<Slide[]>([]);
   const [caption, setCaption] = useState("");
@@ -77,7 +81,7 @@ export default function SnsAdminPage() {
   const [threeChoiceTheme, setThreeChoiceTheme] = useState("近いうちに起こる嬉しいこと");
   const [threeChoiceCategory, setThreeChoiceCategory] = useState("near_future");
   const [threeChoiceDeckId, setThreeChoiceDeckId] = useState("");
-  const [threeChoiceCta, setThreeChoiceCta] = useState("詳しい鑑定はプロフィールへ");
+  const [threeChoiceCta, setThreeChoiceCta] = useState(RAVEN_CHARACTER_CONFIG.threeChoiceCta);
   const [threeChoiceBackground, setThreeChoiceBackground] = useState("media://raven/default-background");
   const [threeChoiceMusic, setThreeChoiceMusic] = useState("media://raven/default-bgm");
   const [threeChoiceHook, setThreeChoiceHook] = useState("");
@@ -102,7 +106,7 @@ export default function SnsAdminPage() {
 
   async function loadPosts() {
     try {
-      const response = await fetch("/api/sns/posts?tenantId=raven-oracle", { cache: "no-store" });
+      const response = await fetch(`/api/sns/posts?tenantId=${TENANT_ID}`, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         setStatus(payload.error || "SNS投稿一覧の取得に失敗しました。");
@@ -143,7 +147,7 @@ export default function SnsAdminPage() {
 
   async function loadDecks() {
     try {
-      const response = await fetch("/api/card-library?resource=decks&tenantId=raven-oracle", { cache: "no-store" });
+      const response = await fetch(`/api/card-library?resource=decks&tenantId=${TENANT_ID}`, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (response.ok) setDecks(payload.decks || []);
     } catch {}
@@ -159,7 +163,7 @@ export default function SnsAdminPage() {
 
   async function loadGrowthLoop() {
     try {
-      const response = await fetch("/api/sns/videos/growth-loop?tenantId=raven-oracle", { cache: "no-store" });
+      const response = await fetch(`/api/sns/videos/growth-loop?tenantId=${TENANT_ID}`, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (response.ok) {
         setGrowthLoop({
@@ -196,7 +200,7 @@ export default function SnsAdminPage() {
 
   useEffect(() => {
     let active = true;
-    fetch("/api/sns/posts?tenantId=raven-oracle", { cache: "no-store" })
+    fetch(`/api/sns/posts?tenantId=${TENANT_ID}`, { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : { posts: [] }))
       .then((payload) => {
         if (active) {
@@ -240,7 +244,7 @@ export default function SnsAdminPage() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          tenant_id: "raven-oracle",
+          tenant_id: TENANT_ID,
           theme: threeChoiceTheme,
           category: threeChoiceCategory,
           deck_id: threeChoiceDeckId,
@@ -297,7 +301,7 @@ export default function SnsAdminPage() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          tenant_id: "raven-oracle",
+          tenant_id: TENANT_ID,
           action: "generate_hooks",
           theme: threeChoiceTheme,
           category: threeChoiceCategory,
@@ -335,7 +339,7 @@ export default function SnsAdminPage() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          tenant_id: "raven-oracle",
+          tenant_id: TENANT_ID,
           action: "create_ab_variants",
           experiment_id: threeChoiceExperimentId,
           theme: threeChoiceTheme,
@@ -373,7 +377,7 @@ export default function SnsAdminPage() {
       const response = await fetch("/api/sns/videos/three-choice/render", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ tenant_id: "raven-oracle", job_payload: threeChoicePreview }),
+        body: JSON.stringify({ tenant_id: TENANT_ID, job_payload: threeChoicePreview }),
       });
       const payload = await response.json().catch(() => ({}));
       setStatus(response.ok ? `3択動画ジョブを登録しました: ${payload.jobId} / ${payload.status}` : payload.error || "3択動画ジョブ登録に失敗しました。");
@@ -424,10 +428,10 @@ export default function SnsAdminPage() {
       { heading: "意図を見る", body: "何を伝えたいのか、相手に何を返してほしいのかを分けます。" },
       { heading: "圧を下げる", body: "正しさが強すぎる時は、要望と気持ちを別の文にします。" },
       { heading: "次の一手", body: "送る、待つ、保留する。行動を一つだけ選びます。" },
-      { heading: "レイヴン・ブラックウッド", body: "テキスト鑑定と時間制チャットで、文面を落ち着いて整えます。" },
+      { heading: RAVEN_CHARACTER_CONFIG.displayName, body: "テキスト鑑定と時間制チャットで、文面を落ち着いて整えます。" },
     ];
     setSlides(generated);
-    setCaption(`${topic}\n\n${tone}なトーンで、送信前の迷いを短く整えるための投稿です。\n\n${goal}として、レイヴン・ブラックウッドのテキスト鑑定へ案内します。\n\n#レイヴンブラックウッド #文章鑑定 #相談整理 #返信前チェック`);
+    setCaption(`${topic}\n\n${tone}なトーンで、送信前の迷いを短く整えるための投稿です。\n\n${goal}として、${RAVEN_CHARACTER_CONFIG.displayName}のテキスト鑑定へ案内します。\n\n${RAVEN_CHARACTER_CONFIG.sns.hashtags.join(" ")}`);
     setStatus("スライド案を生成しました。内容を確認してから投稿準備してください。");
     setActiveAction("idle");
   }
@@ -460,15 +464,15 @@ export default function SnsAdminPage() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          tenant_id: "raven-oracle",
+          tenant_id: TENANT_ID,
           platform: "instagram",
           post_type: hasVideo ? "reel" : "carousel",
           title: topic,
           theme: topic,
           category: hasVideo ? "完成済み動画" : "文章鑑定",
-          character: "レイヴン・ブラックウッド",
+          character: RAVEN_CHARACTER_CONFIG.displayName,
           purpose: goal,
-          cta: "必要なら、レイヴン・ブラックウッドのテキスト鑑定で一緒に整理します。",
+          cta: RAVEN_CHARACTER_CONFIG.defaultCta,
           caption: preparedCaption,
           script: preparedSlides.map((slide, index) => `${index + 1}. ${slide.heading}: ${slide.body}`).join("\n"),
           media_type: hasVideo ? "video" : "",
@@ -571,7 +575,7 @@ export default function SnsAdminPage() {
       const response = await fetch("/api/sns/publish", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ tenant_id: "raven-oracle", id }),
+        body: JSON.stringify({ tenant_id: TENANT_ID, id }),
       });
       const payload = await response.json().catch(() => ({}));
       const detail = payload.details?.error?.message ? ` Meta: ${payload.details.error.message}` : "";
@@ -640,7 +644,7 @@ export default function SnsAdminPage() {
     ctx.fillRect(0, 0, 1080, 1920);
     ctx.fillStyle = "#20241f";
     ctx.font = "700 48px sans-serif";
-    ctx.fillText("レイヴン・ブラックウッド", 90, 150);
+    ctx.fillText(RAVEN_CHARACTER_CONFIG.displayName, 90, 150);
     ctx.font = "700 78px sans-serif";
     wrap(ctx, slide.heading, 90, 430, 900, 96);
     ctx.font = "500 48px sans-serif";
@@ -650,7 +654,7 @@ export default function SnsAdminPage() {
     ctx.fillText(`${index + 1}/${slides.length}`, 90, 1760);
     const link = document.createElement("a");
     link.href = canvas.toDataURL("image/png");
-    link.download = `raven-oracle-${String(index + 1).padStart(2, "0")}.png`;
+    link.download = `${TENANT_ID}-${String(index + 1).padStart(2, "0")}.png`;
     link.click();
     setStatus("PNGを書き出しました。");
     setActiveAction("idle");
@@ -847,7 +851,7 @@ export default function SnsAdminPage() {
                 {slides.map((slide, index) => (
                   <article key={`${slide.heading}-${index}`} className="rounded border border-[#d7cabc] bg-white p-4">
                     <div className="aspect-[9/16] rounded border border-[#cbd4c4] bg-[#edf3e8] p-5">
-                      <p className="text-xs font-semibold uppercase text-[#596d51]">レイヴン・ブラックウッド</p>
+                      <p className="text-xs font-semibold uppercase text-[#596d51]">{RAVEN_CHARACTER_CONFIG.displayName}</p>
                       <h3 className="mt-8 text-2xl font-semibold">{slide.heading}</h3>
                       <p className="mt-5 leading-7 text-[#3f4b3d]">{slide.body}</p>
                       <p className="mt-8 text-sm text-[#596d51]">{index + 1}/{slides.length}</p>
@@ -898,12 +902,12 @@ function buildSlides(topic: string) {
     { heading: "意図を見る", body: "何を伝えたいのか、相手に何を返してほしいのかを分けます。" },
     { heading: "圧を下げる", body: "正しさが強すぎる時は、要望と気持ちを別の文にします。" },
     { heading: "次の一手", body: "送る、待つ、保留する。行動を一つだけ選びます。" },
-    { heading: "レイヴン・ブラックウッド", body: "テキスト鑑定と時間制チャットで、文面を落ち着いて整えます。" },
+    { heading: RAVEN_CHARACTER_CONFIG.displayName, body: "テキスト鑑定と時間制チャットで、文面を落ち着いて整えます。" },
   ];
 }
 
 function buildCaption(topic: string, tone: string, goal: string) {
-  return `${topic}\n\n${tone}なトーンで、送信前の迷いを短く整えるための投稿です。\n\n${goal}として、レイヴン・ブラックウッドのテキスト鑑定へ案内します。\n\n#レイヴンブラックウッド #文章鑑定 #相談整理 #返信前チェック`;
+  return `${topic}\n\n${tone}なトーンで、送信前の迷いを短く整えるための投稿です。\n\n${goal}として、${RAVEN_CHARACTER_CONFIG.displayName}のテキスト鑑定へ案内します。\n\n${RAVEN_CHARACTER_CONFIG.sns.hashtags.join(" ")}`;
 }
 
 function Metric({ label, value }: { label: string; value: number }) {
