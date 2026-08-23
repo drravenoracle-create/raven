@@ -57,11 +57,11 @@ function parseMediaUrls(post: { media_url?: string; thumbnail_url?: string }) {
   return raw.split(/[\n,]/).map((item) => item.trim()).filter(Boolean).slice(0, 10);
 }
 
-async function saveReelState(input: { tenantId: string; id: string; containerId: string; state: string; httpStatus?: number; body?: unknown }) {
+async function saveReelState(input: { tenantId: string; id: string; containerId: string; state: string; metaStatus?: string | null; httpStatus?: number; body?: unknown }) {
   const error = readInstagramMetaError(input.body);
   await env.DB.prepare(
-    "UPDATE sns_posts SET container_id = ?, container_status = ?, container_created_at = COALESCE(container_created_at, CURRENT_TIMESTAMP), container_last_checked_at = CASE WHEN ? IS NULL THEN container_last_checked_at ELSE CURRENT_TIMESTAMP END, container_ready_at = CASE WHEN ? = 'ready' THEN CURRENT_TIMESTAMP ELSE container_ready_at END, meta_http_status = COALESCE(?, meta_http_status), meta_response_body = COALESCE(?, meta_response_body), meta_error_code = ?, meta_error_subcode = ?, meta_error_message = ?, meta_error_type = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?",
-  ).bind(input.containerId, input.state, input.httpStatus ?? null, input.state, input.httpStatus ?? null, input.body ? sanitizeInstagramResponse(input.body) : null, error.code, error.subcode, error.message, error.type, input.tenantId, input.id).run();
+    "UPDATE sns_posts SET container_id = ?, container_status = ?, container_created_at = COALESCE(container_created_at, CURRENT_TIMESTAMP), container_last_checked_at = CASE WHEN ? IS NULL THEN container_last_checked_at ELSE CURRENT_TIMESTAMP END, container_ready_at = CASE WHEN ? = 'ready' THEN CURRENT_TIMESTAMP ELSE container_ready_at END, meta_status = COALESCE(?, meta_status), meta_http_status = COALESCE(?, meta_http_status), meta_response_body = COALESCE(?, meta_response_body), meta_error_code = ?, meta_error_subcode = ?, meta_error_message = ?, meta_error_type = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?",
+  ).bind(input.containerId, input.state, input.httpStatus ?? null, input.state, input.metaStatus ?? null, input.httpStatus ?? null, input.body ? sanitizeInstagramResponse(input.body) : null, error.code, error.subcode, error.message, error.type, input.tenantId, input.id).run();
 }
 
 async function logReelEvent(input: { tenantId: string; id: string; containerId: string; action: string; state: string; httpStatus: number; body?: unknown; retryCount?: number }) {
@@ -114,7 +114,7 @@ export async function POST(request: Request) {
   }
   if (isReel && fullPost.container_id) {
     const checked = await checkInstagramContainer(fullPost.container_id);
-    await saveReelState({ tenantId, id, containerId: fullPost.container_id, state: checked.observation.state, httpStatus: checked.response.status, body: checked.body });
+    await saveReelState({ tenantId, id, containerId: fullPost.container_id, state: checked.observation.state, metaStatus: checked.observation.metaStatus, httpStatus: checked.response.status, body: checked.body });
     await logReelEvent({ tenantId, id, containerId: fullPost.container_id, action: "check", state: checked.observation.state, httpStatus: checked.response.status, body: checked.body, retryCount: fullPost.retry_count });
     if (checked.observation.state === "processing") return Response.json({ ok: false, inProgress: true, state: "processing", containerId: fullPost.container_id }, { status: 202 });
     if (checked.observation.state === "failed") {
