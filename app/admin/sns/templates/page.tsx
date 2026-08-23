@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { RAVEN_CHARACTER_CONFIG } from "@/app/lib/character-config";
 import { RAVEN_TENANT_CONFIG } from "@/app/lib/tenant-config";
 
 type Template = { id: string; name: string; slug: string; format_key?: string; category: string; format_type: string; status: string; enabled?: number; is_system_preset?: number; version: number; duration_seconds: number; supported_platforms?: string; supported_characters?: string; description?: string };
@@ -31,7 +32,7 @@ export default function SnsTemplateManagerPage() {
 
   async function action(id: string, actionName: string) {
     try {
-      const response = await fetch(`/api/sns/templates/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tenantId, action: actionName, content: { title: "サンプル投稿", hook: "テーマを選んでください", cta: "詳しい鑑定はプロフィールへ", platform: "instagram" } }) });
+      const response = await fetch(`/api/sns/templates/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tenantId, action: actionName, content: { title: "サンプル投稿", hook: "テーマを選んでください", cta: RAVEN_CHARACTER_CONFIG.threeChoiceCta, platform: "instagram" } }) });
       const payload = await response.json().catch(() => ({})) as Record<string, unknown>; setResult(payload);
       setStatus(response.ok ? `${actionName === "render" ? "動画構成" : actionName === "duplicate" ? "複製" : actionName === "create_post" ? "SNS下書き" : actionName === "toggle" ? "有効状態" : "プレビュー"}を更新しました。` : String(payload.error || "操作に失敗しました。"));
       if ((actionName === "duplicate" || actionName === "toggle") && response.ok) await load();
