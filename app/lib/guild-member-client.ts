@@ -1,6 +1,10 @@
-export const GUILD_ID = "raven-guild";
-export const RAVEN_TENANT_ID = "raven-oracle";
-export const RAVEN_CHARACTER_ID = "raven";
+import { RAVEN_GUILD_CONFIG } from "./guild-config";
+import { RAVEN_CHARACTER_CONFIG } from "./character-config";
+import { RAVEN_TENANT_CONFIG } from "./tenant-config";
+
+export const GUILD_ID = RAVEN_GUILD_CONFIG.id;
+export const RAVEN_TENANT_ID = RAVEN_TENANT_CONFIG.id;
+export const RAVEN_CHARACTER_ID = RAVEN_CHARACTER_CONFIG.id;
 
 export type GuildMemberEnv = {
   GUILD_MEMBER_WORKER?: { fetch(request: Request): Promise<Response> };
@@ -131,7 +135,7 @@ export async function getMemberSession(env: GuildMemberEnv, request: Request) {
 }
 
 export async function getMemberAuthLinks(env: GuildMemberEnv, request: Request, input: { returnTo: string; menuId?: string; mode?: "login" | "register" }) {
-  return guildMemberRequest<{ login_url?: string; register_url?: string }>(env, "/api/member/auth/links", {
+  return guildMemberRequest<{ login_url?: string; register_url?: string; google_login_url?: string; google_register_url?: string; email_login_url?: string; email_register_url?: string }>(env, "/api/member/auth/links", {
     method: "POST",
     request,
     body: {
@@ -142,12 +146,13 @@ export async function getMemberAuthLinks(env: GuildMemberEnv, request: Request, 
   });
 }
 
-export async function reserveReadingEntitlement(env: GuildMemberEnv, request: Request, input: { menuId: string; readingMode: string; consultationSummary?: string }) {
+export async function reserveReadingEntitlement(env: GuildMemberEnv, request: Request, input: { menuId: string; readingMode: string; consultationSummary?: string; returnTo?: string }) {
   return guildMemberRequest<TrialReservation>(env, "/api/member/trials/reserve", {
     method: "POST",
     request,
     body: {
       ...authContext(input.menuId, "raven_reading"),
+      return_to: input.returnTo || memberReturnTo(request),
       reading_mode: input.readingMode,
       consultation_summary: input.consultationSummary || "",
     },

@@ -5,6 +5,7 @@ import { RAVEN_TENANT_CONFIG } from "@/app/lib/tenant-config";
 export const THREE_CHOICE_TENANT_ID = RAVEN_TENANT_CONFIG.id;
 export const THREE_CHOICE_TEMPLATE_ID = "raven_three_choice_v1";
 export const THREE_CHOICE_VERSION = "three-choice-video-v1.0";
+const RAVEN_PUBLIC_ORIGIN = "https://raven.fortunestudios.jp";
 
 export type ThreeChoiceCard = {
   slot: "A" | "B" | "C";
@@ -160,6 +161,7 @@ export function characterTone(character: string) {
 function isSafeMediaReference(value: string) {
   if (!value) return true;
   if (value.startsWith("/api/reel-engine/assets?assetId=")) return true;
+  if (value.startsWith("/api/card-library/drive-image/")) return true;
   if (value.startsWith("media://")) return true;
   if (value.startsWith("r2://")) return true;
   try {
@@ -168,6 +170,12 @@ function isSafeMediaReference(value: string) {
   } catch {
     return false;
   }
+}
+
+function rendererMediaUrl(value: string, fallback: string) {
+  const normalized = cleanVideoText(value, 1000);
+  if (!normalized) return fallback;
+  return normalized.startsWith("/") ? `${RAVEN_PUBLIC_ORIGIN}${normalized}` : normalized;
 }
 
 function shortMeaning(card: SelectedCard, category: string) {
@@ -205,7 +213,7 @@ export function composeThreeChoicePayload(input: {
     cardId: card.id,
     deckId: card.deck_id,
     name: card.name_ja || card.name,
-    image: card.image_url || (card.storage_key ? `r2://${card.storage_key}` : ""),
+    image: rendererMediaUrl(card.image_url || (card.storage_key ? `r2://${card.storage_key}` : ""), ""),
     reading: cleanVideoText(input.readings?.[index] || shortMeaning(card, input.category), 90),
   }));
   return {
@@ -220,7 +228,7 @@ export function composeThreeChoicePayload(input: {
     character: cleanVideoText(input.character, 80) || "raven",
     deckId: input.deckId,
     cards,
-    background: cleanVideoText(input.background, 1000) || "media://raven/default-background",
+    background: rendererMediaUrl(input.background || "", `${RAVEN_PUBLIC_ORIGIN}/api/reel-engine/assets?assetId=65ed49d2-7509-467b-b469-f990929ea440`),
     music: cleanVideoText(input.music, 1000) || "media://raven/default-bgm",
     cta: cleanVideoText(input.cta, 160) || RAVEN_CHARACTER_CONFIG.threeChoiceCta,
     experimentId: cleanVideoText(input.experimentId, 120) || undefined,

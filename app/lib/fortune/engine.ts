@@ -1,6 +1,7 @@
 ﻿import { getPersona, personaSystemPrompt } from "@/app/lib/personas";
 import { checkFortuneSafety } from "@/app/lib/fortune/safety";
 import { tarotCards, type TarotCard } from "@/app/lib/fortune/tarot";
+import { yijingHexagrams, type YijingHexagram } from "@/app/divination-dictionary/yijing-64-hexagrams/data";
 
 export type FortuneTheme = "love" | "work" | "money" | "today" | "yijing";
 
@@ -26,6 +27,8 @@ export type FortuneReading = {
   advice: string;
   caution: string;
   luckyAction: string;
+  yijingHexagram?: { number: number; name: string; reading: string };
+  yijingChanging?: { line: number; hexagram: { number: number; name: string; reading: string } };
 };
 
 const themeLabels: Record<FortuneTheme, string> = {
@@ -70,6 +73,18 @@ export function drawServerCard(input: { theme: FortuneTheme; name?: string; conc
   return tarotCards[hashText(seed) % tarotCards.length];
 }
 
+export function selectYijingHexagram(input: { name?: string; concern?: string }): YijingHexagram {
+  const index = hashText(`${input.name?.trim() ?? ""}:${input.concern?.trim() ?? ""}`) % yijingHexagrams.length;
+  return yijingHexagrams[index];
+}
+
+export function selectYijingChange(input: { name?: string; concern?: string }, base: YijingHexagram) {
+  const seed = hashText(`${input.name?.trim() ?? ""}:${input.concern?.trim() ?? ""}:changing-line`);
+  const line = (seed % 6) + 1;
+  const changed = yijingHexagrams[(base.number - 1 + line) % yijingHexagrams.length] || yijingHexagrams[0];
+  return { line, hexagram: changed };
+}
+
 export function buildFallbackReading(input: {
   theme: FortuneTheme;
   name?: string;
@@ -81,6 +96,8 @@ export function buildFallbackReading(input: {
   const nameLabel = input.name?.trim() || "あなた";
   const concern = input.concern?.trim();
   const luckyAction = luckyActions[hashText(`${input.card.id}:${input.theme}`) % luckyActions.length];
+  const yijingHexagram = input.theme === "yijing" ? selectYijingHexagram(input) : undefined;
+  const yijingChanging = yijingHexagram ? selectYijingChange(input, yijingHexagram) : undefined;
 
   return {
     schemaVersion: "raven-fortune-v1",
@@ -99,6 +116,8 @@ export function buildFallbackReading(input: {
     advice: input.card.advice,
     caution: input.card.caution,
     luckyAction,
+    ...(yijingHexagram ? { yijingHexagram: { number: yijingHexagram.number, name: yijingHexagram.name, reading: yijingHexagram.reading } } : {}),
+    ...(yijingChanging ? { yijingChanging: { line: yijingChanging.line, hexagram: { number: yijingChanging.hexagram.number, name: yijingChanging.hexagram.name, reading: yijingChanging.hexagram.reading } } } : {}),
   };
 }
 
@@ -116,8 +135,10 @@ export function buildSafetyReading(input: { theme: FortuneTheme; name?: string; 
   });
 }
 
-export function buildFortunePrompt(input: { theme: FortuneTheme; name?: string; concern?: string; card: TarotCard }) {
+export function buildFortunePrompt(input: { theme: FortuneTheme; name?: string; concern?: string; birthDate?: string; card: TarotCard }) {
   const persona = getPersona(process.env.RAVEN_PERSONA_ID);
+  const yijingHexagram = input.theme === "yijing" ? selectYijingHexagram(input) : undefined;
+  const yijingChanging = yijingHexagram ? selectYijingChange(input, yijingHexagram) : undefined;
   return [
     personaSystemPrompt(persona),
     "",
@@ -128,6 +149,9 @@ export function buildFortunePrompt(input: { theme: FortuneTheme; name?: string; 
     "Reply in Japanese. Keep Raven Blackwood's voice calm, strategic, compassionate, and practical.",
     "Make the result clearly specific to the selected theme. Do not reuse generic wording across themes.",
     themeInstructions[input.theme],
+    yijingHexagram
+      ? `易断では最初に「${yijingHexagram.name}（${yijingHexagram.reading}）」を本卦として明記し、変爻は${yijingChanging?.line}爻、変爻後の卦は「${yijingChanging?.hexagram.name}（${yijingChanging?.hexagram.reading}）」と明記してください。その後に卦の解説、今の流れ、注意点、今日の一手を続けてください。卦名は変更しないでください。`
+      : "",
     "Use these four meanings internally: 兆し, 読み, 注意点, 今日の一手.",
     "Return only valid JSON matching this shape:",
     '{"title":"string","summary":"string","advice":"string","caution":"string","luckyAction":"string"}',
@@ -135,6 +159,7 @@ export function buildFortunePrompt(input: { theme: FortuneTheme; name?: string; 
     `Theme: ${themeLabels[input.theme]}`,
     `User name: ${input.name?.trim() || "未入力"}`,
     `Concern: ${input.concern?.trim() || "未入力"}`,
+    input.birthDate ? `Member birth date (private context): ${input.birthDate}` : "",
     `Confirmed card id: ${input.card.id}`,
     `Confirmed card: ${input.card.nameJa} (${input.card.name})`,
     `Card meaning: ${input.card.upright}`,
@@ -143,10 +168,12 @@ export function buildFortunePrompt(input: { theme: FortuneTheme; name?: string; 
   ].join("\n");
 }
 
-export function parseAIReading(text: string, input: { theme: FortuneTheme; card: TarotCard }): FortuneReading | null {
+export function parseAIReading(text: string, input: { theme: FortuneTheme; card: TarotCard; name?: string; concern?: string }): FortuneReading | null {
   try {
     const parsed = JSON.parse(text) as Partial<Pick<FortuneReading, "title" | "summary" | "advice" | "caution" | "luckyAction">>;
     if (!parsed.title || !parsed.summary || !parsed.advice || !parsed.caution || !parsed.luckyAction) return null;
+    const yijingHexagram = input.theme === "yijing" ? selectYijingHexagram({ name: input.name, concern: input.concern }) : undefined;
+    const yijingChanging = yijingHexagram ? selectYijingChange({ name: input.name, concern: input.concern }, yijingHexagram) : undefined;
     return {
       schemaVersion: "raven-fortune-v1",
       source: "ai",
@@ -162,6 +189,8 @@ export function parseAIReading(text: string, input: { theme: FortuneTheme; card:
       advice: parsed.advice,
       caution: parsed.caution,
       luckyAction: parsed.luckyAction,
+      ...(yijingHexagram ? { yijingHexagram: { number: yijingHexagram.number, name: yijingHexagram.name, reading: yijingHexagram.reading } } : {}),
+      ...(yijingChanging ? { yijingChanging: { line: yijingChanging.line, hexagram: { number: yijingChanging.hexagram.number, name: yijingChanging.hexagram.name, reading: yijingChanging.hexagram.reading } } } : {}),
     };
   } catch {
     return null;

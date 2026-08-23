@@ -10,6 +10,7 @@ const items = [
   { href: "/admin/decks/", title: "Deck Manager", label: "カード管理", description: "デッキ、カード画像参照、意味データ、SNS利用可否、カード選出と利用履歴を管理します。" },
   { href: "/admin/sns/", title: "SNS Engine", label: "SNS運用", description: "Instagram投稿、キャプション、Reels台本、予約、投稿履歴を管理します。" },
   { href: "/admin/analytics/", title: "アクセス分析", label: "分析", description: "イベント計測、流入、KPI、改善メモを確認します。" },
+  { href: "/admin/members/", title: "Member Management", label: "会員管理", description: "会員一覧、トライアル残数、鑑定履歴を読み取り確認します。" },
 ];
 
 type CountRow = { status: string; count: number };

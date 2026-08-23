@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { NextResponse } from "next/server";
-import { adminEmail, getAdminSession, googleRedirectUri, publicOrigin, GOOGLE_STATE_COOKIE } from "@/app/lib/google-admin-auth";
+import { adminEmail, getAdminSession, googleRedirectUri, publicOrigin, requestCookieMatches, GOOGLE_STATE_COOKIE } from "@/app/lib/google-admin-auth";
 import { encryptDriveRefreshToken } from "@/app/lib/google-drive-oauth";
 
 export async function GET(request: Request) {
@@ -8,9 +8,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const state = url.searchParams.get("state");
   const code = url.searchParams.get("code");
-  const cookies = request.headers.get("cookie") || "";
-  const expected = cookies.match(new RegExp(`${GOOGLE_STATE_COOKIE}=([^;]+)`))?.[1];
-  if (!session || session.email.toLowerCase() !== adminEmail().toLowerCase() || !state || state !== expected || !code) return NextResponse.json({ error: "Invalid Drive OAuth session." }, { status: 400 });
+  if (!session || session.email.toLowerCase() !== adminEmail().toLowerCase() || !state || !requestCookieMatches(request, GOOGLE_STATE_COOKIE, state) || !code) return NextResponse.json({ error: "Invalid Drive OAuth session." }, { status: 400 });
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) return NextResponse.json({ error: "Google OAuth credentials are not configured." }, { status: 503 });

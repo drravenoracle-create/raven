@@ -11,6 +11,17 @@ function clean(value: unknown, maxLength: number) {
   return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, maxLength);
 }
 
+function cleanCaption(value: unknown, maxLength: number) {
+  return String(value ?? "")
+    .replace(/\\n/g, "\n")
+    .replace(/\/n/g, "\n")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, maxLength);
+}
+
 function assertTenant(value: unknown) {
   const tenantId = clean(value, 80) || TENANT_ID;
   if (tenantId !== TENANT_ID) throw new Error("Invalid tenant_id");
@@ -75,7 +86,7 @@ export async function GET(request: Request) {
   const result = await env.DB.prepare("SELECT * FROM sns_posts WHERE tenant_id = ? ORDER BY datetime(created_at) DESC LIMIT 100")
     .bind(tenantId)
     .all();
-  const settings = await env.DB.prepare("SELECT automation_level, emergency_stop_all, min_post_interval_minutes, schedule_json FROM sns_automation_settings WHERE tenant_id = ? LIMIT 1")
+  const settings = await env.DB.prepare("SELECT automation_level, emergency_stop_all, emergency_stop_platforms, min_post_interval_minutes, schedule_json FROM sns_automation_settings WHERE tenant_id = ? LIMIT 1")
     .bind(tenantId)
     .first()
     .catch(() => null);
@@ -116,8 +127,8 @@ export async function POST(request: Request) {
 
   const theme = clean(body.theme, 180) || "返信前の文章を整える3つの視点";
   const cta = clean(body.cta, 240) || RAVEN_CHARACTER_CONFIG.defaultCta;
-  const captionBase = clean(body.caption, 2200) || `${theme}\n\n送る前に、気持ち・目的・相手に伝えたいことを分けて見直します。\n\n${cta}\n\n${RAVEN_CHARACTER_CONFIG.sns.hashtags.join(" ")}`;
-  const caption = selectedCardPayload ? clean(`${captionBase}\n\n今日のカード\n${selectedCardPayload}`, 2200) : captionBase;
+  const captionBase = cleanCaption(body.caption, 2200) || `${theme}\n\n送る前に、気持ち・目的・相手に伝えたいことを分けて見直します。\n\n${cta}\n\n${RAVEN_CHARACTER_CONFIG.sns.hashtags.join(" ")}`;
+  const caption = selectedCardPayload ? cleanCaption(`${captionBase}\n\n今日のカード\n${selectedCardPayload}`, 2200) : captionBase;
   const title = clean(body.title, 180) || theme;
   const scriptBase = clean(body.script, 4000);
   const script = selectedCardPayload ? clean(`${scriptBase}\n\n[Card Library]\n${selectedCardPayload}`, 4000) : scriptBase;
@@ -192,3 +203,4 @@ export async function POST(request: Request) {
   }
   return Response.json({ ok: true, id, duplicateWarning: duplicate ? { id: duplicate.candidate.id, score: Math.round(duplicate.score * 100) } : null }, { status: 201, headers: { "Cache-Control": "no-store" } });
 }
+

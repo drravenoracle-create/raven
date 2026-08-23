@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 type Slide = { heading: string; body: string };
 type SnsPost = { id: string; title: string; status: string; platform: string; post_type: string; scheduled_at?: string; created_at?: string };
 type SnsSettings = { automation_level?: number; emergency_stop_all?: number; schedule_json?: string };
+type PlatformSettings = { instagram: boolean; tiktok: boolean; youtube: boolean };
 type SnsPing = {
   instagram?: {
     access_token_configured?: boolean;
@@ -24,6 +25,7 @@ type DeckOption = { id: string; name: string; status: string; sns_use_allowed: n
 type UploadedMedia = { assetId: string; url: string; fileName: string; sizeBytes: number; mimeType: string };
 type SnsAction = "idle" | "loading" | "generating" | "saving" | "uploading" | "publishing" | "copying" | "downloading" | "deleting";
 type ThreeChoiceCard = { slot: "A" | "B" | "C"; cardId: string; name: string; image: string; reading: string };
+type ThreeChoiceScene = { id: string; start: number; end: number; label: string };
 type ThreeChoicePayload = { theme: string; category: string; deckId: string; hook: string; character: string; cta: string; cards: ThreeChoiceCard[]; background: string; music: string; experimentId?: string; variantId?: string; timeline: Array<{ id: string; start: number; end: number; label: string }> };
 type VideoJob = { id: string; status: string; theme: string; category?: string; output_url?: string; error_code?: string; error_message?: string; retry_count?: number; created_at?: string; completed_at?: string };
 type GrowthLoopState = {
@@ -41,6 +43,14 @@ const ideas = [
   "時間制チャットで相談を絞る流れ",
   "相手に伝わる文面にするための小さな確認",
 ];
+const defaultThreeChoiceTimeline: ThreeChoiceScene[] = [
+  { id: "hook", start: 0, end: 2, label: "HOOK" },
+  { id: "choice", start: 2, end: 5, label: "3択選択画面" },
+  { id: "result-a", start: 5, end: 9, label: "Aの結果" },
+  { id: "result-b", start: 9, end: 13, label: "Bの結果" },
+  { id: "result-c", start: 13, end: 17, label: "Cの結果" },
+  { id: "cta", start: 17, end: 20, label: "CTA" },
+];
 
 export default function SnsAdminPage() {
   const [topic, setTopic] = useState(ideas[0]);
@@ -48,10 +58,11 @@ export default function SnsAdminPage() {
   const [tone, setTone] = useState("静かで知的");
   const [slides, setSlides] = useState<Slide[]>([]);
   const [caption, setCaption] = useState("");
-  const [status, setStatus] = useState("投稿前です。");
+  const [status, setStatus] = useState("SNSマネージャーを準備しています。");
   const [posts, setPosts] = useState<SnsPost[]>([]);
   const [scheduledAt, setScheduledAt] = useState("");
   const [settings, setSettings] = useState<SnsSettings | null>(null);
+  const [platformSettings, setPlatformSettings] = useState<PlatformSettings>({ instagram: true, tiktok: true, youtube: true });
   const [snsPing, setSnsPing] = useState<SnsPing | null>(null);
   const [decks, setDecks] = useState<DeckOption[]>([]);
   const [cardDeckId, setCardDeckId] = useState("");
@@ -62,7 +73,7 @@ export default function SnsAdminPage() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [uploadedMedia, setUploadedMedia] = useState<UploadedMedia | null>(null);
   const [duplicateCandidate, setDuplicateCandidate] = useState<{ id: string; title?: string; created_at?: string; score?: number } | null>(null);
-  const [activeAction, setActiveAction] = useState<SnsAction>("loading");
+  const [activeAction, setActiveAction] = useState<SnsAction>("idle");
   const [threeChoiceTheme, setThreeChoiceTheme] = useState("近いうちに起こる嬉しいこと");
   const [threeChoiceCategory, setThreeChoiceCategory] = useState("near_future");
   const [threeChoiceDeckId, setThreeChoiceDeckId] = useState("");
@@ -73,6 +84,7 @@ export default function SnsAdminPage() {
   const [threeChoiceCharacter, setThreeChoiceCharacter] = useState("raven");
   const [threeChoiceExperimentId, setThreeChoiceExperimentId] = useState("");
   const [threeChoiceVariantId, setThreeChoiceVariantId] = useState("");
+  const [threeChoiceTimeline, setThreeChoiceTimeline] = useState<ThreeChoiceScene[]>(defaultThreeChoiceTimeline);
   const [hookCandidates, setHookCandidates] = useState<string[]>([]);
   const [ctaCandidates, setCtaCandidates] = useState<string[]>([]);
   const [threeChoicePreview, setThreeChoicePreview] = useState<ThreeChoicePayload | null>(null);
@@ -110,6 +122,22 @@ export default function SnsAdminPage() {
       const payload = await response.json().catch(() => ({}));
       if (response.ok) setSnsPing(payload);
     } catch {}
+  }
+
+  async function loadPlatformSettings() {
+    try {
+      const response = await fetch("/api/admin/sns/platform-settings/", { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok && payload.platforms) setPlatformSettings(payload.platforms);
+    } catch {}
+  }
+
+  async function savePlatformSettings(next: PlatformSettings) {
+    setPlatformSettings(next);
+    setStatus("SNS投稿先の設定を保存しています。");
+    const response = await fetch("/api/admin/sns/platform-settings/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ platforms: next }) });
+    if (!response.ok) setStatus("SNS投稿先の設定保存に失敗しました。");
+    else setStatus("SNS投稿先の設定を保存しました。");
   }
 
   async function loadDecks() {
@@ -189,6 +217,7 @@ export default function SnsAdminPage() {
     loadVideoJobs();
     loadGrowthLoop();
     loadSnsPing();
+    loadPlatformSettings();
     return () => {
       active = false;
     };
@@ -221,6 +250,7 @@ export default function SnsAdminPage() {
           variant_id: threeChoiceVariantId,
           background: threeChoiceBackground,
           music: threeChoiceMusic,
+          timeline: threeChoiceTimeline,
           selection_mode: "least_used",
           exclude_recent_days: 14,
         }),
@@ -231,12 +261,30 @@ export default function SnsAdminPage() {
         return;
       }
       setThreeChoicePreview(payload.payload);
+      if (payload.payload?.timeline?.length === 6) {
+        setThreeChoiceTimeline(payload.payload.timeline as ThreeChoiceScene[]);
+      }
       setStatus("3択動画プレビューを生成しました。カードと短文を確認してください。");
     } catch {
       setStatus("3択動画プレビューの生成に失敗しました。通信状態を確認してください。");
     } finally {
       setActiveAction("idle");
     }
+  }
+
+  function resetThreeChoiceTimeline() {
+    setThreeChoiceTimeline(defaultThreeChoiceTimeline);
+    setStatus("3択動画のタイムラインを初期値に戻しました。");
+  }
+
+  function updateThreeChoiceTimeline(index: number, field: keyof Omit<ThreeChoiceScene, "id">, value: string) {
+    const numberValue = Number(value);
+    setThreeChoiceTimeline((current) =>
+      current.map((scene, sceneIndex) => {
+        if (sceneIndex !== index) return scene;
+        return { ...scene, [field]: Number.isFinite(numberValue) ? numberValue : 0 };
+      }),
+    );
   }
 
   async function generateHooksForThreeChoice() {
@@ -601,7 +649,9 @@ export default function SnsAdminPage() {
           <p className="text-sm font-semibold uppercase text-[#6c5f3d]">SNS Creator</p>
           <h1 className="mt-2 text-4xl font-semibold">SNSコンテンツ生成</h1>
           <p className="mt-3 max-w-3xl leading-7 text-[#5e625c]">Instagram向けスライド案、PNG、キャプション、Reels台本、予約、投稿履歴を管理します。Instagram API未設定時は公開を止め、失敗ログを保存します。</p>
+          <p className="mt-3 rounded border border-[#b9c9b5] bg-[#edf3e8] px-3 py-2 text-sm font-semibold text-[#3f573c]" aria-live="polite">{status}</p>
         </header>
+        <section className="mt-5 rounded border border-[#d7cabc] bg-white p-4"><p className="text-sm font-semibold text-[#6c5f3d]">基本の流れ</p><div className="mt-2 grid gap-2 text-sm leading-6 text-[#5e625c] md:grid-cols-4"><p><strong>1.</strong> テーマ・目的を入力</p><p><strong>2.</strong> カードやMP4を必要に応じて選択</p><p><strong>3.</strong> 「生成」で内容を確認</p><p><strong>4.</strong> 下書き保存または予約保存</p></div><p className="mt-2 text-xs text-[#7b817a]">ボタンを押すと上のステータス欄に処理状況が表示されます。処理中の操作だけ一時的に無効になります。</p></section>
         <section className="mt-8 grid gap-3 md:grid-cols-4">
           <Metric label="下書き" value={postCounts.draft} />
           <Metric label="予約済み" value={postCounts.scheduled} />
@@ -610,6 +660,18 @@ export default function SnsAdminPage() {
         </section>
         <section className="mt-4 rounded border border-[#d7cabc] bg-[#fffaf2] p-4 text-sm leading-7 text-[#5e625c]">
           <span className="font-semibold text-[#20241f]">自動投稿予約:</span> {settings?.automation_level ? "有効" : "無効"} / 投稿枠 {scheduleLabel()} / 緊急停止 {settings?.emergency_stop_all ? "ON" : "OFF"}
+        </section>
+        <section className="mt-4 rounded border border-[#d7cabc] bg-[#fffaf2] p-5">
+          <h2 className="text-lg font-semibold text-[#20241f]">SNS投稿先 ON / OFF</h2>
+          <p className="mt-1 text-sm leading-6 text-[#5e625c]">OFFにしたSNSは、予約生成後でも自動投稿を実行しません。設定は即時保存されます。</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {([['instagram', 'Instagram'], ['tiktok', 'TikTok'], ['youtube', 'YouTube Shorts']] as const).map(([platform, label]) => (
+              <label key={platform} className="flex items-center justify-between rounded border border-[#d7cabc] bg-white px-4 py-3 text-sm font-semibold">
+                <span>{label}</span>
+                <input type="checkbox" checked={platformSettings[platform]} onChange={(event) => savePlatformSettings({ ...platformSettings, [platform]: event.target.checked })} />
+              </label>
+            ))}
+          </div>
         </section>
         <section className={`mt-4 rounded border p-4 text-sm leading-7 ${tokenPanelClass(snsPing?.instagram?.token?.level)}`}>
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -648,6 +710,28 @@ export default function SnsAdminPage() {
               <label className="grid gap-2 text-sm font-semibold">背景<input className="admin-field" value={threeChoiceBackground} onChange={(event) => setThreeChoiceBackground(event.target.value)} /></label>
               <label className="grid gap-2 text-sm font-semibold">BGM<input className="admin-field" value={threeChoiceMusic} onChange={(event) => setThreeChoiceMusic(event.target.value)} /></label>
               <label className="grid gap-2 text-sm font-semibold">CTA<input className="admin-field" value={threeChoiceCta} onChange={(event) => setThreeChoiceCta(event.target.value)} /></label>
+              <div className="rounded border border-[#d7cabc] bg-white p-3">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-[#20241f]">Scene構成（0〜20秒）</p>
+                  <button className="rounded border border-[#596d51] px-3 py-2 text-xs font-semibold text-[#596d51]" type="button" onClick={resetThreeChoiceTimeline}>初期値に戻す</button>
+                </div>
+                <div className="grid gap-2">
+                  {threeChoiceTimeline.map((scene, index) => (
+                    <div key={scene.id} className="grid min-w-0 grid-cols-1 gap-3 rounded border border-[#d7cabc] bg-[#fffaf2] p-3">
+                      <p className="min-w-0 text-sm font-semibold text-[#6c5f3d]">{scene.label}</p>
+                      <label className="grid min-w-0 gap-1 text-xs">
+                        start(sec)
+                        <input className="admin-field w-full min-w-0 text-base" type="number" min="0" max="20" step="0.5" value={scene.start} onChange={(event) => updateThreeChoiceTimeline(index, "start", event.target.value)} />
+                      </label>
+                      <label className="grid min-w-0 gap-1 text-xs">
+                        end(sec)
+                        <input className="admin-field w-full min-w-0 text-base" type="number" min="0" max="20" step="0.5" value={scene.end} onChange={(event) => updateThreeChoiceTimeline(index, "end", event.target.value)} />
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-[#5e625c]">各Sceneの開始・終了秒数を調整できます。保存は「プレビュー生成」→「動画生成」で反映します。</p>
+              </div>
               <label className="grid gap-2 text-sm font-semibold">Experiment ID<input className="admin-field" value={threeChoiceExperimentId} onChange={(event) => setThreeChoiceExperimentId(event.target.value)} placeholder="自動生成可" /></label>
               <label className="grid gap-2 text-sm font-semibold">Variant ID<select className="admin-field" value={threeChoiceVariantId} onChange={(event) => setThreeChoiceVariantId(event.target.value)}><option value="">未選択</option>{growthLoop.variants.map((variant) => <option key={variant.variant_id} value={variant.variant_id}>{variant.variant_label} / {variant.hook_text}</option>)}</select></label>
               <div className="flex flex-wrap gap-2">
@@ -694,7 +778,7 @@ export default function SnsAdminPage() {
         <section className="mt-8 grid gap-6 lg:grid-cols-[360px_1fr]">
           <aside className="rounded border border-[#d7cabc] bg-[#fffaf2] p-5">
             <label className="grid gap-2 text-sm font-semibold">投稿テーマ<textarea className="admin-field min-h-24" value={topic} onChange={(event) => setTopic(event.target.value)} /></label>
-            <label className="mt-3 grid gap-2 text-sm font-semibold">目的<select className="admin-field" value={goal} onChange={(event) => setGoal(event.target.value)}><option>テキスト鑑定への案内</option><option>時間制チャットへの案内</option><option>運用メモへの案内</option></select></label>
+              <label className="mt-3 grid gap-2 text-sm font-semibold">目的<select className="admin-field" value={goal} onChange={(event) => setGoal(event.target.value)}><option>テキスト鑑定への案内</option><option>時間制チャットへの案内</option><option>ブログ記事への案内</option></select></label>
             <label className="mt-3 grid gap-2 text-sm font-semibold">トーン<select className="admin-field" value={tone} onChange={(event) => setTone(event.target.value)}><option>静かで知的</option><option>やさしく寄り添う</option><option>短く実用的</option></select></label>
             <label className="mt-3 grid gap-2 text-sm font-semibold">予約日時<input className="admin-field" type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} /></label>
             <div className="mt-4 rounded border border-[#d7cabc] bg-white p-3">

@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-type Summary = { period: string; visits: number; readings: number; chatStarts: number; noteViews: number };
+type Summary = { period: string; visits: number; readings: number; chatStarts: number; blogViews: number };
 type AnalyticsPayload = {
   periodDays: number;
   visits: number;
   readings: number;
   chatStarts: number;
-  noteViews: number;
+  blogViews: number;
   primaryActions: number;
   uniqueVisitors: number;
   topPages: { page_path: string; count: number }[];
@@ -24,7 +24,7 @@ const eventDefinitions = [
   { name: "page_view", label: "ページ閲覧", purpose: "訪問の入口と流入傾向を確認" },
   { name: "raven_text_reading", label: "テキスト鑑定実行", purpose: "無料鑑定から有料導線への入口" },
   { name: "timed_chat_start", label: "時間制チャット開始", purpose: "相談意欲が高いユーザーの行動" },
-  { name: "admin_note_view", label: "運用メモ閲覧", purpose: "内部運用確認イベント" },
+  { name: "page_view", label: "ブログ記事閲覧", purpose: "ブログから鑑定・会員登録へ進む導線を確認" },
   { name: "raven_primary_action", label: "主要リンククリック", purpose: "CTAと内部導線の反応確認" },
 ];
 
@@ -35,7 +35,7 @@ function rate(value: number, total: number) {
 
 export default function AnalyticsAdminPage() {
   const [periodDays, setPeriodDays] = useState(30);
-  const [summary, setSummary] = useState<Summary>({ period: "直近30日", visits: 0, readings: 0, chatStarts: 0, noteViews: 0 });
+  const [summary, setSummary] = useState<Summary>({ period: "直近30日", visits: 0, readings: 0, chatStarts: 0, blogViews: 0 });
   const [analytics, setAnalytics] = useState<AnalyticsPayload | null>(null);
   const [loadState, setLoadState] = useState("実データを読み込み中です。");
   const [syncState, setSyncState] = useState("外部分析は未同期です。");
@@ -48,7 +48,7 @@ export default function AnalyticsAdminPage() {
       visits: payload.visits || 0,
       readings: payload.readings || 0,
       chatStarts: payload.chatStarts || 0,
-      noteViews: payload.noteViews || 0,
+      blogViews: payload.blogViews || 0,
     });
     setLoadState(`D1実データを表示中です。最終集計: ${payload.generatedAt.slice(0, 16).replace("T", " ")}`);
   }
@@ -80,7 +80,7 @@ export default function AnalyticsAdminPage() {
 
   const readingRateValue = summary.visits ? summary.readings / summary.visits : 0;
   const chatRateValue = summary.visits ? summary.chatStarts / summary.visits : 0;
-  const noteRateValue = summary.visits ? summary.noteViews / summary.visits : 0;
+  const blogRateValue = summary.visits ? summary.blogViews / summary.visits : 0;
   const funnel = [
     { label: "訪問", value: summary.visits, width: 100 },
     { label: "鑑定実行", value: summary.readings, width: summary.visits ? Math.max(6, readingRateValue * 100) : 6 },
@@ -89,7 +89,7 @@ export default function AnalyticsAdminPage() {
   const diagnosis = [
     readingRateValue >= 0.08 ? "鑑定実行率は最低ラインを超えています。" : "鑑定実行率が低めです。ファーストビューの説明とボタン文言を見直してください。",
     chatRateValue >= 0.05 ? "チャット開始率は良好です。" : "チャット開始率が低めです。料金・相談例・所要時間の不安を減らしてください。",
-    noteRateValue > 0 ? "運用メモ閲覧イベントは動いています。" : "運用メモ閲覧は未計測です。イベント名と導線を確認してください。",
+    blogRateValue > 0 ? "ブログ記事の閲覧が計測されています。" : "ブログ記事の閲覧はまだありません。ブログから鑑定への導線を確認してください。",
   ];
 
   function updateNumber(key: keyof Summary, value: string) {
@@ -118,7 +118,7 @@ export default function AnalyticsAdminPage() {
   }
 
   function generateMemo() {
-    setMemo(`${summary.period}の振り返りです。訪問数は${summary.visits.toLocaleString("ja-JP")}、テキスト鑑定実行率は${rate(summary.readings, summary.visits)}、チャット開始率は${rate(summary.chatStarts, summary.visits)}、運用メモ閲覧率は${rate(summary.noteViews, summary.visits)}でした。\n\n次の一手: ${nextAction}\n\n個人情報を含む相談文は保存せず、イベント名と集計値だけで判断します。`);
+    setMemo(`${summary.period}の振り返りです。訪問数は${summary.visits.toLocaleString("ja-JP")}、テキスト鑑定実行率は${rate(summary.readings, summary.visits)}、チャット開始率は${rate(summary.chatStarts, summary.visits)}、ブログ記事閲覧率は${rate(summary.blogViews, summary.visits)}でした。\n\n次の一手: ${nextAction}\n\n個人情報を含む相談文は保存せず、イベント名と集計値だけで判断します。`);
   }
 
   return (
@@ -152,7 +152,7 @@ export default function AnalyticsAdminPage() {
               <label className="grid gap-2 text-sm font-semibold">訪問数<input className="admin-field" inputMode="numeric" onChange={(event) => updateNumber("visits", event.target.value)} /></label>
               <label className="grid gap-2 text-sm font-semibold">鑑定実行<input className="admin-field" inputMode="numeric" onChange={(event) => updateNumber("readings", event.target.value)} /></label>
               <label className="grid gap-2 text-sm font-semibold">チャット開始<input className="admin-field" inputMode="numeric" onChange={(event) => updateNumber("chatStarts", event.target.value)} /></label>
-              <label className="grid gap-2 text-sm font-semibold">メモ閲覧<input className="admin-field" inputMode="numeric" onChange={(event) => updateNumber("noteViews", event.target.value)} /></label>
+              <label className="grid gap-2 text-sm font-semibold">ブログ記事閲覧<input className="admin-field" inputMode="numeric" onChange={(event) => updateNumber("blogViews", event.target.value)} /></label>
             </div>
             <button className="mt-4 rounded bg-[#222820] px-5 py-3 font-semibold text-[#fff8ed]" type="button" onClick={generateMemo}>振り返りメモを生成</button>
           </div>

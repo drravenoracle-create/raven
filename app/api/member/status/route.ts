@@ -34,19 +34,30 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [sessionPayload, linkPayload] = await Promise.all([
-      getMemberSession(env, request),
-      getMemberAuthLinks(env, request, { returnTo, menuId }),
-    ]);
+    const linkPayload = await getMemberAuthLinks(env, request, { returnTo, menuId }).catch(() => inactiveLinks);
+    const sessionPayload = await getMemberSession(env, request).catch((error) => {
+      if (error instanceof GuildMemberError && (error.status === 401 || error.code === "member_login_required" || error.code === "service_unauthorized")) {
+        return { session: { authenticated: false }, trial_summary: null };
+      }
+      throw error;
+    });
+    const profile = sessionPayload.session?.authenticated && sessionPayload.session.member_id
+      ? await env.DB.prepare("SELECT birth_date FROM member_profiles WHERE member_id = ?1").bind(sessionPayload.session.member_id).first<{ birth_date?: string }>().catch(() => null)
+      : null;
     return Response.json(
       {
         ok: true,
         flags,
         session: sessionPayload.session,
+        profile: { birth_date: profile?.birth_date || null },
         trial_summary: sessionPayload.trial_summary || null,
         auth_links: {
           login_url: linkPayload.login_url || inactiveLinks.login_url,
           register_url: linkPayload.register_url || inactiveLinks.register_url,
+          google_login_url: linkPayload.google_login_url || linkPayload.login_url || inactiveLinks.login_url,
+          google_register_url: linkPayload.google_register_url || linkPayload.register_url || inactiveLinks.register_url,
+          email_login_url: linkPayload.email_login_url,
+          email_register_url: linkPayload.email_register_url,
         },
       },
       { headers: { "Cache-Control": "no-store" } },

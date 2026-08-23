@@ -1,6 +1,10 @@
 import { env } from "cloudflare:workers";
+import { POST as previewThreeChoice } from "@/app/api/sns/videos/three-choice/preview/route";
+import { POST as renderThreeChoice } from "@/app/api/sns/videos/three-choice/render/route";
+import { captionFromThreeChoice } from "@/app/lib/three-choice-video";
 
 const TENANT_ID = "raven-oracle";
+const DEFAULT_RENDER_BACKGROUND = "https://raven.fortunestudios.jp/api/reel-engine/assets?assetId=98ce1cea-851a-4811-8751-fe128d179702";
 function text(value: unknown, max = 4000) { return String(value ?? "").trim().slice(0, max); }
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -38,8 +42,58 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (action === "duplicate") {
     const copyId = crypto.randomUUID();
     const slug = `${template.slug}-copy-${copyId.slice(0, 6)}`;
-    await env.DB.prepare("INSERT INTO sns_post_templates (id,tenant_id,name,slug,format_type,category,description,version,status,duration_seconds,aspect_ratio,renderer_type,scene_schema,content_schema,default_media,default_cta,supported_platforms,supported_characters,tags,ai_enabled,growth_enabled) SELECT ?,tenant_id,name || ' コピー',?,format_type,category,description,1,'active',duration_seconds,aspect_ratio,renderer_type,scene_schema,content_schema,default_media,default_cta,supported_platforms,supported_characters,tags,ai_enabled,growth_enabled FROM sns_post_templates WHERE tenant_id=? AND id=?").bind(copyId, slug, tenantId, id).run();
+    await env.DB.prepare("INSERT INTO sns_post_templates (id,tenant_id,name,slug,format_type,format_key,category,description,version,status,duration_seconds,supported_durations,aspect_ratio,renderer_type,scene_schema,content_schema,default_media,default_cta,supported_platforms,supported_characters,tags,hook_schema,cta_schema,comment_prompt_schema,character_compatibility,required_assets,required_divination_systems,is_system_preset,enabled,ai_enabled,growth_enabled) SELECT ?,tenant_id,name || ' コピー',?,format_type,? || '-copy',category,description,1,'active',duration_seconds,supported_durations,aspect_ratio,renderer_type,scene_schema,content_schema,default_media,default_cta,supported_platforms,supported_characters,tags,hook_schema,cta_schema,comment_prompt_schema,character_compatibility,required_assets,required_divination_systems,0,1,ai_enabled,growth_enabled FROM sns_post_templates WHERE tenant_id=? AND id=?").bind(copyId, slug, slug, tenantId, id).run();
     return Response.json({ ok: true, id: copyId, slug }, { status: 201 });
+  }
+  if (action === "toggle") {
+    const enabled = body?.enabled === false ? 0 : 1;
+    await env.DB.prepare("UPDATE sns_post_templates SET enabled=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE tenant_id=? AND id=?")
+      .bind(enabled, enabled ? "active" : "disabled", tenantId, id).run();
+    return Response.json({ ok: true, id, enabled: Boolean(enabled) });
+  }
+  if (action === "create_post") {
+    const content = body?.content && typeof body.content === "object" ? body.content as Record<string, unknown> : {};
+    if (template.format_key === "next_72_hours_three_choice" || template.format_type === "three_choice_reading") {
+      const deckId = text(content.deckId ?? content.deck_id, 120) || "85790ef8-3824-4969-a4e8-c85cacf4b931";
+      const previewRequest = new Request(request.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        tenant_id: tenantId,
+        deck_id: deckId,
+        theme: text(content.theme, 180) || "72時間以内に起こること",
+        category: text(content.category, 80) || "near_future",
+        hook: text(content.hook, 80) || "72時間以内、あなたに起こること。",
+        character: text(content.characterId, 80) || "raven",
+        cta: text(content.cta, 160) || template.default_cta || "プロフィールから無料鑑定",
+      }) });
+      const previewResponse = await previewThreeChoice(previewRequest);
+      const preview = await previewResponse.json().catch(() => ({})) as { ok?: boolean; payload?: Record<string, unknown>; error?: string };
+      if (!previewResponse.ok || !preview.ok || !preview.payload) return Response.json({ ok: false, error: preview.error || "3択動画の構成を作成できませんでした。" }, { status: 422 });
+      const rendererPayload = {
+        ...preview.payload,
+        background: /^https:\/\//i.test(text(preview.payload.background, 1000)) ? preview.payload.background : DEFAULT_RENDER_BACKGROUND,
+      };
+      const renderRequest = new Request(request.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tenant_id: tenantId, job_payload: rendererPayload, allow_duplicate: true }) });
+      const renderResponse = await renderThreeChoice(renderRequest);
+      const renderResult = await renderResponse.json().catch(() => ({})) as { ok?: boolean; status?: string; jobId?: string; outputUrl?: string; thumbnailUrl?: string; error?: string };
+      if (!renderResponse.ok || !renderResult.ok || renderResult.status === "failed") return Response.json({ ok: false, error: renderResult.error || "動画レンダリングに失敗しました。", render: renderResult }, { status: 502 });
+      if (!renderResult.outputUrl) return Response.json({ ok: true, status: "rendering", renderJobId: renderResult.jobId, message: "動画レンダリング中です。完成後にSNS下書きへ紐付けてください。" }, { status: 202 });
+      const postId = crypto.randomUUID();
+      const platform = text(content.platform, 30) || "instagram";
+      const payload = rendererPayload as { theme?: string; hook?: string; cta?: string; character?: string; timeline?: unknown; cards?: unknown[] };
+      const caption = captionFromThreeChoice(payload as any);
+      await env.DB.prepare("INSERT INTO sns_posts (id,tenant_id,platform,post_type,title,theme,category,character,purpose,cta,caption,hashtags,script,media_type,media_url,thumbnail_url,status,ai_generated,duplicate_warning) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        .bind(postId, tenantId, platform, platform === "youtube" ? "short" : "reel", text(content.title, 180) || template.name, payload.theme || template.name, template.category, payload.character || "raven", "テンプレートからレンダリングした動画を投稿する", payload.cta || template.default_cta, caption, "#レイヴンブラックウッド #3択占い #占い", JSON.stringify(payload.timeline || []), "video", renderResult.outputUrl, renderResult.thumbnailUrl || "", "draft", 1, `template:${template.id}:${template.version}:${postId}`).run();
+      return Response.json({ ok: true, status: "draft", postId, renderJobId: renderResult.jobId, outputUrl: renderResult.outputUrl, templateId: template.id, templateVersion: template.version });
+    }
+    const postId = crypto.randomUUID();
+    const platform = text(content.platform, 30) || "instagram";
+    const title = text(content.title, 180) || template.name;
+    const postType = template.format_type === "three_choice_reading" ? "reel" : "reel";
+    const metadata = { formatId: template.format_key || template.slug, formatVersion: template.version, templateId: template.id, hookId: content.hookId || null, ctaId: content.ctaId || null, characterId: content.characterId || null, divinationSystem: content.divinationSystem || null, deckId: content.deckId || null, campaignId: content.campaignId || null, experimentId: content.experimentId || null };
+    await env.DB.prepare("INSERT INTO sns_posts (id,tenant_id,platform,post_type,title,theme,category,character,cta,caption,script,status,ai_generated) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
+      .bind(postId, tenantId, platform, postType, title, text(content.theme, 180), template.category, text(content.characterId, 80), text(content.cta, 240) || template.default_cta, text(content.caption, 4000), JSON.stringify(content.script || { templateId: template.id, templateVersion: template.version, content }), "draft", 0).run();
+    await env.DB.prepare("INSERT INTO sns_post_format_metadata (post_id,tenant_id,format_id,format_version,visual_template_id,character_id,hook_id,cta_id,platform,category,divination_system,deck_id,campaign_id,experiment_id,metadata_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+      .bind(postId, tenantId, String(metadata.formatId), template.version, text(content.visualTemplateId, 120) || null, text(content.characterId, 80) || null, text(content.hookId, 120) || null, text(content.ctaId, 120) || null, platform, template.category, text(content.divinationSystem, 80) || null, text(content.deckId, 120) || null, text(content.campaignId, 120) || null, text(content.experimentId, 120) || null, JSON.stringify(metadata)).run();
+    return Response.json({ ok: true, postId, status: "draft", metadata });
   }
   const content = body?.content && typeof body.content === "object" ? body.content : {};
   const sceneSchema = JSON.parse(template.scene_schema || "{}");

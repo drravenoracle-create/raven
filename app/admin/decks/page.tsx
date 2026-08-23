@@ -153,6 +153,10 @@ export default function DeckManagerPage() {
       const deckPayload = await readJson(deckResponse);
       const cardPayload = await readJson(cardResponse);
       const usagePayload = await readJson(usageResponse);
+      if ([deckResponse, cardResponse, usageResponse].some((response) => response.status === 401)) {
+        window.location.href = `/api/admin/auth/start?return_to=${encodeURIComponent("/admin/decks")}`;
+        return;
+      }
       if (!deckResponse.ok || !cardResponse.ok || !usageResponse.ok) {
         throw new Error(deckPayload.error || cardPayload.error || usagePayload.error || "読み込みに失敗しました。");
       }

@@ -305,6 +305,14 @@ async function processBlogEvents() {
         .first<{ title: string; category: string; primary_keyword: string; target_reader: string; search_intent: string }>();
       if (!article) throw new Error("Article not found.");
 
+      if (article.category === "今日の暦") {
+        await env.DB.prepare("UPDATE blog_engine_events SET status = 'processed', processed_at = CURRENT_TIMESTAMP WHERE event_id = ?")
+          .bind(event.event_id)
+          .run();
+        processed += 1;
+        continue;
+      }
+
       const draft = buildBlogDraft({
         topic: article.title,
         category: article.category,

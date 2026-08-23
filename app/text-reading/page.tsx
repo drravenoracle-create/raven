@@ -5,7 +5,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 type ReadingMode = "message" | "reply" | "consultation";
 type DivinationMenu = "integrated" | "qimen" | "liuren" | "taiyi" | "yijing";
 
-const trialPrice = "0円";
+const trialPrice = "無料";
 
 declare global {
   interface Window {
@@ -20,19 +20,19 @@ const modes: Array<{ id: ReadingMode; label: string; description: string; placeh
     id: "message",
     label: "受け取った文章",
     description: "相手の文章の温度、意図、距離感を整理します。",
-    placeholder: "相手から届いた文章を貼ってください。関係性や気になっている点を少し添えると読みやすくなります。",
+    placeholder: "例：相手から届いた文章を貼り、気になっている点を添えてください。",
   },
   {
     id: "reply",
     label: "送る前の文章",
     description: "言い方の強さ、誤解されやすさ、整え方を見ます。",
-    placeholder: "送る前の文章を貼ってください。どう見られたいか、避けたい印象があれば一緒に書いてください。",
+    placeholder: "例：送る前の文章を貼り、相手にどう伝えたいかを書いてください。",
   },
   {
     id: "consultation",
     label: "相談文",
     description: "問いの焦点と、次に選べる行動を整理します。",
-    placeholder: "相談したい内容を書いてください。迷っている選択肢、期限、相手との関係があれば入れてください。",
+    placeholder: "例：相談内容、迷っている選択肢、期限や相手との関係を書いてください。",
   },
 ];
 
@@ -82,8 +82,11 @@ export default function TextReadingPage() {
   const [model, setModel] = useState("");
   const [status, setStatus] = useState("文章を入力すると、AIテキスト鑑定結果を表示します。");
   const [memberNotice, setMemberNotice] = useState("");
-  const [authLinks, setAuthLinks] = useState<{ login_url?: string; register_url?: string }>({});
+  const [authLinks, setAuthLinks] = useState<{ login_url?: string; register_url?: string; google_register_url?: string; email_register_url?: string; google_login_url?: string; email_login_url?: string }>({});
+  const [trialLimitReached, setTrialLimitReached] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [birthDate, setBirthDate] = useState("");
+  const [memberAuthenticated, setMemberAuthenticated] = useState(false);
 
   const selectedMode = useMemo(() => modes.find((item) => item.id === mode) || modes[0], [mode]);
   const selectedDivination = useMemo(() => divinationMenus.find((item) => item.id === divination) || divinationMenus[0], [divination]);
@@ -107,6 +110,8 @@ export default function TextReadingPage() {
       .then((response) => response.json())
       .then((payload) => {
         setAuthLinks(payload.auth_links || {});
+        setMemberAuthenticated(Boolean(payload.session?.authenticated));
+        setBirthDate(payload.profile?.birth_date || "");
         if (payload.flags?.member_system_enabled && payload.flags?.configured && !payload.session?.authenticated) {
           setMemberNotice("結果をあとで見返すには、ギルド共通アカウントへの登録またはログインが必要です。");
         } else if (payload.flags?.member_system_enabled && payload.session?.authenticated) {
@@ -131,9 +136,17 @@ export default function TextReadingPage() {
     setBusy(true);
     setResult("");
     setModel("");
+    setTrialLimitReached(false);
     setStatus(`レイヴンが「${selectedDivination.label}」で読んでいます。`);
     try {
-      const response = await fetch("/api/raven", {
+      if (memberAuthenticated && birthDate) {
+        await fetch("/api/member/profile", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ birth_date: birthDate }),
+        });
+      }
+      const response = await fetch(`/api/raven?return_to=/text-reading/&menu_id=raven-text-${divination}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -143,13 +156,31 @@ export default function TextReadingPage() {
           divination,
           divinationLabel: selectedDivination.label,
           sourceText: text,
+          birthDate: birthDate || undefined,
         }),
       });
       const payload = await response.json();
       if (!response.ok) {
-        if (payload.auth_url || payload.register_url) setAuthLinks({ login_url: payload.auth_url, register_url: payload.register_url });
-        trackReadingEvent("reading_api_failed", { statusCode: response.status, errorMessage: String(payload.error || "").slice(0, 120) });
-        throw new Error(payload.error || "AI鑑定に失敗しました。");
+        const errorText = String(payload.error || "");
+        const trialLimit = /trial limit reached|trial_limit|試行回数|無料.*上限/i.test(`${payload.code || ""} ${errorText}`);
+        if (trialLimit) {
+          setTrialLimitReached(true);
+          setMemberNotice("このメニューの無料利用枠を使い切りました。新規会員登録後は、会員向けの無料利用枠で鑑定を続けられます。登録すると鑑定結果も保存できます。");
+          setStatus("無料利用枠に達しました。会員登録へ進んでください。");
+          setAuthLinks((current) => ({
+            ...current,
+            register_url: current.register_url || "/api/member/auth/start?mode=register&return_to=%2Ftext-reading%2F&menu_id=raven-text-integrated",
+          }));
+        }
+        if (payload.auth_url || payload.register_url) {
+          setAuthLinks((current) => ({
+            login_url: current.login_url || payload.auth_url,
+            register_url: current.register_url || payload.register_url,
+          }));
+        }
+        trackReadingEvent("reading_api_failed", { statusCode: response.status, errorMessage: errorText.slice(0, 120), trialLimitReached: trialLimit });
+        if (!trialLimit) throw new Error(payload.error || "AI鑑定に失敗しました。");
+        return;
       }
       setResult(payload.text || "");
       setModel(payload.model || "");
@@ -183,10 +214,10 @@ export default function TextReadingPage() {
           </header>
 
           <section className="raven-card p-4">
-            <p className="text-sm font-semibold text-[#6c5f3d]">トライアル価格</p>
+            <p className="text-sm font-semibold text-[#6c5f3d]">利用料金</p>
             <p className="mt-1 text-3xl font-semibold text-[#20241f]">{trialPrice}</p>
             <p className="mt-2 leading-7 text-[#5e625c]">
-              現在は全メニューを無料トライアルとして利用できます。気になる文章を貼り、今の状況と次の一手を落ち着いて整理できます。
+              現在は全メニューを無料で利用できます。無料利用枠には上限があります。気になる文章を貼り、今の状況と次の一手を落ち着いて整理できます。
             </p>
           </section>
 
@@ -232,10 +263,12 @@ export default function TextReadingPage() {
 
           <form className="raven-card raven-fortune-form p-4" onSubmit={submit}>
             {memberNotice ? (
-              <div className="mb-4 rounded border border-[#d7cabc] bg-white/70 p-3 text-sm leading-6 text-[#5e625c]">
+              <div className={`mb-4 rounded border p-3 text-sm leading-6 ${trialLimitReached ? "border-[#c2b28f] bg-[#fff8e8]" : "border-[#d7cabc] bg-white/70"}`}>
                 <p>{memberNotice}</p>
                 <div className="mt-2 flex flex-wrap gap-3 font-semibold text-[#596d51]">
-                  {authLinks.register_url ? <a className="underline underline-offset-4" href={authLinks.register_url}>無料登録</a> : null}
+                  {authLinks.register_url ? <a className="underline underline-offset-4" href={authLinks.register_url}>{trialLimitReached ? "新規会員登録へ進む" : "無料登録"}</a> : null}
+                  {authLinks.google_register_url ? <a className="underline underline-offset-4" href={authLinks.google_register_url}>Googleで登録</a> : null}
+                  {authLinks.email_register_url ? <a className="underline underline-offset-4" href={authLinks.email_register_url}>メールで登録</a> : null}
                   {authLinks.login_url ? <a className="underline underline-offset-4" href={authLinks.login_url}>ログイン</a> : null}
                   <a className="underline underline-offset-4" href="/member/">マイページ</a>
                 </div>
@@ -247,6 +280,7 @@ export default function TextReadingPage() {
             </div>
             <label className="mt-4 flex flex-col gap-2">
               <span className="text-sm font-semibold">鑑定したい文章・相談内容</span>
+              <span className="text-sm leading-6 text-[#66645d]">相手から届いた文章、送る前の文章、相談内容を入力してください。文章だけでなく「何を知りたいか」「いつまでに決めたいか」も添えると、読みが具体的になります。氏名・住所・電話番号・認証情報は入力しないでください。</span>
               <textarea
                 className="min-h-44"
                 value={sourceText}
@@ -254,6 +288,13 @@ export default function TextReadingPage() {
                 placeholder={selectedMode.placeholder}
               />
             </label>
+            {memberAuthenticated && !birthDate ? (
+              <label className="mt-4 flex flex-col gap-2">
+                <span className="text-sm font-semibold">生年月日（初回のみ・任意）</span>
+                <span className="text-sm leading-6 text-[#66645d]">登録すると、次回からこの鑑定で入力を省略できます。マイページから変更・削除できます。</span>
+                <input type="date" value={birthDate} onChange={(event) => setBirthDate(event.target.value)} max={new Date().toISOString().slice(0, 10)} />
+              </label>
+            ) : null}
             <button className="raven-primary-button mt-4 disabled:opacity-60" type="submit" disabled={busy}>
               {busy ? "鑑定中..." : `${selectedDivination.label}でAI鑑定する`}
             </button>

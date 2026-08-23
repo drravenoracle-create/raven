@@ -19,7 +19,8 @@ type EngineArticle = {
   published_at?: string;
 };
 type EngineRecommendation = { id: string; article_id?: string; recommendation_type?: string; title: string; summary: string; reason?: string; evidence_json?: string; expected_effect?: string; risk_level: string; rollback_plan?: string; status: string; created_at?: string; applied_at?: string };
-type EngineSettings = { enabled: number; kill_switch: number; auto_post_enabled: number; posting_mode: string; automation_levels_json: string; schedule_json?: string };
+type EngineSettings = { enabled: number; kill_switch: number; auto_post_enabled: number; posting_mode: string; automation_levels_json: string; schedule_json?: string; calendar_enabled?: number; calendar_time_jst?: string; calendar_format?: string };
+type CalendarPreview = { localDate: string; format: string; almanac: { sexagenary: { name: string; reading: string }; theme: string; recommendedAction: string; caution: string; message: string }; blog: { title: string; description: string }; };
 type SocialContent = { source_article_id: string; platform: string; format: string; angle: string; status: string; tracking_id: string; scheduled_at?: string };
 type ArticleForm = Pick<EngineArticle, "id" | "slug" | "title" | "description" | "body" | "category" | "status"> & { scheduled_at?: string };
 type DailySeries = { id: string; title: string; category: string; draft_time: string; publish_time: string; enabled: boolean };
@@ -98,6 +99,8 @@ export default function BlogAdminPage() {
   const [filter, setFilter] = useState("all");
   const [reviewStatusFilter, setReviewStatusFilter] = useState("active");
   const [reviewArticleFilter, setReviewArticleFilter] = useState("all");
+  const [calendarPreview, setCalendarPreview] = useState<CalendarPreview | null>(null);
+  const [calendarDate, setCalendarDate] = useState("");
 
   const automation = parseAutomationLevels(engineSettings?.automation_levels_json);
   const dailySeries = parseDailySeries(engineSettings?.schedule_json);
@@ -143,8 +146,17 @@ export default function BlogAdminPage() {
     setSocialContents(payload.socialContents || []);
   }
 
+  async function loadCalendarPreview(date = calendarDate) {
+    const query = date ? `?date=${encodeURIComponent(date)}` : "";
+    const response = await fetch(`/api/blog-engine/calendar/preview${query}`, { cache: "no-store" });
+    if (!response.ok) return;
+    const payload = await response.json();
+    setCalendarPreview(payload);
+  }
+
   useEffect(() => {
     void loadEngineDashboard();
+    void loadCalendarPreview();
   }, []);
 
   function refreshTopicSuggestion() {
@@ -219,7 +231,7 @@ export default function BlogAdminPage() {
     await saveArticle({ ...toForm(article), status: nextStatus });
   }
 
-  async function updateEngineSettings(next: { enabled?: boolean; articleGeneration?: boolean; autoPublish?: boolean; killSwitch?: boolean }) {
+  async function updateEngineSettings(next: { enabled?: boolean; articleGeneration?: boolean; autoPublish?: boolean; killSwitch?: boolean; calendarEnabled?: boolean; calendarTimeJst?: string; calendarFormat?: string }) {
     const response = await fetch("/api/blog-engine/settings/", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -229,6 +241,9 @@ export default function BlogAdminPage() {
         kill_switch: next.killSwitch ?? !!engineSettings?.kill_switch,
         article_generation: next.articleGeneration ?? !!automation.article_generation,
         auto_publish: next.autoPublish ?? !!automation.auto_publish,
+        calendar_enabled: next.calendarEnabled,
+        calendar_time_jst: next.calendarTimeJst,
+        calendar_format: next.calendarFormat,
       }),
     });
     const payload = await response.json().catch(() => ({}));
@@ -346,6 +361,16 @@ export default function BlogAdminPage() {
                   </div>
                 ))}
                 {!dailySeries.length ? <p className="rounded border border-[#d7cabc] bg-white p-3 text-sm text-[#5e625c]">スケジュール未設定です。</p> : null}
+              </div>
+            </Panel>
+
+            <Panel eyebrow="Daily Calendar" title="今日の暦 自動投稿">
+              <div className="grid gap-3">
+                <Toggle label="暦投稿" checked={engineSettings?.calendar_enabled !== 0} onChange={(checked) => updateEngineSettings({ calendarEnabled: checked })} />
+                <label className="grid gap-2 text-sm font-semibold">公開時刻<input className="admin-field" type="time" value={engineSettings?.calendar_time_jst || "07:30"} onChange={(event) => updateEngineSettings({ calendarTimeJst: event.target.value })} /></label>
+                <label className="grid gap-2 text-sm font-semibold">SNS形式<select className="admin-field" value={engineSettings?.calendar_format || "auto"} onChange={(event) => updateEngineSettings({ calendarFormat: event.target.value })}><option value="auto">AUTO</option><option value="short_video">SHORT_VIDEO</option><option value="carousel">CAROUSEL</option></select></label>
+                <label className="grid gap-2 text-sm font-semibold">プレビュー日<input className="admin-field" type="date" value={calendarDate} onChange={(event) => { setCalendarDate(event.target.value); void loadCalendarPreview(event.target.value); }} /></label>
+                {calendarPreview ? <div className="rounded border border-[#d7cabc] bg-white p-3 text-sm leading-6"><p className="font-semibold">{calendarPreview.blog.title}</p><p>日干支：{calendarPreview.almanac.sexagenary.name}（{calendarPreview.almanac.sexagenary.reading}）</p><p>テーマ：{calendarPreview.almanac.theme}</p><p>おすすめ：{calendarPreview.almanac.recommendedAction}</p><p>注意：{calendarPreview.almanac.caution}</p><p>一言：{calendarPreview.almanac.message}</p><p className="mt-1 text-xs text-[#5e625c]">SNS形式：{calendarPreview.format}</p></div> : null}
               </div>
             </Panel>
 

@@ -1,4 +1,6 @@
-export const GROWTH_ENGINE_TENANT_ID = "raven-oracle";
+import { RAVEN_TENANT_CONFIG } from "./tenant-config";
+
+export const GROWTH_ENGINE_TENANT_ID = RAVEN_TENANT_CONFIG.id;
 export const GROWTH_ENGINE_VERSION = "growth-engine-v3.0";
 
 const allowedConversionEvents = new Set([

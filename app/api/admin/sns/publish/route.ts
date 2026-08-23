@@ -6,6 +6,17 @@ function clean(value: unknown, maxLength: number) {
   return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, maxLength);
 }
 
+function cleanCaption(value: unknown, maxLength: number) {
+  return String(value ?? "")
+    .replace(/\\n/g, "\n")
+    .replace(/\/n/g, "\n")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, maxLength);
+}
+
 async function logFailure(input: { tenantId: string; id: string; platform: string; code: number; message: string; body?: unknown }) {
   await env.DB.prepare(
     "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?, ?)",
@@ -78,7 +89,7 @@ export async function POST(request: Request) {
   }
 
   const mediaUrls = parseMediaUrls(fullPost);
-  const caption = String(fullPost.caption || fullPost.title || "").slice(0, 2200);
+  const caption = cleanCaption(fullPost.caption || fullPost.title || "", 2200);
   if (!mediaUrls.length) {
     await logFailure({ tenantId, id, platform, code: 400, message: "A public media_url or thumbnail_url is required for Instagram publishing." });
     return Response.json({ ok: false, error: "A public media_url or thumbnail_url is required for Instagram publishing." }, { status: 400 });

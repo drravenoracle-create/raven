@@ -64,6 +64,33 @@ export function randomState() {
   return base64UrlEncodeBytes(bytes);
 }
 
+/** Read a single request cookie without relying on a regex over the whole header. */
+export function readRequestCookie(request: Request, name: string) {
+  const header = request.headers.get("cookie");
+  if (!header) return null;
+
+  for (const part of header.split(";")) {
+    const separator = part.indexOf("=");
+    if (separator < 0) continue;
+    const key = part.slice(0, separator).trim();
+    if (key !== name) continue;
+    return part.slice(separator + 1).trim().replace(/^\"|\"$/g, "");
+  }
+
+  return null;
+}
+
+export function requestCookieMatches(request: Request, name: string, expected: string) {
+  const stored = readRequestCookie(request, name);
+  if (!stored) return false;
+  if (stored === expected) return true;
+  try {
+    return decodeURIComponent(stored) === expected;
+  } catch {
+    return false;
+  }
+}
+
 export function safeRelativeReturnPath(value: string | null) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) return "/admin/";
 

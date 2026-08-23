@@ -7,6 +7,7 @@ import {
   createSessionCookie,
   googleRedirectUri,
   publicOrigin,
+  requestCookieMatches,
 } from "@/app/lib/google-admin-auth";
 import { env } from "cloudflare:workers";
 import { encryptDriveRefreshToken } from "@/app/lib/google-drive-oauth";
@@ -32,8 +33,7 @@ export async function GET(request: Request) {
   const origin = publicOrigin(request);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
-  const storedState = request.headers.get("cookie")?.match(new RegExp(`${GOOGLE_STATE_COOKIE}=([^;]+)`))?.[1];
-  if (!code || !state || !storedState || decodeURIComponent(storedState) !== state) {
+  if (!code || !state || !requestCookieMatches(request, GOOGLE_STATE_COOKIE, state)) {
     return new Response("Invalid Google OAuth state.", { status: 400 });
   }
 

@@ -5,7 +5,6 @@ const allowedEvents = new Set([
   "page_view",
   "raven_text_reading",
   "timed_chat_start",
-  "admin_note_view",
   "raven_primary_action",
   "member_registration_started",
   "member_registered",

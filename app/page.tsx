@@ -49,7 +49,7 @@ const serviceLinks = [
     href: "/text-reading/",
     label: "AIテキスト占い",
     title: "文章の温度と次の一手を見る",
-    body: "相手から来た文章、送る前の文章、相談文を貼り、意図・注意点・整え方を確認できます。現在は無料トライアルとして利用できます。",
+    body: "相手から来た文章、送る前の文章、相談文を貼り、意図・注意点・整え方を確認できます。現在は無料で試せます。",
   },
 ];
 
@@ -70,7 +70,7 @@ const routeLinks = [
     href: "/divination-methods/",
     title: "占術の考え方から知りたい",
     label: "レイヴンの占術",
-    body: "奇門遁甲、六壬神課、太乙神数、易経を、現実の判断に戻す視点で解説します。",
+    body: "奇門遁甲、六壬神課、太乙神数、易経を、現実の判断に生かす視点で解説します。",
   },
 ];
 
@@ -129,20 +129,21 @@ export default async function Home() {
               今選べる行動を見つけます。
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
-              <a className="raven-hero-button" href="/text-reading/">AIテキスト占いへ</a>
-              <a className="raven-hero-button raven-hero-button-secondary" href="/divination-methods/">占術を読む</a>
+              <a className="raven-hero-button" href="/text-reading/">相談文・相手の文章を読む</a>
+              <a className="raven-hero-button raven-hero-button-secondary" href="/free-fortune/">テーマを選んで無料で占う</a>
             </div>
+            <p className="mt-3 text-sm leading-6 text-[#d8cdbd]">相手から届いた文面や相談内容を具体的に読みたい方は左へ。テーマを選び、今の流れを短く確かめたい方は右へ。</p>
             <div className="raven-hero-trust mt-7 grid gap-3 sm:grid-cols-3">
-              <div><strong>4系統</strong><span>問いに合わせて占術を選択</span></div>
+              <div><strong>4つの古典占術</strong><span>問いに合わせて占術を選択</span></div>
               <div><strong>64卦</strong><span>易経ページを個別解説</span></div>
-              <div><strong>5入口</strong><span>軽い確認から具体相談まで</span></div>
+              <div><strong>2つの鑑定入口</strong><span>短い確認から具体的な相談まで</span></div>
             </div>
           </div>
 
           <aside className="raven-profile-panel">
             <img className="raven-profile-image" src="/raven-blackwood-cover.png" alt="レイヴン・ブラックウッド" />
             <div className="p-5">
-              <p className="text-sm font-semibold text-[#8d6a2f]">Founder / Oracle Strategist</p>
+              <p className="text-sm font-semibold text-[#8d6a2f]">古典占術の案内役</p>
               <h2 className="mt-1 text-2xl font-semibold">レイヴン・ブラックウッド</h2>
               <p className="mt-3 leading-7 text-[#5e625c]">
                 神秘を飾りにせず、相談者が恐れではなく判断軸から次の行動を選べるよう導く、静かな鑑定室の主です。
@@ -163,10 +164,10 @@ export default async function Home() {
           <a className="raven-path-card" href="/free-fortune/">
             <p>軽く兆しを確かめる</p>
             <h2>AI無料占い</h2>
-            <span>今日・恋愛・仕事金運・易断から、短い結果を確認できます。</span>
+            <span>今日・恋愛・仕事・金運・易断から、短い結果を確認できます。</span>
           </a>
           <a className="raven-path-card" href="/divination-dictionary/yijing-64-hexagrams/">
-            <p>古典占術を読む</p>
+            <p>古典占術の解説を見る</p>
             <h2>易経 六十四卦</h2>
             <span>各卦の意味、変爻、変卦、物語上の位置を個別に読めます。</span>
           </a>
@@ -176,7 +177,7 @@ export default async function Home() {
       <section className="mx-auto max-w-7xl px-5 py-8">
         <div className="mb-4">
           <p className="text-sm font-semibold text-[#8d6a2f]">どこから入るか</p>
-          <h2 className="mt-1 text-3xl font-semibold">迷いの深さで入口を選ぶ</h2>
+          <h2 className="mt-1 text-3xl font-semibold">目的に合わせて鑑定を選ぶ</h2>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
           {routeLinks.map((route) => (

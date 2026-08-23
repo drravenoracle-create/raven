@@ -68,7 +68,7 @@ export default function GuildPage() {
 
         <section className="mt-8 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
           <aside className="raven-card p-5">
-            <p className="text-sm font-semibold text-[#596d51]">Founder</p>
+            <p className="text-sm font-semibold text-[#596d51]">ギルド創設者</p>
             <h2 className="mt-2 text-3xl font-semibold">レイヴン・ブラックウッド</h2>
             <p className="mt-3 leading-7 text-[#56615a]">
               元軍師。冷静で知的、神秘的でありながら現実的な相談役です。ギルド創設者として、相談者が恐れではなく判断軸から次の行動を選べるよう導きます。

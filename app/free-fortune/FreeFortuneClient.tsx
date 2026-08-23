@@ -17,7 +17,17 @@ type Reading = {
   advice: string;
   caution: string;
   luckyAction: string;
+  yijingHexagram?: { number: number; name: string; reading: string };
+  yijingChanging?: { line: number; hexagram: { number: number; name: string; reading: string } };
 };
+
+declare global {
+  interface Window {
+    ravenAnalytics?: {
+      track: (eventName: string, extra?: Record<string, unknown>) => void;
+    };
+  }
+}
 
 const themes: Array<{ id: Theme; label: string; description: string; prompt: string }> = [
   {
@@ -68,18 +78,36 @@ export default function FreeFortuneClient() {
   const [model, setModel] = useState("");
   const [status, setStatus] = useState("テーマを選んで、今の流れを短く確認できます。");
   const [memberNotice, setMemberNotice] = useState("");
-  const [authLinks, setAuthLinks] = useState<{ login_url?: string; register_url?: string }>({});
+  const [authLinks, setAuthLinks] = useState<{ login_url?: string; register_url?: string; google_register_url?: string; email_register_url?: string }>({});
   const [busy, setBusy] = useState(false);
+  const [birthDate, setBirthDate] = useState("");
+  const [memberAuthenticated, setMemberAuthenticated] = useState(false);
 
   const selectedTheme = themes.find((item) => item.id === theme) || themes[0];
+
+  function trackFortuneEvent(eventName: string, extra: Record<string, unknown> = {}) {
+    window.ravenAnalytics?.track(eventName, {
+      eventTarget: "free-fortune-form",
+      eventLabel: selectedTheme.label,
+      fortuneTheme: theme,
+      ...extra,
+    });
+  }
+
+  useEffect(() => {
+    trackFortuneEvent("reading_form_viewed", { eventTarget: "free-fortune-form" });
+  }, []);
 
   useEffect(() => {
     fetch(`/api/member/status?return_to=/free-fortune/&menu_id=raven-free-${theme}`)
       .then((response) => response.json())
       .then((payload) => {
         setAuthLinks(payload.auth_links || {});
+        setMemberAuthenticated(Boolean(payload.session?.authenticated));
+        setBirthDate(payload.profile?.birth_date || "");
         if (payload.flags?.member_system_enabled && payload.flags?.configured && !payload.session?.authenticated) {
-          setMemberNotice("結果をあとで見返すには、ギルド共通アカウントへの登録またはログインが必要です。");
+          setMemberNotice("会員登録なしで無料占いを試せます。結果をあとで見返したい場合は、ギルド共通アカウントに登録してください。");
+          trackFortuneEvent("trial_offer_viewed", { eventTarget: "free-fortune-member-notice" });
         } else if (payload.flags?.member_system_enabled && payload.session?.authenticated) {
           setMemberNotice("ログイン中です。結果をあとで見返せます。");
         } else {
@@ -92,19 +120,28 @@ export default function FreeFortuneClient() {
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
+    trackFortuneEvent("reading_submit_clicked", { inputLength: concern.trim().length });
     setStatus("レイヴンがカードを開き、今の流れを整理しています。");
     setReading(null);
     setModel("");
 
     try {
+      if (memberAuthenticated && birthDate) {
+        await fetch("/api/member/profile", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ birth_date: birthDate }),
+        });
+      }
       const response = await fetch("/api/raven", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "fortune", theme, name, concern }),
+        body: JSON.stringify({ mode: "fortune", theme, name, concern, birthDate: birthDate || undefined }),
       });
       const payload = (await response.json()) as { reading?: Reading; model?: string; error?: string; auth_url?: string; register_url?: string };
       if (!response.ok || !payload.reading) {
         if (payload.auth_url || payload.register_url) setAuthLinks({ login_url: payload.auth_url, register_url: payload.register_url });
+        trackFortuneEvent("reading_api_failed", { statusCode: response.status, errorMessage: String(payload.error || "").slice(0, 120) });
         throw new Error(payload.error || "鑑定結果を取得できませんでした。");
       }
       setReading(payload.reading);
@@ -114,8 +151,9 @@ export default function FreeFortuneClient() {
       } else if (payload.reading.source === "safety") {
         setStatus("安全確認を優先した結果を表示しています。");
       } else {
-        setStatus("鑑定完了。現在は補助結果を表示しています。");
+        setStatus("AIを使わない簡易結果を表示しています。");
       }
+      trackFortuneEvent("reading_completed", { inputLength: concern.trim().length });
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "鑑定中にエラーが発生しました。");
     } finally {
@@ -134,7 +172,7 @@ export default function FreeFortuneClient() {
             <h1 className="mt-2 text-[2rem] font-semibold leading-tight sm:text-5xl">今の流れを、短く確かめる</h1>
             <p className="mt-3 leading-7 text-[#5e625c]">
               レイヴン・ブラックウッドの鑑定室へ入る前に、今日の兆しを軽く確認できます。
-              無料占いは結論を決めつけるものではなく、今の気持ちと次の一手を整理する入口です。
+              会員登録なしで試せる無料占いとして、今の気持ちと次の一手を短く整理します。
             </p>
           </header>
 
@@ -157,7 +195,9 @@ export default function FreeFortuneClient() {
               <div className="mb-4 rounded border border-[#d7cabc] bg-white/70 p-3 text-sm leading-6 text-[#5e625c]">
                 <p>{memberNotice}</p>
                 <div className="mt-2 flex flex-wrap gap-3 font-semibold text-[#596d51]">
-                  {authLinks.register_url ? <a className="underline underline-offset-4" href={authLinks.register_url}>無料登録</a> : null}
+                  {authLinks.register_url ? <a className="underline underline-offset-4" href={authLinks.register_url}>結果を保存する</a> : null}
+                  {authLinks.google_register_url ? <a className="underline underline-offset-4" href={authLinks.google_register_url}>Googleで登録</a> : null}
+                  {authLinks.email_register_url ? <a className="underline underline-offset-4" href={authLinks.email_register_url}>メールで登録</a> : null}
                   {authLinks.login_url ? <a className="underline underline-offset-4" href={authLinks.login_url}>ログイン</a> : null}
                   <a className="underline underline-offset-4" href="/member/">マイページ</a>
                 </div>
@@ -177,6 +217,7 @@ export default function FreeFortuneClient() {
             </div>
             <label className="mt-4 flex flex-col gap-2">
               <span className="text-sm font-semibold">気になっていること</span>
+              <span className="text-sm leading-6 text-[#66645d]">「どう動くか迷っている」「今は待つべきか知りたい」など、気になっていることを1〜2文で書いてください。空欄でも占えますが、状況を書くほど結果が具体的になります。</span>
               <textarea
                 className="min-h-32"
                 value={concern}
@@ -184,6 +225,13 @@ export default function FreeFortuneClient() {
                 placeholder={selectedTheme.prompt}
               />
             </label>
+            {memberAuthenticated && !birthDate ? (
+              <label className="mt-4 flex flex-col gap-2">
+                <span className="text-sm font-semibold">生年月日（初回のみ・任意）</span>
+                <span className="text-sm leading-6 text-[#66645d]">登録すると、次回から対応する鑑定で入力を省略できます。マイページから変更・削除できます。</span>
+                <input type="date" value={birthDate} onChange={(event) => setBirthDate(event.target.value)} max={new Date().toISOString().slice(0, 10)} />
+              </label>
+            ) : null}
             <button className="raven-primary-button mt-4 disabled:opacity-60" type="submit" disabled={busy}>
               {busy ? "鑑定中..." : `${themeNames[theme]}を無料で占う`}
             </button>
@@ -198,9 +246,15 @@ export default function FreeFortuneClient() {
           {reading ? (
             <div className="mt-4">
               <div className="rounded border border-[#cbd4c4] bg-[#edf3e8] p-4">
-                <p className="text-xs font-semibold text-[#596d51]">開かれたカード</p>
-                <h2 className="mt-1 text-2xl font-semibold leading-tight">{reading.card.nameJa}</h2>
-                <p className="mt-1 text-sm text-[#5e625c]">{reading.card.meaning}</p>
+                <p className="text-xs font-semibold text-[#596d51]">{theme === "yijing" ? "最初に出た卦" : "開かれたカード"}</p>
+                <h2 className="mt-1 text-2xl font-semibold leading-tight">{theme === "yijing" && reading.yijingHexagram ? reading.yijingHexagram.name : reading.card.nameJa}</h2>
+                <p className="mt-1 text-sm text-[#5e625c]">{theme === "yijing" && reading.yijingHexagram ? reading.yijingHexagram.reading : reading.card.meaning}</p>
+                {theme === "yijing" && reading.yijingChanging ? (
+                  <div className="mt-3 border-t border-[#cbd4c4] pt-3 text-sm text-[#3f4b3d]">
+                    <p className="font-semibold">変爻：{reading.yijingChanging.line}爻</p>
+                    <p className="mt-1">変爻後の卦：{reading.yijingChanging.hexagram.name}（{reading.yijingChanging.hexagram.reading}）</p>
+                  </div>
+                ) : null}
               </div>
 
               <div className="mt-4 grid gap-3 leading-7 text-[#3f4b3d]">
@@ -219,8 +273,18 @@ export default function FreeFortuneClient() {
                 </section>
                 <section className="rounded border border-[#d7cabc] bg-white/75 p-4">
                   <p className="text-xs font-semibold text-[#596d51]">今日の一手</p>
+                  {theme === "yijing" && reading.yijingChanging ? <p className="mt-1 text-sm font-semibold text-[#596d51]">変爻後の卦「{reading.yijingChanging.hexagram.name}」の流れも踏まえます。</p> : null}
                   <p className="mt-1">{reading.luckyAction}</p>
                 </section>
+                {authLinks.register_url ? (
+                  <section className="rounded border border-[#c2b28f] bg-[#fff8e8] p-4">
+                    <p className="text-xs font-semibold text-[#8d6a2f]">結果を残す</p>
+                    <p className="mt-1">この結果をあとで見返したい場合は、ギルド共通アカウントに保存できます。</p>
+                    <a className="mt-3 inline-flex font-semibold text-[#596d51] underline underline-offset-4" href={authLinks.register_url}>
+                      無料で結果を保存する
+                    </a>
+                  </section>
+                ) : null}
               </div>
             </div>
           ) : (

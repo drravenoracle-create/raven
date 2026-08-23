@@ -42,12 +42,15 @@ export async function POST(request: Request) {
   const enabled = boolValue(body.enabled);
   const killSwitch = boolValue(body.kill_switch ?? body.killSwitch);
   const automationLevels = updateAutomationLevels(settings.automation_levels_json, articleGeneration, autoPublish);
+  const calendarEnabled = body.calendar_enabled === undefined && body.calendarEnabled === undefined ? null : boolValue(body.calendar_enabled ?? body.calendarEnabled) ? 1 : 0;
+  const calendarTime = body.calendar_time_jst ?? body.calendarTimeJst;
+  const calendarFormat = body.calendar_format ?? body.calendarFormat;
 
   await env.DB.prepare(
-    "UPDATE blog_engine_settings SET enabled = ?, kill_switch = ?, auto_post_enabled = ?, posting_mode = ?, automation_levels_json = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ?",
+    "UPDATE blog_engine_settings SET enabled = ?, kill_switch = ?, auto_post_enabled = ?, posting_mode = ?, automation_levels_json = ?, calendar_enabled = COALESCE(?, calendar_enabled), calendar_time_jst = COALESCE(?, calendar_time_jst), calendar_format = COALESCE(?, calendar_format), updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ?",
   )
-    .bind(enabled ? 1 : 0, killSwitch ? 1 : 0, autoPublish ? 1 : 0, autoPublish ? "auto" : "approval", automationLevels, TENANT_ID)
+    .bind(enabled ? 1 : 0, killSwitch ? 1 : 0, autoPublish ? 1 : 0, autoPublish ? "auto" : "approval", automationLevels, calendarEnabled, typeof calendarTime === "string" && /^\d{2}:\d{2}$/.test(calendarTime) ? calendarTime : null, calendarFormat === "short_video" || calendarFormat === "carousel" || calendarFormat === "auto" ? calendarFormat : null, TENANT_ID)
     .run();
 
-  return Response.json({ ok: true, enabled, kill_switch: killSwitch, article_generation: articleGeneration, auto_publish: autoPublish });
+  return Response.json({ ok: true, enabled, kill_switch: killSwitch, article_generation: articleGeneration, auto_publish: autoPublish, calendar_enabled: calendarEnabled, calendar_time_jst: calendarTime, calendar_format: calendarFormat });
 }
