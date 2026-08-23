@@ -1,10 +1,15 @@
-﻿/** Cloudflare Worker entry point for the vinext-starter template. */
+/** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import { decryptDriveRefreshToken } from "../app/lib/google-drive-oauth";
+import { buildCalendarBlog, buildCalendarSocial, buildDailyAlmanac } from "../app/lib/calendar/daily-almanac";
+import { observeInstagramContainer, readInstagramMetaError, sanitizeInstagramResponse, type InstagramReelState } from "../app/lib/instagram-reel-state";
 
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
   INSTAGRAM_ACCESS_TOKEN?: string;
   INSTAGRAM_ACCOUNT_ID?: string;
   INSTAGRAM_TOKEN_EXPIRES_AT?: string;
@@ -13,6 +18,10 @@ interface Env {
   SNS_DAILY_THREE_CHOICE_ENABLED?: string;
   SNS_DAILY_THREE_CHOICE_TIME_JST?: string;
   SNS_DAILY_THREE_CHOICE_GENERATION_LEAD_MINUTES?: string;
+  SNS_DAILY_CALENDAR_ENABLED?: string;
+  SNS_DAILY_CALENDAR_TIME_JST?: string;
+  SNS_DAILY_CALENDAR_GENERATION_LEAD_MINUTES?: string;
+  SNS_DAILY_CALENDAR_FORMAT?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -64,6 +73,27 @@ function getCloudflareGeo(request: Request) {
     region: sanitizeText(cf?.region, 120),
     city: sanitizeText(cf?.city, 120),
   };
+}
+
+function englishEntryRedirect(request: Request) {
+  if (request.method !== "GET") return null;
+  const url = new URL(request.url);
+  if (url.pathname !== "/" && url.pathname !== "") return null;
+  const explicit = url.searchParams.get("lang");
+  const cookie = request.headers.get("cookie") || "";
+  if (explicit === "ja") {
+    url.searchParams.delete("lang");
+    return new Response(null, { status: 302, headers: { Location: url.toString(), "Set-Cookie": "raven_locale=ja; Path=/; Max-Age=31536000; SameSite=Lax" } });
+  }
+  if (explicit === "en") return new Response(null, { status: 302, headers: { Location: "/en/", "Set-Cookie": "raven_locale=en; Path=/; Max-Age=31536000; SameSite=Lax" } });
+  if (/\braven_locale=(?:ja|en)\b/i.test(cookie)) return null;
+  const language = (request.headers.get("accept-language") || "").toLowerCase();
+  const english = /(^|,|;)\s*en(?:[-_][a-z]{2})?(?:\s*;\s*q=([0-9.]+))?/.exec(language);
+  const japanese = /(^|,|;)\s*ja(?:[-_][a-z]{2})?(?:\s*;\s*q=([0-9.]+))?/.exec(language);
+  const quality = (match: RegExpExecArray | null) => match?.[2] ? Number(match[2]) : match ? 1 : 0;
+  const location = quality(english) > quality(japanese) ? "/en/" : url.toString();
+  const locale = location === "/en/" ? "en" : "ja";
+  return new Response(null, { status: 302, headers: { Location: location, "Set-Cookie": `raven_locale=${locale}; Path=/; Max-Age=31536000; SameSite=Lax`, Vary: "Accept-Language, Cookie" } });
 }
 
 function toIsoDate(date = new Date()) {
@@ -133,6 +163,15 @@ function parseSnsSchedule(value: unknown) {
     if (Array.isArray(parsed?.windows) && parsed.windows.length) return parsed as typeof DEFAULT_SNS_SCHEDULE;
   } catch {}
   return DEFAULT_SNS_SCHEDULE;
+}
+
+function snsPlatformEnabled(value: unknown, platform: string) {
+  try {
+    const stops = JSON.parse(String(value || "{}")) as Record<string, unknown>;
+    return stops[platform] !== true;
+  } catch {
+    return true;
+  }
 }
 
 function isInSnsPublishWindow(scheduleJson: unknown) {
@@ -356,27 +395,69 @@ async function logRetryableInstagramAuthFailure(env: Env, input: { tenantId: str
     .run();
 }
 
-async function waitForInstagramContainer(env: Env, containerId: string) {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    const response = await fetch(`https://graph.facebook.com/v26.0/${containerId}?fields=status_code&access_token=${env.INSTAGRAM_ACCESS_TOKEN}`);
-    const body = (await response.json().catch(() => ({}))) as { status_code?: string; error?: unknown };
-    if (body.status_code === "FINISHED") return { ok: true, body };
-    if (body.status_code === "ERROR" || body.error) return { ok: false, body };
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-  }
-  return { ok: false, body: { status_code: "TIMEOUT" } };
+async function recordInstagramReelEvent(env: Env, input: {
+  tenantId: string;
+  postId: string;
+  containerId: string;
+  action: "create" | "check" | "publish";
+  status: string;
+  httpStatus: number;
+  body?: unknown;
+  retryCount?: number;
+  errorMessage?: string | null;
+}) {
+  const error = readInstagramMetaError(input.body);
+  await env.DB.prepare(
+    "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message, container_id, container_status, retry_count, meta_error_code, meta_error_subcode) VALUES (?, ?, ?, 'instagram', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  )
+    .bind(crypto.randomUUID(), input.tenantId, input.postId, input.action, input.status, input.httpStatus, sanitizeInstagramResponse(input.body), input.errorMessage || error.message, input.containerId, input.status, input.retryCount ?? 0, error.code, error.subcode)
+    .run();
 }
 
-async function publishInstagramContainer(env: Env, post: Record<string, unknown>, creationId: string, providerMode: string) {
+async function saveInstagramContainerState(env: Env, input: {
+  tenantId: string;
+  postId: string;
+  containerId: string;
+  state: InstagramReelState;
+  httpStatus?: number;
+  body?: unknown;
+}) {
+  const error = readInstagramMetaError(input.body);
+  await env.DB.prepare(
+    "UPDATE sns_posts SET container_id = ?, container_status = ?, container_created_at = COALESCE(container_created_at, CURRENT_TIMESTAMP), container_last_checked_at = CASE WHEN ? IS NULL THEN container_last_checked_at ELSE CURRENT_TIMESTAMP END, container_ready_at = CASE WHEN ? = 'ready' THEN CURRENT_TIMESTAMP ELSE container_ready_at END, meta_http_status = COALESCE(?, meta_http_status), meta_response_body = COALESCE(?, meta_response_body), meta_error_code = ?, meta_error_subcode = ?, meta_error_message = ?, meta_error_type = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?",
+  )
+    .bind(input.containerId, input.state, input.httpStatus ?? null, input.state, input.httpStatus ?? null, input.body ? sanitizeInstagramResponse(input.body) : null, error.code, error.subcode, error.message, error.type, input.tenantId, input.postId)
+    .run();
+}
+
+async function checkInstagramContainer(env: Env, post: Record<string, unknown>) {
+  const tenantId = String(post.tenant_id || TENANT_ID);
+  const postId = String(post.id || "");
+  const containerId = String(post.container_id || "");
+  if (!containerId) return { ok: false, inProgress: false, state: "failed" as const, error: "Instagram Reel container_id is missing." };
+  const response = await fetch(`https://graph.facebook.com/v26.0/${containerId}?fields=status_code&access_token=${env.INSTAGRAM_ACCESS_TOKEN}`);
+  const body = await response.json().catch(() => ({}));
+  const observation = observeInstagramContainer(response.status, body);
+  await saveInstagramContainerState(env, { tenantId, postId, containerId, state: observation.state, httpStatus: response.status, body });
+  await recordInstagramReelEvent(env, { tenantId, postId, containerId, action: "check", status: observation.state, httpStatus: response.status, body, retryCount: Number(post.retry_count || 0) });
+  if (observation.state === "processing") return { ok: false, inProgress: true, state: observation.state, body };
+  if (observation.state === "failed") return { ok: false, inProgress: false, state: observation.state, body };
+  return { ok: true, inProgress: false, state: observation.state, body };
+}
+
+async function publishInstagramContainer(env: Env, post: Record<string, unknown>, creationId: string, providerMode: string, isReel = false) {
   const tenantId = String(post.tenant_id || TENANT_ID);
   const id = String(post.id || "");
   const platform = String(post.platform || "instagram");
+  if (isReel) {
+    await saveInstagramContainerState(env, { tenantId, postId: id, containerId: creationId, state: "publishing" });
+  }
   const publishResponse = await fetch(`https://graph.facebook.com/v26.0/${env.INSTAGRAM_ACCOUNT_ID}/media_publish`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       creation_id: creationId,
-      access_token: env.INSTAGRAM_ACCESS_TOKEN,
+      access_token: env.INSTAGRAM_ACCESS_TOKEN || "",
     }),
   });
   const publishBody = (await publishResponse.json().catch(() => ({}))) as { id?: string; error?: unknown };
@@ -385,28 +466,88 @@ async function publishInstagramContainer(env: Env, post: Record<string, unknown>
       await logRetryableInstagramAuthFailure(env, { tenantId, id, platform, code: publishResponse.status, body: publishBody });
       return { ok: false, error: "Instagram access token expired. Please update INSTAGRAM_ACCESS_TOKEN.", details: publishBody };
     }
-    await env.DB.prepare(
-      "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?, ?)",
-    )
-      .bind(crypto.randomUUID(), tenantId, id, platform, publishResponse.status, JSON.stringify(publishBody), "Instagram media publish failed")
-      .run();
+    if (isReel) {
+      await saveInstagramContainerState(env, { tenantId, postId: id, containerId: creationId, state: "failed", httpStatus: publishResponse.status, body: publishBody });
+      await recordInstagramReelEvent(env, { tenantId, postId: id, containerId: creationId, action: "publish", status: "failed", httpStatus: publishResponse.status, body: publishBody, retryCount: Number(post.retry_count || 0) + 1, errorMessage: "Instagram media publish failed" });
+    } else {
+      await env.DB.prepare(
+        "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?, ?)",
+      ).bind(crypto.randomUUID(), tenantId, id, platform, publishResponse.status, sanitizeInstagramResponse(publishBody), "Instagram media publish failed").run();
+    }
     await env.DB.prepare("UPDATE sns_posts SET status = 'failed', retry_count = retry_count + 1, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
       .bind(tenantId, id)
       .run();
     return { ok: false, error: "Instagram media publish failed", details: publishBody };
   }
   const externalId = publishBody.id;
+  if (isReel) {
+    await saveInstagramContainerState(env, { tenantId, postId: id, containerId: creationId, state: "published", httpStatus: 200, body: { id: externalId } });
+    await recordInstagramReelEvent(env, { tenantId, postId: id, containerId: creationId, action: "publish", status: "published", httpStatus: 200, body: { id: externalId }, retryCount: Number(post.retry_count || 0) });
+  } else {
+    await env.DB.prepare(
+      "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body) VALUES (?, ?, ?, ?, 'publish', 'success', ?, ?)",
+    ).bind(crypto.randomUUID(), tenantId, id, platform, 200, sanitizeInstagramResponse({ mode: providerMode || "instagram", externalId })).run();
+  }
   await env.DB.prepare(
-    "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body) VALUES (?, ?, ?, ?, 'publish', 'success', ?, ?)",
+    "UPDATE sns_posts SET status = 'published', published_at = CURRENT_TIMESTAMP, external_post_id = ?, container_published_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE container_published_at END, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?",
   )
-    .bind(crypto.randomUUID(), tenantId, id, platform, 200, JSON.stringify({ mode: providerMode || "instagram", externalId }))
-    .run();
-  await env.DB.prepare(
-    "UPDATE sns_posts SET status = 'published', published_at = CURRENT_TIMESTAMP, external_post_id = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?",
-  )
-    .bind(externalId, tenantId, id)
+    .bind(externalId, isReel ? 1 : 0, tenantId, id)
     .run();
   return { ok: true, externalId };
+}
+
+async function publishYouTubeShort(env: Env, post: Record<string, unknown>) {
+  const tenantId = String(post.tenant_id || TENANT_ID);
+  const id = String(post.id || "");
+  const account = await env.DB.prepare("SELECT access_token_ciphertext, refresh_token_ciphertext FROM sns_platform_accounts WHERE tenant_id = ? AND platform = 'youtube' AND status = 'connected' LIMIT 1").bind(tenantId).first<{ access_token_ciphertext?: string; refresh_token_ciphertext?: string }>();
+  if (!account?.access_token_ciphertext) return { ok: false, error: "YouTube OAuth account is not connected." };
+  const mediaUrl = String(post.media_url || "").trim();
+  if (!mediaUrl) return { ok: false, error: "YouTube投稿用の動画URLがありません。" };
+  const metadata = { snippet: { title: String(post.title || "今日の3択占い").slice(0, 100), description: String(post.caption || "").slice(0, 5000), tags: ["レイヴンブラックウッド", "3択占い", "占い", "YouTube Shorts"], categoryId: "22" }, status: { privacyStatus: "public", selfDeclaredMadeForKids: false } };
+  async function upload(token: string) {
+    const video = await fetch(mediaUrl);
+    if (!video.ok || !video.body) throw new Error(`動画取得に失敗しました (${video.status})`);
+    const init = await fetch("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json; charset=UTF-8", "X-Upload-Content-Type": video.headers.get("content-type") || "video/mp4" }, body: JSON.stringify(metadata) });
+    const uploadUrl = init.headers.get("location");
+    if (!init.ok || !uploadUrl) throw new Error(`YouTube upload session作成失敗 (${init.status})`);
+    const uploaded = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": video.headers.get("content-type") || "video/mp4" }, body: await video.arrayBuffer() });
+    const result = await uploaded.json().catch(() => ({})) as { id?: string; error?: { message?: string } };
+    if (!uploaded.ok || !result.id) throw new Error(result.error?.message || `YouTube upload失敗 (${uploaded.status})`);
+    return result.id;
+  }
+  let externalId: string;
+  try {
+    externalId = await upload(await decryptDriveRefreshToken(account.access_token_ciphertext));
+  } catch (error) {
+    if (!account.refresh_token_ciphertext) throw error;
+    const refreshed = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ client_id: env.GOOGLE_CLIENT_ID || "", client_secret: env.GOOGLE_CLIENT_SECRET || "", refresh_token: await decryptDriveRefreshToken(account.refresh_token_ciphertext), grant_type: "refresh_token" }) });
+    const token = await refreshed.json().catch(() => ({})) as { access_token?: string };
+    if (!refreshed.ok || !token.access_token) throw error;
+    externalId = await upload(token.access_token);
+  }
+  await env.DB.prepare("INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body) VALUES (?, ?, ?, 'youtube', 'publish', 'success', 200, ?)").bind(crypto.randomUUID(), tenantId, id, JSON.stringify({ externalId, mode: "youtube_shorts" })).run();
+  await env.DB.prepare("UPDATE sns_posts SET status = 'published', published_at = CURRENT_TIMESTAMP, external_post_id = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?").bind(externalId, tenantId, id).run();
+  return { ok: true, externalId, mode: "youtube_shorts" };
+}
+
+async function publishTikTokDirectPost(env: Env, post: Record<string, unknown>) {
+  const tenantId = String(post.tenant_id || TENANT_ID);
+  const id = String(post.id || "");
+  const account = await env.DB.prepare("SELECT access_token_ciphertext FROM sns_platform_accounts WHERE tenant_id = ? AND platform = 'tiktok' AND status = 'connected' LIMIT 1").bind(tenantId).first<{ access_token_ciphertext?: string }>();
+  const mediaUrl = String(post.media_url || "").trim();
+  if (!account?.access_token_ciphertext) return { ok: false, error: "TikTok OAuth account is not connected." };
+  if (!mediaUrl) return { ok: false, error: "TikTok投稿用の動画URLがありません。" };
+  const token = await decryptDriveRefreshToken(account.access_token_ciphertext);
+  const creatorResponse = await fetch("https://open.tiktokapis.com/v2/post/publish/creator_info/query/", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json; charset=UTF-8" }, body: "{}" });
+  const creator = await creatorResponse.json().catch(() => ({})) as { data?: { privacy_level_options?: string[]; comment_disabled?: boolean; duet_disabled?: boolean; stitch_disabled?: boolean }; error?: { message?: string } };
+  if (!creatorResponse.ok || !creator.data?.privacy_level_options?.length) return { ok: false, error: creator.error?.message || "TikTok creator info取得に失敗しました." };
+  const privacy = creator.data.privacy_level_options.includes("PUBLIC_TO_EVERYONE") ? "PUBLIC_TO_EVERYONE" : creator.data.privacy_level_options[0];
+  const response = await fetch("https://open.tiktokapis.com/v2/post/publish/video/init/", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify({ post_info: { title: String(post.caption || post.title || "").slice(0, 2200), privacy_level: privacy, disable_comment: Boolean(creator.data.comment_disabled), disable_duet: Boolean(creator.data.duet_disabled), disable_stitch: Boolean(creator.data.stitch_disabled), is_aigc: true }, source_info: { source: "PULL_FROM_URL", video_url: mediaUrl } }) });
+  const result = await response.json().catch(() => ({})) as { data?: { publish_id?: string }; error?: { code?: string; message?: string } };
+  if (!response.ok || !result.data?.publish_id) return { ok: false, error: result.error?.message || `TikTok Direct Post初期化に失敗しました (${response.status})` };
+  await env.DB.prepare("INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body) VALUES (?, ?, ?, 'tiktok', 'publish', 'success', ?, ?)").bind(crypto.randomUUID(), tenantId, id, response.status, JSON.stringify({ publishId: result.data.publish_id, mode: "direct_post", privacy })).run();
+  await env.DB.prepare("UPDATE sns_posts SET status = 'published', published_at = CURRENT_TIMESTAMP, external_post_id = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?").bind(result.data.publish_id, tenantId, id).run();
+  return { ok: true, externalId: result.data.publish_id, mode: "tiktok_direct_post", privacy };
 }
 
 async function publishSnsPost(env: Env, post: Record<string, unknown>) {
@@ -415,6 +556,8 @@ async function publishSnsPost(env: Env, post: Record<string, unknown>) {
   const platform = String(post.platform || "instagram");
   const postType = String(post.post_type || "image");
   const providerMode = env.SNS_PROVIDER_MODE || "";
+  if (platform === "tiktok") return publishTikTokDirectPost(env, post);
+  if (platform === "youtube") return publishYouTubeShort(env, post);
   if (!env.INSTAGRAM_ACCESS_TOKEN || !env.INSTAGRAM_ACCOUNT_ID) {
     await env.DB.prepare(
       "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?)",
@@ -449,6 +592,25 @@ async function publishSnsPost(env: Env, post: Record<string, unknown>) {
   }
 
   const isReel = postType === "reel" || String(post.media_type || "") === "video";
+  if (isReel) {
+    if (String(post.status || "") === "published" || String(post.external_post_id || "").trim()) {
+      return { ok: true, externalId: String(post.external_post_id || ""), alreadyPublished: true };
+    }
+    const existingContainerId = String(post.container_id || "").trim();
+    if (existingContainerId) {
+      if (String(post.container_status || "") === "publishing") {
+        return { ok: false, inProgress: true, containerId: existingContainerId, state: "publishing", requiresReconciliation: true };
+      }
+      const checked = await checkInstagramContainer(env, post);
+      if (checked.inProgress) return { ok: false, inProgress: true, containerId: existingContainerId, state: "processing" };
+      if (!checked.ok) {
+        await env.DB.prepare("UPDATE sns_posts SET status = 'failed', retry_count = retry_count + 1, container_status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
+          .bind(tenantId, id).run();
+        return { ok: false, error: "Instagram Reel container returned an explicit error.", details: checked.body };
+      }
+      return publishInstagramContainer(env, post, existingContainerId, providerMode || "instagram", true);
+    }
+  }
   if (postType === "carousel" && mediaUrls.length >= 2 && !isReel) {
     const childIds: string[] = [];
     for (const mediaUrl of mediaUrls) {
@@ -523,18 +685,9 @@ async function publishSnsPost(env: Env, post: Record<string, unknown>) {
     return { ok: false, error: "Instagram media container creation failed", details: createBody };
   }
   if (isReel) {
-    const ready = await waitForInstagramContainer(env, createBody.id);
-    if (!ready.ok) {
-      await env.DB.prepare(
-        "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?, ?)",
-      )
-        .bind(crypto.randomUUID(), tenantId, id, platform, 502, JSON.stringify(ready.body), "Instagram Reel container was not ready.")
-        .run();
-      await env.DB.prepare("UPDATE sns_posts SET status = 'failed', retry_count = retry_count + 1, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
-        .bind(tenantId, id)
-        .run();
-      return { ok: false, error: "Instagram Reel container was not ready.", details: ready.body };
-    }
+    await saveInstagramContainerState(env, { tenantId, postId: id, containerId: createBody.id, state: "created", httpStatus: createResponse.status, body: createBody });
+    await recordInstagramReelEvent(env, { tenantId, postId: id, containerId: createBody.id, action: "create", status: "created", httpStatus: createResponse.status, body: createBody, retryCount: Number(post.retry_count || 0) });
+    return { ok: false, inProgress: true, containerId: createBody.id, state: "created" };
   }
   return publishInstagramContainer(env, post, createBody.id, providerMode || "instagram");
 }
@@ -587,11 +740,34 @@ async function createDueDailySnsPost(env: Env) {
     .first<{ id: string }>();
   if (existing) return 0;
 
+  const scheduledAt = jstLocalToUtcIso(date, postTime);
+  const scheduledForDate = await env.DB.prepare(
+    "SELECT id FROM sns_posts WHERE tenant_id = ? AND platform = 'instagram' AND post_type = 'reel' AND scheduled_at = ? AND status IN ('draft', 'review', 'approved', 'scheduled', 'publishing', 'published') LIMIT 1",
+  )
+    .bind(TENANT_ID, scheduledAt)
+    .first<{ id: string }>();
+  if (scheduledForDate) return 0;
+
   const id = crypto.randomUUID();
+  const dailyThemes = [
+    { theme: "今日あなたに届く嬉しい知らせ", cta: "続きはRaven Oracleへ。" },
+    { theme: "明日ひらく新しい流れ", cta: "プロフィールから詳しく占えます。" },
+    { theme: "今のあなたを支える一言", cta: "あなた専用の結果を確認する。" },
+    { theme: "近いうちに起きる小さな変化", cta: "Raven Oracleで続きを見る。" },
+  ][Number(date.replace(/-/g, "")) % 4];
   const title = `今日の3択占い ${date}`;
-  const theme = "あの人が今、あなたに隠している本音";
-  const cta = "もっと詳しく占うなら、プロフィールからRaven Oracleへ。";
-  const videoUrl = "https://raven.fortunestudios.jp/api/sns/sample-video";
+  const theme = dailyThemes.theme;
+  const cta = dailyThemes.cta;
+  const videoAsset = await env.DB.prepare(
+    "SELECT asset_id FROM media_video_assets WHERE tenant_id = ? AND mime_type = 'video/mp4' AND deleted_at IS NULL AND category <> 'fireplace' ORDER BY CASE WHEN category = 'three_choice_background' THEN 0 ELSE 1 END, CASE WHEN category = 'three_choice_background' THEN datetime(created_at) END DESC, usage_count ASC, datetime(created_at) ASC LIMIT 1",
+  )
+    .bind(TENANT_ID)
+    .first<{ asset_id: string }>();
+  if (!videoAsset?.asset_id) return 0;
+  const videoUrl = `https://raven.fortunestudios.jp/api/reel-engine/assets?assetId=${encodeURIComponent(videoAsset.asset_id)}`;
+  await env.DB.prepare("UPDATE media_video_assets SET usage_count = usage_count + 1, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND asset_id = ?")
+    .bind(TENANT_ID, videoAsset.asset_id)
+    .run();
   const caption = [
     "今日の3択占い",
     "",
@@ -606,7 +782,7 @@ async function createDueDailySnsPost(env: Env) {
   await env.DB.prepare(
     `INSERT INTO sns_posts
       (id, tenant_id, platform, post_type, title, theme, category, character, purpose, cta, caption, hashtags, script, media_type, media_url, thumbnail_url, status, scheduled_at, ai_generated, duplicate_warning)
-      VALUES (?, ?, 'instagram', 'reel', ?, ?, '3択動画', 'レイヴン・ブラックウッド', 'Instagram ReelsからRaven Oracleへ誘導', ?, ?, ?, ?, 'video', ?, ?, 'draft', NULL, 1, ?)`,
+      VALUES (?, ?, 'instagram', 'reel', ?, ?, '3択動画', 'レイヴン・ブラックウッド', 'Instagram ReelsからRaven Oracleへ誘導', ?, ?, ?, ?, 'video', ?, ?, 'scheduled', ?, 1, ?)`,
   )
     .bind(
       id,
@@ -619,8 +795,21 @@ async function createDueDailySnsPost(env: Env) {
       "0-2秒: HOOK\n2-5秒: 裏面カードA/B/C\n5-17秒: A/B/Cの結果\n17-20秒: CTA",
       videoUrl,
       "https://raven.fortunestudios.jp/api/sns/sample-card?card=knight",
-      jstLocalToUtcIso(date, postTime),
+      scheduledAt,
       idempotencyKey,
+    )
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO sns_posts
+      (id, tenant_id, platform, post_type, title, theme, category, character, purpose, cta, caption, hashtags, script, media_type, media_url, thumbnail_url, status, scheduled_at, ai_generated, duplicate_warning)
+      VALUES (?, ?, 'youtube', 'short', ?, ?, '3択動画', 'レイヴン・ブラックウッド', 'YouTube ShortsからRaven Oracleへ誘導', ?, ?, ?, ?, 'video', ?, ?, 'scheduled', ?, 1, ?)`
+  )
+    .bind(
+      crypto.randomUUID(), TENANT_ID, title, theme, cta, caption,
+      "#レイヴンブラックウッド #3択占い #オラクルカード #占い #YouTubeShorts",
+      "0-2秒: HOOK\n2-5秒: 裏面カードA/B/C\n5-17秒: A/B/Cの結果\n17-20秒: CTA",
+      videoUrl, "https://raven.fortunestudios.jp/api/sns/sample-card?card=knight", scheduledAt,
+      `${idempotencyKey}:youtube`,
     )
     .run();
   return 1;
@@ -628,7 +817,7 @@ async function createDueDailySnsPost(env: Env) {
 
 async function publishDueSnsPosts(env: Env) {
   if (!env.DB) return 0;
-  const settings = await env.DB.prepare("SELECT automation_level, emergency_stop_all, schedule_json FROM sns_automation_settings WHERE tenant_id = ? LIMIT 1").bind(TENANT_ID).first<{ automation_level?: number; emergency_stop_all?: number; schedule_json?: string }>();
+  const settings = await env.DB.prepare("SELECT automation_level, emergency_stop_all, emergency_stop_platforms, schedule_json FROM sns_automation_settings WHERE tenant_id = ? LIMIT 1").bind(TENANT_ID).first<{ automation_level?: number; emergency_stop_all?: number; emergency_stop_platforms?: string; schedule_json?: string }>();
   if (settings?.emergency_stop_all) return 0;
   if (!settings?.automation_level) return 0;
   await createDueDailySnsPost(env);
@@ -639,7 +828,15 @@ async function publishDueSnsPosts(env: Env) {
     .all();
   let count = 0;
   for (const post of result.results || []) {
-    await publishSnsPost(env, post as Record<string, unknown>);
+    if (!snsPlatformEnabled(settings?.emergency_stop_platforms, String(post.platform || "instagram"))) continue;
+    const postRecord = post as Record<string, unknown>;
+    const publishResult = await publishSnsPost(env, postRecord);
+    const duplicateWarning = String(postRecord.duplicate_warning || "");
+    if (duplicateWarning.startsWith("daily-calendar:")) {
+      const parts = duplicateWarning.split(":");
+      await env.DB.prepare("UPDATE daily_calendar_runs SET sns_status = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND local_date = ? AND content_type = 'daily_calendar'")
+        .bind(publishResult?.ok ? "published" : ("inProgress" in publishResult && publishResult.inProgress) ? "processing" : "failed", TENANT_ID, parts[2]).run();
+    }
     count += 1;
   }
   return count;
@@ -1180,6 +1377,87 @@ async function queueAndPublishBlogSnsPost(env: Env, article: { id: string; slug?
   return 1;
 }
 
+function calendarFormatFor(env: Env, date: string): "short_video" | "carousel" {
+  const configured = String(env.SNS_DAILY_CALENDAR_FORMAT || "auto").toLowerCase();
+  if (configured === "short_video") return "short_video";
+  return "carousel";
+}
+
+async function processDailyCalendar(env: Env) {
+  if (!env.DB) return 0;
+  const calendarSettings = await env.DB.prepare("SELECT enabled, kill_switch, auto_post_enabled, calendar_enabled, calendar_time_jst, calendar_format FROM blog_engine_settings WHERE tenant_id = ? LIMIT 1")
+    .bind(TENANT_ID)
+    .first<{ enabled?: number; kill_switch?: number; auto_post_enabled?: number; calendar_enabled?: number; calendar_time_jst?: string; calendar_format?: string }>()
+    .catch(() => null);
+  if (calendarSettings && (calendarSettings.enabled === 0 || calendarSettings.kill_switch === 1 || calendarSettings.auto_post_enabled === 0 || calendarSettings.calendar_enabled === 0)) return 0;
+  if (!calendarSettings && !envEnabled(env.SNS_DAILY_CALENDAR_ENABLED, true)) return 0;
+  const { date, time } = jstParts();
+  const publishTime = validTimeOr(calendarSettings?.calendar_time_jst || env.SNS_DAILY_CALENDAR_TIME_JST, "07:30");
+  const leadMinutes = positiveIntOr(env.SNS_DAILY_CALENDAR_GENERATION_LEAD_MINUTES, 10);
+  const nowMinutes = timeToMinutes(time);
+  const publishMinutes = timeToMinutes(publishTime);
+  const generationStart = Math.max(0, publishMinutes - leadMinutes);
+  const shouldGenerate = nowMinutes >= generationStart && nowMinutes <= publishMinutes + 5;
+  const almanac = buildDailyAlmanac(date, TENANT_ID);
+  const format = calendarSettings?.calendar_format === "short_video" ? "short_video" : calendarFormatFor(env, date);
+  const runKey = `daily-calendar:${TENANT_ID}:${date}`;
+  let run = await env.DB.prepare("SELECT id, blog_article_id FROM daily_calendar_runs WHERE tenant_id = ? AND local_date = ? AND content_type = 'daily_calendar' LIMIT 1")
+    .bind(TENANT_ID, date)
+    .first<{ id: string; blog_article_id?: string }>();
+
+  if (shouldGenerate && !run) {
+    const runId = crypto.randomUUID();
+    const blog = buildCalendarBlog(almanac);
+    const articleId = crypto.randomUUID();
+    const scheduledAt = jstLocalToUtcIso(date, publishTime);
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO daily_calendar_runs (id, tenant_id, local_date, content_type, sexagenary_cycle_index, almanac_json, blog_article_id, media_format, generated_at) VALUES (?, ?, ?, 'daily_calendar', ?, ?, ?, ?, CURRENT_TIMESTAMP)",
+    ).bind(runId, TENANT_ID, date, almanac.sexagenary.index, JSON.stringify(almanac), articleId, format).run();
+    const insertedRun = await env.DB.prepare("SELECT id FROM daily_calendar_runs WHERE tenant_id = ? AND local_date = ? AND content_type = 'daily_calendar' LIMIT 1").bind(TENANT_ID, date).first<{ id: string }>();
+    if (insertedRun?.id === runId) {
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO blog_engine_articles
+          (id, tenant_id, title, slug, description, body, category, tags_json, primary_keyword, secondary_keywords_json,
+           search_intent, target_reader, outline_json, seo_title, meta_description, og_title, og_description, faq_json,
+           internal_links_json, related_articles_json, key_message, recommended_social_angle, quality_score, brand_score,
+           safety_score, quality_report_json, status, scheduled_at, generation_version, idempotency_key)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'educational', 92, 96, 98, ?, 'scheduled', ?, 'daily-calendar-v1.0', ?)`
+      ).bind(
+        articleId, TENANT_ID, blog.title, blog.slug, blog.description, blog.body, blog.category, JSON.stringify(blog.tags),
+        "今日の暦", JSON.stringify([almanac.sexagenary.name, "日干支", "レイヴン・ブラックウッド"]),
+        "今日の暦と一日の行動ヒントを確認したい", "朝に一日の判断軸を整えたい読者", JSON.stringify(["今日の日干支", "今日のテーマ", "行動ヒント", "運勢", "注意点"]),
+        `${blog.title} | レイヴン・ブラックウッド Blog`, blog.description, `${blog.title} | レイヴン・ブラックウッド Blog`, blog.description,
+        JSON.stringify([]), JSON.stringify([]), JSON.stringify([]), blog.keyMessage, JSON.stringify({ warnings: [], blocked: false }), scheduledAt, runKey,
+      ).run();
+      await env.DB.prepare("INSERT INTO blog_engine_events (event_id, event_type, tenant_id, article_id, payload_json) VALUES (?, 'article.created', ?, ?, ?)")
+        .bind(crypto.randomUUID(), TENANT_ID, articleId, JSON.stringify({ article_id: articleId, content_type: "daily_calendar", local_date: date, media_format: format })).run();
+      const social = buildCalendarSocial(almanac, format);
+      const snsId = crypto.randomUUID();
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO sns_posts
+          (id, tenant_id, platform, post_type, title, theme, category, character, purpose, cta, caption, hashtags, script, media_type, media_url, thumbnail_url, status, scheduled_at, ai_generated, duplicate_warning)
+          VALUES (?, ?, 'instagram', ?, ?, ?, '今日の暦', 'レイヴン・ブラックウッド', '今日の暦を毎朝届ける', '詳しくはRaven Oracleへ。', ?, ?, ?, ?, ?, ?, 'scheduled', ?, 0, ?)`
+      ).bind(
+        snsId, TENANT_ID, social.postType, blog.title, almanac.theme, social.caption, "#レイヴンブラックウッド #今日の暦 #干支 #占い", social.script,
+        social.mediaType, social.mediaType === "video" ? "https://raven.fortunestudios.jp/raven-blackwood-cover.png" : "https://raven.fortunestudios.jp/raven-blackwood-cover.png",
+        "https://raven.fortunestudios.jp/raven-blackwood-cover.png", scheduledAt, `${runKey}:instagram:${format}`,
+      ).run();
+      await env.DB.prepare("UPDATE daily_calendar_runs SET blog_status = 'scheduled', sns_status = 'scheduled', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(runId).run();
+      run = { id: runId, blog_article_id: articleId };
+    }
+  }
+
+  if (!run || nowMinutes < publishMinutes) return 0;
+  const due = await env.DB.prepare("SELECT id, slug, title, category, key_message FROM blog_engine_articles WHERE tenant_id = ? AND id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL AND datetime(scheduled_at) <= datetime('now') LIMIT 1")
+    .bind(TENANT_ID, run.blog_article_id || "")
+    .first<{ id: string; slug?: string; title?: string; category?: string; key_message?: string }>();
+  if (!due) return 0;
+  await env.DB.prepare("UPDATE blog_engine_articles SET status = 'published', published_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ? AND status = 'scheduled'").bind(TENANT_ID, due.id).run();
+  await env.DB.prepare("INSERT INTO blog_engine_events (event_id, event_type, tenant_id, article_id, payload_json) VALUES (?, 'article.published', ?, ?, ?)").bind(crypto.randomUUID(), TENANT_ID, due.id, JSON.stringify({ article_id: due.id, content_type: "daily_calendar", published_by: "worker_cron" })).run();
+  await env.DB.prepare("UPDATE daily_calendar_runs SET blog_status = 'published', updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(run.id).run();
+  return 1;
+}
+
 async function publishDueBlogArticles(env: Env) {
   if (!env.DB) return 0;
   const settings = await env.DB.prepare("SELECT enabled, kill_switch, auto_post_enabled, automation_levels_json FROM blog_engine_settings WHERE tenant_id = ? LIMIT 1")
@@ -1192,7 +1470,7 @@ async function publishDueBlogArticles(env: Env) {
   if (articleGeneration) await createDueDailyBlogDraft(env, autoPublish);
   if (!autoPublish) return 0;
   const result = await env.DB.prepare(
-    "SELECT id, slug, title, category, key_message FROM blog_engine_articles WHERE tenant_id = ? AND status IN ('draft', 'scheduled') AND scheduled_at IS NOT NULL AND datetime(scheduled_at) <= datetime('now') ORDER BY datetime(scheduled_at) ASC LIMIT 20",
+    "SELECT id, slug, title, category, key_message FROM blog_engine_articles WHERE tenant_id = ? AND category != '今日の暦' AND status IN ('draft', 'scheduled') AND scheduled_at IS NOT NULL AND datetime(scheduled_at) <= datetime('now') ORDER BY datetime(scheduled_at) ASC LIMIT 20",
   )
     .bind(TENANT_ID)
     .all<{ id: string; slug?: string; title?: string; category?: string; key_message?: string }>();
@@ -1219,6 +1497,8 @@ async function publishDueBlogArticles(env: Env) {
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    const localeRedirect = englishEntryRedirect(request);
+    if (localeRedirect) return localeRedirect;
 
     if (url.pathname === "/api/admin/sns/ping") {
       return json({
@@ -1280,6 +1560,7 @@ const worker = {
   },
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil((async () => {
+      await processDailyCalendar(env);
       await publishDueBlogArticles(env);
       await publishDueSnsPosts(env);
       await syncInstagramPostMetrics(env);
@@ -1289,8 +1570,3 @@ const worker = {
 };
 
 export default worker;
-
-
-
-
-
