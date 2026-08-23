@@ -419,14 +419,15 @@ async function saveInstagramContainerState(env: Env, input: {
   postId: string;
   containerId: string;
   state: InstagramReelState;
+  metaStatus?: string | null;
   httpStatus?: number;
   body?: unknown;
 }) {
   const error = readInstagramMetaError(input.body);
   await env.DB.prepare(
-    "UPDATE sns_posts SET container_id = ?, container_status = ?, container_created_at = COALESCE(container_created_at, CURRENT_TIMESTAMP), container_last_checked_at = CASE WHEN ? IS NULL THEN container_last_checked_at ELSE CURRENT_TIMESTAMP END, container_ready_at = CASE WHEN ? = 'ready' THEN CURRENT_TIMESTAMP ELSE container_ready_at END, meta_http_status = COALESCE(?, meta_http_status), meta_response_body = COALESCE(?, meta_response_body), meta_error_code = ?, meta_error_subcode = ?, meta_error_message = ?, meta_error_type = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?",
+    "UPDATE sns_posts SET container_id = ?, container_status = ?, container_created_at = COALESCE(container_created_at, CURRENT_TIMESTAMP), container_last_checked_at = CASE WHEN ? IS NULL THEN container_last_checked_at ELSE CURRENT_TIMESTAMP END, container_ready_at = CASE WHEN ? = 'ready' THEN CURRENT_TIMESTAMP ELSE container_ready_at END, meta_status = COALESCE(?, meta_status), meta_http_status = COALESCE(?, meta_http_status), meta_response_body = COALESCE(?, meta_response_body), meta_error_code = ?, meta_error_subcode = ?, meta_error_message = ?, meta_error_type = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?",
   )
-    .bind(input.containerId, input.state, input.httpStatus ?? null, input.state, input.httpStatus ?? null, input.body ? sanitizeInstagramResponse(input.body) : null, error.code, error.subcode, error.message, error.type, input.tenantId, input.postId)
+    .bind(input.containerId, input.state, input.httpStatus ?? null, input.state, input.metaStatus ?? null, input.httpStatus ?? null, input.body ? sanitizeInstagramResponse(input.body) : null, error.code, error.subcode, error.message, error.type, input.tenantId, input.postId)
     .run();
 }
 
@@ -438,7 +439,7 @@ async function checkInstagramContainer(env: Env, post: Record<string, unknown>) 
   const response = await fetch(`https://graph.facebook.com/v26.0/${containerId}?fields=status_code&access_token=${env.INSTAGRAM_ACCESS_TOKEN}`);
   const body = await response.json().catch(() => ({}));
   const observation = observeInstagramContainer(response.status, body);
-  await saveInstagramContainerState(env, { tenantId, postId, containerId, state: observation.state, httpStatus: response.status, body });
+  await saveInstagramContainerState(env, { tenantId, postId, containerId, state: observation.state, metaStatus: observation.metaStatus, httpStatus: response.status, body });
   await recordInstagramReelEvent(env, { tenantId, postId, containerId, action: "check", status: observation.state, httpStatus: response.status, body, retryCount: Number(post.retry_count || 0) });
   if (observation.state === "processing") return { ok: false, inProgress: true, state: observation.state, body };
   if (observation.state === "failed") return { ok: false, inProgress: false, state: observation.state, body };

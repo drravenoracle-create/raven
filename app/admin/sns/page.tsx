@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type Slide = { heading: string; body: string };
-type SnsPost = { id: string; title: string; status: string; platform: string; post_type: string; scheduled_at?: string; created_at?: string };
+type SnsPost = { id: string; title: string; status: string; platform: string; post_type: string; scheduled_at?: string; created_at?: string; container_id?: string; container_status?: string; container_last_checked_at?: string; meta_status?: string; meta_error_code?: number | null; meta_error_subcode?: number | null; retry_count?: number; reconciliation_reason?: string };
 type SnsSettings = { automation_level?: number; emergency_stop_all?: number; schedule_json?: string };
 type PlatformSettings = { instagram: boolean; tiktok: boolean; youtube: boolean };
 type SnsPing = {
@@ -96,6 +96,7 @@ export default function SnsAdminPage() {
     scheduled: posts.filter((post) => post.status === "scheduled").length,
     published: posts.filter((post) => post.status === "published").length,
     failed: posts.filter((post) => post.status === "failed").length,
+    reconciliation: posts.filter((post) => post.status === "reconciliation_required" || post.container_status === "reconciliation_required").length,
   };
   const activeSnsDecks = decks.filter((deck) => deck.status === "active" && deck.sns_use_allowed);
 
@@ -583,6 +584,26 @@ export default function SnsAdminPage() {
     }
   }
 
+  async function reconcilePost(id: string) {
+    if (activeAction !== "idle") return;
+    setActiveAction("publishing");
+    setStatus("Meta側のcontainer状態を再確認しています。");
+    try {
+      const response = await fetch("/api/admin/sns/reconciliation", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      setStatus(response.ok ? `${payload.state || "reconciliation_required"}: ${payload.reason || "状態を更新しました。"}` : (payload.error || "状態再確認に失敗しました。"));
+      await loadPosts();
+    } catch {
+      setStatus("状態再確認に失敗しました。通信状態を確認してください。");
+    } finally {
+      setActiveAction("idle");
+    }
+  }
+
   async function copyCaption() {
     if (activeAction !== "idle") return;
     const preparedCaption = caption.trim() || buildCaption(topic, tone, goal);
@@ -652,11 +673,12 @@ export default function SnsAdminPage() {
           <p className="mt-3 rounded border border-[#b9c9b5] bg-[#edf3e8] px-3 py-2 text-sm font-semibold text-[#3f573c]" aria-live="polite">{status}</p>
         </header>
         <section className="mt-5 rounded border border-[#d7cabc] bg-white p-4"><p className="text-sm font-semibold text-[#6c5f3d]">基本の流れ</p><div className="mt-2 grid gap-2 text-sm leading-6 text-[#5e625c] md:grid-cols-4"><p><strong>1.</strong> テーマ・目的を入力</p><p><strong>2.</strong> カードやMP4を必要に応じて選択</p><p><strong>3.</strong> 「生成」で内容を確認</p><p><strong>4.</strong> 下書き保存または予約保存</p></div><p className="mt-2 text-xs text-[#7b817a]">ボタンを押すと上のステータス欄に処理状況が表示されます。処理中の操作だけ一時的に無効になります。</p></section>
-        <section className="mt-8 grid gap-3 md:grid-cols-4">
+        <section className="mt-8 grid gap-3 md:grid-cols-5">
           <Metric label="下書き" value={postCounts.draft} />
           <Metric label="予約済み" value={postCounts.scheduled} />
           <Metric label="投稿済み" value={postCounts.published} />
           <Metric label="失敗" value={postCounts.failed} />
+          <Metric label="要確認" value={postCounts.reconciliation} />
         </section>
         <section className="mt-4 rounded border border-[#d7cabc] bg-[#fffaf2] p-4 text-sm leading-7 text-[#5e625c]">
           <span className="font-semibold text-[#20241f]">自動投稿予約:</span> {settings?.automation_level ? "有効" : "無効"} / 投稿枠 {scheduleLabel()} / 緊急停止 {settings?.emergency_stop_all ? "ON" : "OFF"}
@@ -845,7 +867,8 @@ export default function SnsAdminPage() {
               <PostList title="下書き" posts={posts.filter((post) => post.status === "draft")} onPublish={publishPost} disabled={activeAction !== "idle"} />
               <PostList title="予約済み" posts={posts.filter((post) => post.status === "scheduled")} onPublish={publishPost} disabled={activeAction !== "idle"} />
               <PostList title="投稿済み" posts={posts.filter((post) => post.status === "published")} onPublish={publishPost} disabled={activeAction !== "idle"} />
-              <PostList title="失敗・要確認" posts={posts.filter((post) => post.status === "failed")} onPublish={publishPost} disabled={activeAction !== "idle"} />
+              <PostList title="要確認" posts={posts.filter((post) => post.status === "reconciliation_required" || post.container_status === "reconciliation_required")} onPublish={publishPost} onReconcile={reconcilePost} disabled={activeAction !== "idle"} />
+              <PostList title="失敗" posts={posts.filter((post) => post.status === "failed")} onPublish={publishPost} disabled={activeAction !== "idle"} />
             </section>
           </div>
         </section>
@@ -916,17 +939,26 @@ function formatBytes(value: number) {
   return `${size.toFixed(index ? 1 : 0)} ${units[index]}`;
 }
 
-function PostList({ title, posts, onPublish, disabled }: { title: string; posts: SnsPost[]; onPublish: (id: string) => Promise<void>; disabled: boolean }) {
+function PostList({ title, posts, onPublish, onReconcile, disabled }: { title: string; posts: SnsPost[]; onPublish: (id: string) => Promise<void>; onReconcile?: (id: string) => Promise<void>; disabled: boolean }) {
   return (
     <section className="rounded border border-[#d7cabc] bg-[#fffaf2] p-5">
       <h2 className="text-2xl font-semibold">{title}</h2>
       <div className="mt-4 grid gap-3">
         {posts.map((post) => (
           <article key={post.id} className="rounded border border-[#d7cabc] bg-white p-4">
-            <p className="text-sm font-semibold text-[#596d51]">{post.platform} / {post.post_type} / {post.status}</p>
+            <p className="text-sm font-semibold text-[#596d51]">{post.platform} / {post.post_type} / {post.status === "reconciliation_required" ? "要確認" : post.status}</p>
+            {post.status === "reconciliation_required" || post.container_status === "reconciliation_required" ? <span className="mt-2 inline-flex rounded-full border border-[#b98043] bg-[#fff6e8] px-2 py-1 text-xs font-semibold text-[#7a451b]">要確認</span> : null}
             <h3 className="mt-1 font-semibold leading-6">{post.title}</h3>
             <p className="mt-1 text-xs text-[#5e625c]">{post.scheduled_at || post.created_at || "日時未設定"}</p>
-            {post.status !== "published" ? <button className="mt-3 rounded bg-[#222820] px-4 py-2 text-sm font-semibold text-[#fff8ed] disabled:opacity-60" type="button" onClick={() => onPublish(post.id)} disabled={disabled}>今すぐ投稿</button> : null}
+            {post.container_id ? <div className="mt-3 rounded border border-[#e1d6c8] bg-[#fffaf2] p-3 text-xs leading-5 text-[#5e625c]">
+              <p>container ID: <span className="break-all font-mono">{post.container_id}</span></p>
+              <p>最終確認: {post.container_last_checked_at || "未確認"}</p>
+              <p>Meta status: {post.meta_status || "不明"} / error: {post.meta_error_code ?? "-"} / subcode: {post.meta_error_subcode ?? "-"}</p>
+              <p>retry: {post.retry_count ?? 0}</p>
+              {post.reconciliation_reason ? <p className="mt-1 font-semibold text-[#7a451b]">理由: {post.reconciliation_reason}</p> : null}
+            </div> : null}
+            {onReconcile && post.container_id ? <button className="mt-3 rounded border border-[#b98043] px-4 py-2 text-sm font-semibold text-[#7a451b] disabled:opacity-60" type="button" onClick={() => onReconcile(post.id)} disabled={disabled}>Meta状態を再確認</button> : null}
+            {post.status !== "published" && post.status !== "reconciliation_required" && post.container_status !== "publishing" ? <button className="mt-3 rounded bg-[#222820] px-4 py-2 text-sm font-semibold text-[#fff8ed] disabled:opacity-60" type="button" onClick={() => onPublish(post.id)} disabled={disabled}>今すぐ投稿</button> : null}
           </article>
         ))}
         {!posts.length ? <p className="text-sm text-[#5e625c]">該当投稿はありません。</p> : null}
