@@ -2,8 +2,9 @@ import { env } from "cloudflare:workers";
 import { POST as previewThreeChoice } from "@/app/api/sns/videos/three-choice/preview/route";
 import { POST as renderThreeChoice } from "@/app/api/sns/videos/three-choice/render/route";
 import { captionFromThreeChoice } from "@/app/lib/three-choice-video";
+import { RAVEN_TENANT_CONFIG } from "@/app/lib/tenant-config";
 
-const TENANT_ID = "raven-oracle";
+const TENANT_ID = RAVEN_TENANT_CONFIG.id;
 const DEFAULT_RENDER_BACKGROUND = "https://raven.fortunestudios.jp/api/reel-engine/assets?assetId=98ce1cea-851a-4811-8751-fe128d179702";
 function text(value: unknown, max = 4000) { return String(value ?? "").trim().slice(0, max); }
 

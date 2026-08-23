@@ -293,13 +293,13 @@ async function listSnsPosts(request: Request, env: Env) {
 
 function buildSnsDraft(input: Record<string, unknown>) {
   const theme = toJsonText(input.theme, 180) || "返信前の文章を整える3つの視点";
-  const purpose = toJsonText(input.purpose, 180) || "テキスト鑑定への案内";
+  const purpose = toJsonText(input.purpose, 180) || CHARACTER_CONFIG.sns.defaultPurpose;
   const character = toJsonText(input.character, 120) || CHARACTER_CONFIG.displayName;
   const cta = toJsonText(input.cta, 240) || CHARACTER_CONFIG.defaultCta;
   const title = toJsonText(input.title, 180) || theme;
   const caption =
     toJsonText(input.caption, 2200) ||
-    `${theme}\n\n送る前に、気持ち、目的、相手に求めることを一度分けてみてください。\n\n${cta}\n\n#レイヴンブラックウッド #文章鑑定 #相談整理 #返信前チェック`;
+    `${theme}\n\n送る前に、気持ち、目的、相手に求めることを一度分けてみてください。\n\n${cta}\n\n${CHARACTER_CONFIG.sns.hashtags.join(" ")}`;
   const script =
     toJsonText(input.script, 4000) ||
     `0-3秒: ${theme}\n3-10秒: まず気持ちと目的を分けます。\n10-22秒: 相手に何を求めているかを一文にします。\n22-27秒: 送る、待つ、保留するを選びます。\n27-30秒: ${cta}`;
@@ -795,7 +795,7 @@ async function createDueDailySnsPost(env: Env) {
       title,
       theme,
       CHARACTER_CONFIG.displayName,
-      "Instagram ReelsからRaven Oracleへ誘導",
+      CHARACTER_CONFIG.reelCta,
       cta,
       caption,
       CHARACTER_CONFIG.dailyThreeChoiceHashtags.join(" "),
@@ -1358,11 +1358,11 @@ async function queueAndPublishBlogSnsPost(env: Env, article: { id: string; slug?
   const title = sanitizeText(article.title || "今日の占い", 180);
   const keyMessage = sanitizeText(article.key_message || "今日の流れを整える一手を確認しましょう。", 240);
   const blogUrl = article.slug ? `${PUBLIC_URL}/blog/${article.slug}/` : `${PUBLIC_URL}/blog/`;
-  const caption = `${title}\n\n${keyMessage}\n\n詳しくはブログ「今日の占い」へ。\n${blogUrl}\n\n#レイヴンブラックウッド #今日の占い #易断 #占い`;
+  const caption = `${title}\n\n${keyMessage}\n\n${CHARACTER_CONFIG.reelCta}\n${blogUrl}\n\n${CHARACTER_CONFIG.sns.hashtags.join(" ")}`;
   await env.DB.prepare(
     `INSERT INTO sns_posts
       (id, tenant_id, platform, post_type, title, theme, category, character, purpose, cta, caption, hashtags, script, media_type, media_url, thumbnail_url, status, scheduled_at, ai_generated, duplicate_warning)
-      VALUES (?, ?, 'instagram', 'image', ?, ?, ?, 'レイヴン・ブラックウッド', 'ブログ「今日の占い」からSNS導線を作る', '詳しくはブログ「今日の占い」へ。', ?, ?, ?, 'image', ?, ?, 'scheduled', ?, 1, ?)`,
+      VALUES (?, ?, 'instagram', 'image', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'image', ?, ?, 'scheduled', ?, 1, ?)`,
   )
     .bind(
       id,
@@ -1370,8 +1370,11 @@ async function queueAndPublishBlogSnsPost(env: Env, article: { id: string; slug?
       `${title} / Instagram`.slice(0, 180),
       title,
       article.category || "今日の占い",
+      CHARACTER_CONFIG.displayName,
+      "ブログ「今日の占い」からSNS導線を作る",
+      CHARACTER_CONFIG.reelCta,
       caption,
-      "#レイヴンブラックウッド #今日の占い #易断 #占い",
+      CHARACTER_CONFIG.sns.hashtags.join(" "),
       `${title}\n${keyMessage}\nブログへ誘導`,
       `${PUBLIC_URL}/raven-blackwood-cover.png`,
       `${PUBLIC_URL}/raven-blackwood-cover.png`,
