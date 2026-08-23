@@ -1,7 +1,8 @@
 import { env } from "cloudflare:workers";
 import { listDriveVideos } from "@/app/lib/drive-import";
+import { RAVEN_TENANT_CONFIG } from "@/app/lib/tenant-config";
 
-const tenantId = "raven-oracle";
+const tenantId = RAVEN_TENANT_CONFIG.id;
 export async function GET(request: Request) {
   const folderId = new URL(request.url).searchParams.get("folderId") || String((env as any).GOOGLE_DRIVE_VIDEO_FOLDER_ID || "");
   try { return Response.json({ ok: true, videos: await listDriveVideos(env, { folderId }) }); }

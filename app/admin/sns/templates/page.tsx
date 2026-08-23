@@ -1,9 +1,10 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { RAVEN_TENANT_CONFIG } from "@/app/lib/tenant-config";
 
 type Template = { id: string; name: string; slug: string; format_key?: string; category: string; format_type: string; status: string; enabled?: number; is_system_preset?: number; version: number; duration_seconds: number; supported_platforms?: string; supported_characters?: string; description?: string };
-const tenantId = "raven-oracle";
+const tenantId = RAVEN_TENANT_CONFIG.id;
 
 const actionDescriptions: Record<string, string> = {
   preview: "企画の構成と入力データを確認します。",

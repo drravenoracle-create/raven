@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { RAVEN_TENANT_CONFIG } from "@/app/lib/tenant-config";
 
 function addDays(date: Date, days: number) {
   const next = new Date(date);
@@ -61,8 +62,8 @@ export function GET() {
   return Response.json(
     {
       ok: true,
-      worker: "raven-oracle",
-      tenantId: "raven-oracle",
+      worker: RAVEN_TENANT_CONFIG.id,
+      tenantId: RAVEN_TENANT_CONFIG.id,
       version: "sns-engine-raven-2026-08-09",
       instagram: {
         access_token_configured: Boolean(env.INSTAGRAM_ACCESS_TOKEN),
