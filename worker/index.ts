@@ -3,6 +3,7 @@ import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } fr
 import handler from "vinext/server/app-router-entry";
 import { decryptDriveRefreshToken } from "../app/lib/google-drive-oauth";
 import { buildCalendarBlog, buildCalendarSocial, buildDailyAlmanac } from "../app/lib/calendar/daily-almanac";
+import { observeInstagramContainer, readInstagramMetaError, sanitizeInstagramResponse, type InstagramReelState } from "../app/lib/instagram-reel-state";
 
 interface Env {
   ASSETS: Fetcher;
@@ -394,27 +395,69 @@ async function logRetryableInstagramAuthFailure(env: Env, input: { tenantId: str
     .run();
 }
 
-async function waitForInstagramContainer(env: Env, containerId: string) {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    const response = await fetch(`https://graph.facebook.com/v26.0/${containerId}?fields=status_code&access_token=${env.INSTAGRAM_ACCESS_TOKEN}`);
-    const body = (await response.json().catch(() => ({}))) as { status_code?: string; error?: unknown };
-    if (body.status_code === "FINISHED") return { ok: true, body };
-    if (body.status_code === "ERROR" || body.error) return { ok: false, body };
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-  }
-  return { ok: false, body: { status_code: "TIMEOUT" } };
+async function recordInstagramReelEvent(env: Env, input: {
+  tenantId: string;
+  postId: string;
+  containerId: string;
+  action: "create" | "check" | "publish";
+  status: string;
+  httpStatus: number;
+  body?: unknown;
+  retryCount?: number;
+  errorMessage?: string | null;
+}) {
+  const error = readInstagramMetaError(input.body);
+  await env.DB.prepare(
+    "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message, container_id, container_status, retry_count, meta_error_code, meta_error_subcode) VALUES (?, ?, ?, 'instagram', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  )
+    .bind(crypto.randomUUID(), input.tenantId, input.postId, input.action, input.status, input.httpStatus, sanitizeInstagramResponse(input.body), input.errorMessage || error.message, input.containerId, input.status, input.retryCount ?? 0, error.code, error.subcode)
+    .run();
 }
 
-async function publishInstagramContainer(env: Env, post: Record<string, unknown>, creationId: string, providerMode: string) {
+async function saveInstagramContainerState(env: Env, input: {
+  tenantId: string;
+  postId: string;
+  containerId: string;
+  state: InstagramReelState;
+  httpStatus?: number;
+  body?: unknown;
+}) {
+  const error = readInstagramMetaError(input.body);
+  await env.DB.prepare(
+    "UPDATE sns_posts SET container_id = ?, container_status = ?, container_created_at = COALESCE(container_created_at, CURRENT_TIMESTAMP), container_last_checked_at = CASE WHEN ? IS NULL THEN container_last_checked_at ELSE CURRENT_TIMESTAMP END, container_ready_at = CASE WHEN ? = 'ready' THEN CURRENT_TIMESTAMP ELSE container_ready_at END, meta_http_status = COALESCE(?, meta_http_status), meta_response_body = COALESCE(?, meta_response_body), meta_error_code = ?, meta_error_subcode = ?, meta_error_message = ?, meta_error_type = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?",
+  )
+    .bind(input.containerId, input.state, input.httpStatus ?? null, input.state, input.httpStatus ?? null, input.body ? sanitizeInstagramResponse(input.body) : null, error.code, error.subcode, error.message, error.type, input.tenantId, input.postId)
+    .run();
+}
+
+async function checkInstagramContainer(env: Env, post: Record<string, unknown>) {
+  const tenantId = String(post.tenant_id || TENANT_ID);
+  const postId = String(post.id || "");
+  const containerId = String(post.container_id || "");
+  if (!containerId) return { ok: false, inProgress: false, state: "failed" as const, error: "Instagram Reel container_id is missing." };
+  const response = await fetch(`https://graph.facebook.com/v26.0/${containerId}?fields=status_code&access_token=${env.INSTAGRAM_ACCESS_TOKEN}`);
+  const body = await response.json().catch(() => ({}));
+  const observation = observeInstagramContainer(response.status, body);
+  await saveInstagramContainerState(env, { tenantId, postId, containerId, state: observation.state, httpStatus: response.status, body });
+  await recordInstagramReelEvent(env, { tenantId, postId, containerId, action: "check", status: observation.state, httpStatus: response.status, body, retryCount: Number(post.retry_count || 0) });
+  if (observation.state === "processing") return { ok: false, inProgress: true, state: observation.state, body };
+  if (observation.state === "failed") return { ok: false, inProgress: false, state: observation.state, body };
+  return { ok: true, inProgress: false, state: observation.state, body };
+}
+
+async function publishInstagramContainer(env: Env, post: Record<string, unknown>, creationId: string, providerMode: string, isReel = false) {
   const tenantId = String(post.tenant_id || TENANT_ID);
   const id = String(post.id || "");
   const platform = String(post.platform || "instagram");
+  if (isReel) {
+    await saveInstagramContainerState(env, { tenantId, postId: id, containerId: creationId, state: "publishing" });
+  }
   const publishResponse = await fetch(`https://graph.facebook.com/v26.0/${env.INSTAGRAM_ACCOUNT_ID}/media_publish`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       creation_id: creationId,
-      access_token: env.INSTAGRAM_ACCESS_TOKEN,
+      access_token: env.INSTAGRAM_ACCESS_TOKEN || "",
     }),
   });
   const publishBody = (await publishResponse.json().catch(() => ({}))) as { id?: string; error?: unknown };
@@ -423,26 +466,32 @@ async function publishInstagramContainer(env: Env, post: Record<string, unknown>
       await logRetryableInstagramAuthFailure(env, { tenantId, id, platform, code: publishResponse.status, body: publishBody });
       return { ok: false, error: "Instagram access token expired. Please update INSTAGRAM_ACCESS_TOKEN.", details: publishBody };
     }
-    await env.DB.prepare(
-      "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?, ?)",
-    )
-      .bind(crypto.randomUUID(), tenantId, id, platform, publishResponse.status, JSON.stringify(publishBody), "Instagram media publish failed")
-      .run();
+    if (isReel) {
+      await saveInstagramContainerState(env, { tenantId, postId: id, containerId: creationId, state: "failed", httpStatus: publishResponse.status, body: publishBody });
+      await recordInstagramReelEvent(env, { tenantId, postId: id, containerId: creationId, action: "publish", status: "failed", httpStatus: publishResponse.status, body: publishBody, retryCount: Number(post.retry_count || 0) + 1, errorMessage: "Instagram media publish failed" });
+    } else {
+      await env.DB.prepare(
+        "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?, ?)",
+      ).bind(crypto.randomUUID(), tenantId, id, platform, publishResponse.status, sanitizeInstagramResponse(publishBody), "Instagram media publish failed").run();
+    }
     await env.DB.prepare("UPDATE sns_posts SET status = 'failed', retry_count = retry_count + 1, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
       .bind(tenantId, id)
       .run();
     return { ok: false, error: "Instagram media publish failed", details: publishBody };
   }
   const externalId = publishBody.id;
+  if (isReel) {
+    await saveInstagramContainerState(env, { tenantId, postId: id, containerId: creationId, state: "published", httpStatus: 200, body: { id: externalId } });
+    await recordInstagramReelEvent(env, { tenantId, postId: id, containerId: creationId, action: "publish", status: "published", httpStatus: 200, body: { id: externalId }, retryCount: Number(post.retry_count || 0) });
+  } else {
+    await env.DB.prepare(
+      "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body) VALUES (?, ?, ?, ?, 'publish', 'success', ?, ?)",
+    ).bind(crypto.randomUUID(), tenantId, id, platform, 200, sanitizeInstagramResponse({ mode: providerMode || "instagram", externalId })).run();
+  }
   await env.DB.prepare(
-    "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body) VALUES (?, ?, ?, ?, 'publish', 'success', ?, ?)",
+    "UPDATE sns_posts SET status = 'published', published_at = CURRENT_TIMESTAMP, external_post_id = ?, container_published_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE container_published_at END, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?",
   )
-    .bind(crypto.randomUUID(), tenantId, id, platform, 200, JSON.stringify({ mode: providerMode || "instagram", externalId }))
-    .run();
-  await env.DB.prepare(
-    "UPDATE sns_posts SET status = 'published', published_at = CURRENT_TIMESTAMP, external_post_id = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?",
-  )
-    .bind(externalId, tenantId, id)
+    .bind(externalId, isReel ? 1 : 0, tenantId, id)
     .run();
   return { ok: true, externalId };
 }
@@ -543,6 +592,25 @@ async function publishSnsPost(env: Env, post: Record<string, unknown>) {
   }
 
   const isReel = postType === "reel" || String(post.media_type || "") === "video";
+  if (isReel) {
+    if (String(post.status || "") === "published" || String(post.external_post_id || "").trim()) {
+      return { ok: true, externalId: String(post.external_post_id || ""), alreadyPublished: true };
+    }
+    const existingContainerId = String(post.container_id || "").trim();
+    if (existingContainerId) {
+      if (String(post.container_status || "") === "publishing") {
+        return { ok: false, inProgress: true, containerId: existingContainerId, state: "publishing", requiresReconciliation: true };
+      }
+      const checked = await checkInstagramContainer(env, post);
+      if (checked.inProgress) return { ok: false, inProgress: true, containerId: existingContainerId, state: "processing" };
+      if (!checked.ok) {
+        await env.DB.prepare("UPDATE sns_posts SET status = 'failed', retry_count = retry_count + 1, container_status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
+          .bind(tenantId, id).run();
+        return { ok: false, error: "Instagram Reel container returned an explicit error.", details: checked.body };
+      }
+      return publishInstagramContainer(env, post, existingContainerId, providerMode || "instagram", true);
+    }
+  }
   if (postType === "carousel" && mediaUrls.length >= 2 && !isReel) {
     const childIds: string[] = [];
     for (const mediaUrl of mediaUrls) {
@@ -617,18 +685,9 @@ async function publishSnsPost(env: Env, post: Record<string, unknown>) {
     return { ok: false, error: "Instagram media container creation failed", details: createBody };
   }
   if (isReel) {
-    const ready = await waitForInstagramContainer(env, createBody.id);
-    if (!ready.ok) {
-      await env.DB.prepare(
-        "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?, ?)",
-      )
-        .bind(crypto.randomUUID(), tenantId, id, platform, 502, JSON.stringify(ready.body), "Instagram Reel container was not ready.")
-        .run();
-      await env.DB.prepare("UPDATE sns_posts SET status = 'failed', retry_count = retry_count + 1, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
-        .bind(tenantId, id)
-        .run();
-      return { ok: false, error: "Instagram Reel container was not ready.", details: ready.body };
-    }
+    await saveInstagramContainerState(env, { tenantId, postId: id, containerId: createBody.id, state: "created", httpStatus: createResponse.status, body: createBody });
+    await recordInstagramReelEvent(env, { tenantId, postId: id, containerId: createBody.id, action: "create", status: "created", httpStatus: createResponse.status, body: createBody, retryCount: Number(post.retry_count || 0) });
+    return { ok: false, inProgress: true, containerId: createBody.id, state: "created" };
   }
   return publishInstagramContainer(env, post, createBody.id, providerMode || "instagram");
 }
@@ -776,7 +835,7 @@ async function publishDueSnsPosts(env: Env) {
     if (duplicateWarning.startsWith("daily-calendar:")) {
       const parts = duplicateWarning.split(":");
       await env.DB.prepare("UPDATE daily_calendar_runs SET sns_status = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND local_date = ? AND content_type = 'daily_calendar'")
-        .bind(publishResult?.ok ? "published" : "failed", TENANT_ID, parts[2]).run();
+        .bind(publishResult?.ok ? "published" : ("inProgress" in publishResult && publishResult.inProgress) ? "processing" : "failed", TENANT_ID, parts[2]).run();
     }
     count += 1;
   }
