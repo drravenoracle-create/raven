@@ -50,6 +50,10 @@ test("resolver exposes slices without returning the whole tenant", () => {
   assert.equal(resolver.getSnsConfig("raven-oracle").tenantId, "raven-oracle");
   assert.throws(() => resolver.getSnsConfig("unknown-tenant"), /Unknown tenant/);
   assert.equal(resolver.getReelConfig("raven-oracle").storage.namespace, "reel-assets");
+  assert.equal(resolver.getReelConfig("raven-oracle").tenantId, "raven-oracle");
+  assert.equal(resolver.getReelConfig("raven-oracle").storageRef, "reel-assets");
+  assert.equal(resolver.getReelConfig("raven-oracle").backgroundLibraryRef, "media_video_assets");
+  assert.equal(resolver.getReelConfig("raven-oracle").publicBaseUrl, "https://raven.fortunestudios.jp");
   assert.equal(resolver.getGrowthConfig("raven-oracle").tenantId, "raven-oracle");
   assert.deepEqual(resolver.getEntitlements("raven-oracle").tenantOverrides, {});
   assert.equal("persona" in resolver.getTenantConfig("raven-oracle"), false);
