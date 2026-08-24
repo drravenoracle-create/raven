@@ -20,7 +20,7 @@ async function safeFirst<T>(query: Promise<T | null>, fallback: T | null = null)
 }
 
 export async function GET() {
-  const [settings, connectors, metrics, conversions, insights, calendar, segments, experiments, experimentStats, costs, customers, revenue, actions, reports] = await Promise.all([
+  const [settings, connectors, metrics, conversions, insights, calendar, segments, experiments, experimentStats, costs, customers, revenue, actions, reports, proposals] = await Promise.all([
     safeFirst(env.DB.prepare("SELECT * FROM growth_engine_settings WHERE tenant_id = ? LIMIT 1").bind(GROWTH_ENGINE_TENANT_ID).first()),
     safeAll(env.DB.prepare("SELECT source, provider, enabled, sync_status, last_success_at, last_error FROM growth_data_connectors WHERE tenant_id = ? ORDER BY source").bind(GROWTH_ENGINE_TENANT_ID).all()),
     safeAll(env.DB.prepare("SELECT source, entity_type, metric_name, metric_value, data_quality, measured_at FROM growth_metric_points WHERE tenant_id = ? ORDER BY datetime(created_at) DESC LIMIT 20").bind(GROWTH_ENGINE_TENANT_ID).all()),
@@ -35,6 +35,7 @@ export async function GET() {
     safeAll(env.DB.prepare("SELECT service_key, revenue, gross_margin, attribution_type, revenue_kind, occurred_at FROM growth_revenue_records WHERE tenant_id = ? ORDER BY datetime(occurred_at) DESC LIMIT 20").bind(GROWTH_ENGINE_TENANT_ID).all()),
     safeAll(env.DB.prepare("SELECT id, action_type, channel, risk_level, requires_approval, guard_result, status, created_at FROM growth_autonomous_actions WHERE tenant_id = ? ORDER BY datetime(created_at) DESC LIMIT 20").bind(GROWTH_ENGINE_TENANT_ID).all()),
     safeAll(env.DB.prepare("SELECT period_type, period_start, period_end, summary, status, created_at FROM growth_executive_reports WHERE tenant_id = ? ORDER BY datetime(created_at) DESC LIMIT 10").bind(GROWTH_ENGINE_TENANT_ID).all()),
+    safeAll(env.DB.prepare("SELECT p.proposal_id, p.hypothesis_id, p.title, p.summary, p.rationale, p.expected_outcome, p.target_metric, p.confidence, p.risk_class, p.evidence_ids_json, p.missing_evidence_json, p.market, p.country, p.locale, p.status, p.execution_allowed, p.created_at, p.updated_at, p.reviewed_at, p.reviewed_by, p.review_note, h.observation, h.hypothesis FROM growth_proposals p LEFT JOIN growth_hypotheses h ON h.tenant_id = p.tenant_id AND h.hypothesis_id = p.hypothesis_id WHERE p.tenant_id = ? ORDER BY datetime(p.created_at) DESC LIMIT 20").bind(GROWTH_ENGINE_TENANT_ID).all()),
   ]);
 
   return Response.json(
@@ -53,6 +54,7 @@ export async function GET() {
       revenue,
       actions,
       reports,
+      proposals,
     },
     { headers: { "Cache-Control": "no-store" } },
   );

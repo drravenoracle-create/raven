@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ProposalReviewPanel from "./ProposalReviewPanel";
 
 type Connector = { source: string; provider: string; enabled: number; sync_status: string; last_success_at?: string; last_error?: string };
 type Conversion = { event_name: string; goal_name?: string; goal_value?: number; attribution_type: string; occurred_at?: string };
@@ -10,6 +11,7 @@ type Revenue = { service_key?: string; revenue: number; attribution_type: string
 type Action = { id: string; action_type: string; channel?: string; risk_level: string; requires_approval: number; guard_result: string; status: string };
 type Report = { period_type: string; period_start: string; period_end: string; summary: string; status: string };
 type CalendarItem = { channel?: string; content_type?: string; topic?: string; scheduled_at?: string; status?: string; guard_status?: string };
+type Proposal = { proposal_id: string; title: string; summary: string; rationale: string; expected_outcome?: string | null; target_metric?: string | null; confidence: number; risk_class: string; evidence_ids_json: string; missing_evidence_json: string; market?: string | null; locale?: string | null; status: string; execution_allowed: number; created_at?: string; reviewed_by?: string | null; review_note?: string | null };
 
 async function loadDashboard() {
   const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || ""}/api/growth-engine/dashboard`, { cache: "no-store" }).catch(() => null);
@@ -33,6 +35,7 @@ export default async function GrowthAdminPage() {
   const actions = (dashboard.actions || []) as Action[];
   const reports = (dashboard.reports || []) as Report[];
   const calendar = (dashboard.calendar || []) as CalendarItem[];
+  const proposals = (dashboard.proposals || []) as Proposal[];
   const experimentSummary = dashboard.experimentSummary || {};
   const approvalCount = actions.filter((item) => item.requires_approval && item.status === "queued").length;
   const measuredRevenue = revenue.filter((item) => item.revenue_kind === "measured").reduce((sum, item) => sum + Number(item.revenue || 0), 0);
@@ -56,6 +59,7 @@ export default async function GrowthAdminPage() {
         </section>
 
         <section className="mt-8 grid gap-5 lg:grid-cols-2">
+          <ProposalReviewPanel initial={proposals} />
           <Panel title="Executive Brief">
             {reports.map((item, index) => <Row key={`${item.period_type}-${index}`} title={`${item.period_type}: ${item.period_start} - ${item.period_end}`} meta={item.status} body={item.summary} />)}
             {!reports.length ? <Empty text="Executive Reportはまだありません。" /> : null}
