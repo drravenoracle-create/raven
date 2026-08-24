@@ -68,7 +68,9 @@ export async function GET(request: Request) {
         listRollbackPlans(env.DB, experimentId, tenantId),
         listExperimentFeedback(env.DB, experimentId, tenantId),
       ]);
-      return Response.json({ ok: true, detail: { ...detail, variants, runs, measurements: measurements.measurements, measurementGuardrails: measurements.guardrails, resultEvaluations: evaluations, rollbackPlans, feedback } }, { headers: { "Cache-Control": "no-store" } });
+      const confirmed = (evaluations as Array<Record<string, unknown>>).find((item) => item.status === "CONFIRMED");
+      const rollbackRecommendation = confirmed ? await getRollbackRecommendation(env.DB, String(confirmed.evaluation_id), {}, tenantId) : null;
+      return Response.json({ ok: true, detail: { ...detail, variants, runs, measurements: measurements.measurements, measurementGuardrails: measurements.guardrails, resultEvaluations: evaluations, rollbackPlans, feedback, rollbackRecommendation } }, { headers: { "Cache-Control": "no-store" } });
     }
     const [experiments, summary, recommendations] = await Promise.all([
       listExperiments(env.DB, {

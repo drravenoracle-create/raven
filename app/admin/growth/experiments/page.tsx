@@ -66,6 +66,7 @@ type Detail = {
   resultEvaluations: ResultEvaluation[];
   rollbackPlans: RollbackPlan[];
   feedback: Feedback[];
+  rollbackRecommendation?: { recommendation?: { recommended?: boolean; reason?: string; rollbackType?: string; riskClass?: string; automaticExecution?: boolean } | null } | null;
 };
 type Variant = { variant_id: string; name: string; kind: string; allocation_weight: number; status: string; configuration_json?: string };
 type Run = { run_id: string; status: string; started_at?: string; stopped_at?: string; start_reason?: string; stop_reason?: string; exposure_count?: number };
@@ -482,6 +483,7 @@ export default function GrowthExperimentsPage() {
             {selected ? <Panel title="Rollback Plan / Internal Feedback" eyebrow="Stage 5">
               <div className="grid gap-3">
                 <p className="text-xs leading-5 text-[#5e625c]">Rollbackは計画と承認までです。Web、SNS、価格、課金、Trial、外部APIへの変更は実行しません。</p>
+                {detail?.rollbackRecommendation?.recommendation ? <Info label="Rollback Recommendation" value={`${detail.rollbackRecommendation.recommendation.recommended ? "RECOMMENDED" : "NONE"} / ${detail.rollbackRecommendation.recommendation.reason || "-"} / Risk ${detail.rollbackRecommendation.recommendation.riskClass || "-"} / Auto ${detail.rollbackRecommendation.recommendation.automaticExecution ? "禁止違反" : "実行なし"}`} /> : null}
                 {confirmedEvaluation ? <button className="rounded border border-[#8c4b3b] px-4 py-2 text-sm font-semibold text-[#8c4b3b] disabled:opacity-60" type="button" disabled={busy} onClick={() => createRollbackPlan(confirmedEvaluation.evaluation_id)}>Rollback Recommendation / Plan作成</button> : null}
                 {(detail?.rollbackPlans || []).map((plan) => <div key={plan.rollback_plan_id} className="rounded border border-[#d7cabc] bg-white p-3"><Info label={`${plan.status} / ${plan.approval_status} / ${plan.risk_class}`} value={`${plan.reason} / ${plan.rollback_type}`} /><Info label="Steps / Scope" value={`${plan.steps_json || "[]"} / ${plan.affected_scope_json || "{}"}`} /><div className="mt-2 flex flex-wrap gap-2">{plan.status === "DRAFT" ? <><button className="rounded border border-[#596d51] px-3 py-2 text-xs font-semibold text-[#596d51]" type="button" disabled={busy} onClick={() => rollbackPlanAction(plan.rollback_plan_id, "approveRollbackPlan")}>承認</button><button className="rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold" type="button" disabled={busy} onClick={() => rollbackPlanAction(plan.rollback_plan_id, "rejectRollbackPlan")}>却下</button></> : null}</div></div>)}
                 {(detail?.feedback || []).map((item) => <div key={item.feedback_id} className="rounded border border-[#d7cabc] bg-white p-3"><Info label={`Feedback ${item.result}`} value={`${item.status} / Evidence Source: ${item.evidence_source_id}`} /></div>)}
