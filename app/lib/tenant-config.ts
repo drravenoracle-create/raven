@@ -1,4 +1,4 @@
-import { RAVEN_CHARACTER_CONFIG } from "./character-config";
+import { RAVEN_CHARACTER_CONFIG } from "./character-config.ts";
 
 export type TenantIdentity = {
   tenantId: string;
