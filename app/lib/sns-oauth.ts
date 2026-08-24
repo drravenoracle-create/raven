@@ -1,7 +1,8 @@
 import { env } from "cloudflare:workers";
 import { encryptDriveRefreshToken } from "@/app/lib/google-drive-oauth";
+import { resolveSnsConfig } from "@/app/lib/tenant-config-resolver";
 
-export const SNS_TENANT_ID = "raven-oracle";
+export const SNS_TENANT_ID = resolveSnsConfig().tenantId;
 export const YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload";
 export const YOUTUBE_READ_SCOPE = "https://www.googleapis.com/auth/youtube.readonly";
 export const YOUTUBE_SCOPES = [YOUTUBE_UPLOAD_SCOPE, YOUTUBE_READ_SCOPE] as const;

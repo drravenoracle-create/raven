@@ -125,6 +125,11 @@ export type SnsConfigSlice = {
   defaultCta: string;
   hashtags: string[];
   publicBaseUrl: string;
+  defaultLocale?: string;
+  templateDefaults?: Record<string, unknown>;
+  publishingDefaults?: Record<string, unknown>;
+  providerRefs?: Record<string, string>;
+  storageRefs?: Record<string, string>;
 };
 
 export type ReelConfigSlice = {
@@ -301,6 +306,11 @@ export function adaptRavenTenantConfig(legacy: RavenTenantConfig = RAVEN_TENANT_
       defaultCta: legacy.sns.defaultCta,
       hashtags: legacy.sns.hashtags,
       publicBaseUrl: publicUrl,
+      defaultLocale: "ja-JP",
+      templateDefaults: {},
+      publishingDefaults: {},
+      providerRefs: { instagram: "instagram", tiktok: "tiktok", youtube: "youtube" },
+      storageRefs: { publicBaseUrl: publicUrl },
     },
     reel: {
       enabled: true,
