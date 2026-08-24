@@ -6,10 +6,6 @@ account_id = "c7ce2613bf30affed8d2caae0068beb5"
 workers_dev = true
 preview_urls = false
 
-routes = [
-  { pattern = "raven.fortunestudios.jp/*", zone_name = "fortunestudios.jp" }
-]
-
 [assets]
 directory = "./dist/client"
 binding = "ASSETS"
