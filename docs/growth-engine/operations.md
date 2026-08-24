@@ -2,6 +2,25 @@
 
 ## Migration
 
+### Production Growth Intelligence controlled migrations
+
+Read [`docs/operations/production-d1-controlled-migrations.md`](../operations/production-d1-controlled-migrations.md) before any Production D1 work. Production uses a legacy migration history; do not infer Production state from repository migration numbers.
+
+For every future Growth migration:
+
+1. Read the Migration Ledger.
+2. Inspect the actual Production schema.
+3. Export D1 and verify the checksum.
+4. Compare the required schema with the actual schema.
+5. Apply only missing controlled changes after separate approval.
+6. Verify existing data counts and feature tables.
+7. Deploy the matching code after a clean preflight.
+8. Run read-only smoke tests.
+
+Migrations `0028-0032` are already applied manually and must not be reapplied.
+The same actual-schema-plus-ledger check is required for future migrations
+`0033+`.
+
 Apply only to the Raven D1 database under the Raven Cloudflare account after confirming Wrangler identity:
 
 ```powershell
