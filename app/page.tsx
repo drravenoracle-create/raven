@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { getSortedBlogPosts } from "./lib/blog";
 import { OpeningCampaignBanner } from "./components/opening-campaign-banner";
-import { isOpeningCampaignActive } from "./lib/opening-campaign";
+import { isOpeningCampaignActive, loadOpeningCampaignConfig } from "./lib/opening-campaign";
 import { RAVEN_TENANT_CONFIG } from "./lib/tenant-config";
 
 type HomePost = {
@@ -106,7 +106,8 @@ async function loadLatestPosts(): Promise<HomePost[]> {
 
 export default async function Home() {
   const latestPosts = await loadLatestPosts();
-  const openingCampaign = isOpeningCampaignActive(RAVEN_TENANT_CONFIG.openingCampaign) ? RAVEN_TENANT_CONFIG.openingCampaign : null;
+  const effectiveOpeningCampaign = await loadOpeningCampaignConfig(env.DB, RAVEN_TENANT_CONFIG);
+  const openingCampaign = isOpeningCampaignActive(effectiveOpeningCampaign) ? effectiveOpeningCampaign : null;
 
   return (
     <main className="raven-page min-h-screen text-[#20241f]">

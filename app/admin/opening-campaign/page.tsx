@@ -1,12 +1,12 @@
 import { env } from "cloudflare:workers";
 import Link from "next/link";
-import { deriveOpeningCampaignState } from "../../lib/opening-campaign";
+import { deriveOpeningCampaignState, loadOpeningCampaignConfig } from "../../lib/opening-campaign";
 import { RAVEN_TENANT_CONFIG } from "../../lib/tenant-config";
 
 export const metadata = { title: "Opening Campaign | Raven Admin" };
 
 export default async function OpeningCampaignAdminPage() {
-  const config = RAVEN_TENANT_CONFIG.openingCampaign;
+  const config = await loadOpeningCampaignConfig(env.DB, RAVEN_TENANT_CONFIG);
   let counts: Array<{ event_name: string; count: number }> = [], usage = 0, conversions = 0;
   try {
     const events = await env.DB.prepare("SELECT event_name, COUNT(*) AS count FROM opening_campaign_events WHERE campaign_id = ? GROUP BY event_name").bind(config.campaignId).all<{ event_name: string; count: number }>();
