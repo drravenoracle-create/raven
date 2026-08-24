@@ -40,6 +40,20 @@ export type TenantAnalyticsConfig = { enabled?: boolean; publicUrl: string; sour
 export type TenantGrowthConfig = { tenantId: string };
 export type TenantStorageConfig = { mediaNamespace: string; reelNamespace: string };
 export type TenantEntitlements = { plan?: string; features?: Record<string, boolean>; limits?: Record<string, number> };
+export type TenantOpeningCampaignConfig = {
+  campaignId: string;
+  campaignName: string;
+  enabled: boolean;
+  startAt: string | null;
+  endAt: string | null;
+  trialEnabled: boolean;
+  trialScope: "member" | "menu" | "tenant";
+  trialLimit: number;
+  campaignMessage: string;
+  primaryCta: string;
+  secondaryCta: string;
+  targetAudience: string;
+};
 
 export type TenantConfig = {
   id: string;
@@ -57,6 +71,7 @@ export type TenantConfig = {
   growth: TenantGrowthConfig;
   storage: TenantStorageConfig;
   entitlements: TenantEntitlements;
+  openingCampaign: TenantOpeningCampaignConfig;
 };
 
 const RAVEN_PUBLIC_URL = "https://raven.fortunestudios.jp";
@@ -82,6 +97,20 @@ export const RAVEN_TENANT_CONFIG: TenantConfig = {
   growth: { tenantId: RAVEN_CHARACTER_CONFIG.tenantId },
   storage: { mediaNamespace: "media", reelNamespace: "reel-assets" },
   entitlements: {},
+  openingCampaign: {
+    campaignId: "raven-guild-opening",
+    campaignName: "Raven Guild Opening Campaign",
+    enabled: false,
+    startAt: null,
+    endAt: null,
+    trialEnabled: true,
+    trialScope: "member",
+    trialLimit: 1,
+    campaignMessage: "会員登録後、無料でレイヴンの鑑定をお試しいただけます。",
+    primaryCta: "無料登録",
+    secondaryCta: "詳しく見る",
+    targetAudience: "raven-site-members",
+  },
 };
 
 export function getTenantConfig(tenantId = RAVEN_TENANT_CONFIG.id) {
