@@ -15,6 +15,7 @@ import {
 import { runExperimentPreflight } from "@/app/lib/growth-experiment-preflight";
 import { listExperimentMeasurements, recordExperimentMeasurement } from "@/app/lib/growth-experiment-measurement";
 import { confirmExperimentResult, evaluateExperimentResult, listResultEvaluations, rejectExperimentResult } from "@/app/lib/growth-experiment-result";
+import { approveRollbackPlan, createRollbackPlan, getRollbackRecommendation, listExperimentFeedback, listRollbackPlans, registerExperimentFeedback, rejectRollbackPlan } from "@/app/lib/growth-experiment-feedback";
 import {
   assignExperimentSubject,
   createExperimentVariant,
@@ -59,13 +60,15 @@ export async function GET(request: Request) {
     if (id) {
       const detail = await listExperimentDetail(env.DB, id, tenantId);
       const experimentId = String(detail.experiment.experiment_id);
-      const [variants, runs, measurements, evaluations] = await Promise.all([
+      const [variants, runs, measurements, evaluations, rollbackPlans, feedback] = await Promise.all([
         listExperimentVariants(env.DB, experimentId, tenantId),
         listExperimentRuns(env.DB, experimentId, tenantId),
         listExperimentMeasurements(env.DB, experimentId, tenantId),
         listResultEvaluations(env.DB, experimentId, tenantId),
+        listRollbackPlans(env.DB, experimentId, tenantId),
+        listExperimentFeedback(env.DB, experimentId, tenantId),
       ]);
-      return Response.json({ ok: true, detail: { ...detail, variants, runs, measurements: measurements.measurements, measurementGuardrails: measurements.guardrails, resultEvaluations: evaluations } }, { headers: { "Cache-Control": "no-store" } });
+      return Response.json({ ok: true, detail: { ...detail, variants, runs, measurements: measurements.measurements, measurementGuardrails: measurements.guardrails, resultEvaluations: evaluations, rollbackPlans, feedback } }, { headers: { "Cache-Control": "no-store" } });
     }
     const [experiments, summary, recommendations] = await Promise.all([
       listExperiments(env.DB, {
@@ -141,6 +144,11 @@ export async function POST(request: Request) {
       const evaluationId = clean(body.evaluation_id ?? body.evaluationId, 120); if (!evaluationId) throw new Error("evaluation_id is required.");
       return Response.json({ ok: true, evaluation: await rejectExperimentResult(env.DB, evaluationId, actorBody, tenantId) });
     }
+    if (action === "rollbackRecommendation") return Response.json({ ok: true, recommendation: await getRollbackRecommendation(env.DB, clean(body.evaluation_id ?? body.evaluationId, 120), actorBody, tenantId) });
+    if (action === "createRollbackPlan") return Response.json({ ok: true, plan: await createRollbackPlan(env.DB, id, actorBody, tenantId) }, { status: 201 });
+    if (action === "approveRollbackPlan") return Response.json({ ok: true, plan: await approveRollbackPlan(env.DB, clean(body.rollback_plan_id ?? body.rollbackPlanId, 120), actorBody, tenantId) });
+    if (action === "rejectRollbackPlan") return Response.json({ ok: true, plan: await rejectRollbackPlan(env.DB, clean(body.rollback_plan_id ?? body.rollbackPlanId, 120), actorBody, tenantId) });
+    if (action === "feedback") return Response.json({ ok: true, feedback: await registerExperimentFeedback(env.DB, clean(body.evaluation_id ?? body.evaluationId, 120), actorBody, tenantId) }, { status: 201 });
     if (action === "preflight") {
       return Response.json({ ok: true, preflight: await runExperimentPreflight(env.DB, id, {
         tenantId,

@@ -64,12 +64,16 @@ type Detail = {
   measurements: Measurement[];
   measurementGuardrails: Guardrail[];
   resultEvaluations: ResultEvaluation[];
+  rollbackPlans: RollbackPlan[];
+  feedback: Feedback[];
 };
 type Variant = { variant_id: string; name: string; kind: string; allocation_weight: number; status: string; configuration_json?: string };
 type Run = { run_id: string; status: string; started_at?: string; stopped_at?: string; start_reason?: string; stop_reason?: string; exposure_count?: number };
 type Measurement = { id: string; run_id?: string; variant_id?: string; metric_name: string; metric_role?: string; baseline_value?: number | null; measured_value?: number | null; absolute_change?: number | null; relative_change?: number | null; sample_size?: number; availability?: string; source?: string; measured_at?: string };
 type Guardrail = { result: string; reasons_json?: string; checked_at?: string };
 type ResultEvaluation = { evaluation_id: string; candidate_result: string; stop_recommendation: string; primary_metric: string; control_value?: number | null; variant_value?: number | null; absolute_difference?: number | null; relative_difference?: number | null; sample_size: number; confidence?: number | null; guardrail_status: string; reasons_json?: string; blockers_json?: string; evaluated_at?: string; status: string };
+type RollbackPlan = { rollback_plan_id: string; evaluation_id: string; reason: string; rollback_type: string; risk_class: string; approval_required: number; approval_status: string; status: string; steps_json?: string; affected_scope_json?: string };
+type Feedback = { feedback_id: string; evaluation_id: string; evidence_source_id: string; result: string; status: string };
 type Preflight = { experimentId: string; allowed: boolean; decision: string; approvalStatus: string; evidenceDecision: { decision?: string; sufficiency?: { level?: string } }; riskClass: string; guardrails: Array<{ type: string; result: string; reason: string }>; blockers: string[]; warnings: string[]; evaluatedAt: string };
 
 function metricOptions(experiment?: Experiment) {
@@ -123,6 +127,7 @@ export default function GrowthExperimentsPage() {
 
   const selected = detail?.experiment || null;
   const candidate = detail?.resultEvaluations?.find((item) => item.status === "CANDIDATE") || null;
+  const confirmedEvaluation = detail?.resultEvaluations?.find((item) => item.status === "CONFIRMED") || null;
   const filtered = useMemo(() => experiments, [experiments]);
 
   async function readJson(response: Response) {
@@ -281,6 +286,21 @@ export default function GrowthExperimentsPage() {
   async function rejectResult(evaluationId: string) {
     if (!selected) return;
     await post({ action: "rejectResult", id: selected.experiment_id, evaluation_id: evaluationId, reason: "再評価が必要なためResult Candidateを却下しました。" }, "Result Candidateを却下しました。");
+  }
+
+  async function createRollbackPlan(evaluationId: string) {
+    if (!selected) return;
+    await post({ action: "createRollbackPlan", id: selected.experiment_id, evaluation_id: evaluationId, reversible: true }, "Rollback Planを作成しました。実行は行いません。");
+  }
+
+  async function rollbackPlanAction(planId: string, action: "approveRollbackPlan" | "rejectRollbackPlan") {
+    if (!selected) return;
+    await post({ action, id: selected.experiment_id, rollback_plan_id: planId, reason: "管理画面で確認しました。" }, action === "approveRollbackPlan" ? "Rollback Planを承認しました。実行は行いません。" : "Rollback Planを却下しました。");
+  }
+
+  async function registerFeedback(evaluationId: string) {
+    if (!selected) return;
+    await post({ action: "feedback", id: selected.experiment_id, evaluation_id: evaluationId }, "内部EvidenceへFeedbackを登録しました。");
   }
 
   async function recordResult(action: "recordResult" | "complete") {
@@ -457,6 +477,16 @@ export default function GrowthExperimentsPage() {
             {selected ? <Panel title="Result Candidate" eyebrow="Decision">
               {candidate ? <div className="grid gap-2"><Info label="候補 / 推奨" value={`${candidate.candidate_result} / ${candidate.stop_recommendation}`} /><Info label="Primary KPI" value={`${candidate.primary_metric} / Control ${candidate.control_value ?? "-"} / Variant ${candidate.variant_value ?? "-"}`} /><Info label="差分 / Sample" value={`Absolute ${candidate.absolute_difference ?? "-"} / Relative ${candidate.relative_difference ?? "-"}% / n=${candidate.sample_size}`} /><Info label="Guardrail" value={candidate.guardrail_status} /><Info label="Blocker / Reason" value={`${candidate.blockers_json || "[]"} / ${candidate.reasons_json || "[]"}`} /><Info label="Evaluation time" value={candidate.evaluated_at || "-"} /><div className="flex flex-wrap gap-2"><button className="rounded bg-[#222820] px-4 py-2 text-sm font-semibold text-[#fff8ed] disabled:opacity-60" type="button" disabled={busy} onClick={() => confirmResult(candidate.evaluation_id)}>Confirm Result</button><button className="rounded border border-[#d7cabc] px-4 py-2 text-sm font-semibold disabled:opacity-60" type="button" disabled={busy} onClick={() => rejectResult(candidate.evaluation_id)}>再評価 / 却下</button></div></div> : <p className="text-sm text-[#5e625c]">Result Candidateはありません。最新測定後に評価してください。</p>}
               <p className="mt-3 text-xs leading-5 text-[#5e625c]">候補は自動確定されません。Confirm Result時に最新測定値・Guardrail・Sample Sizeを再確認します。Rollbackや外部変更は行いません。</p>
+            </Panel> : null}
+
+            {selected ? <Panel title="Rollback Plan / Internal Feedback" eyebrow="Stage 5">
+              <div className="grid gap-3">
+                <p className="text-xs leading-5 text-[#5e625c]">Rollbackは計画と承認までです。Web、SNS、価格、課金、Trial、外部APIへの変更は実行しません。</p>
+                {confirmedEvaluation ? <button className="rounded border border-[#8c4b3b] px-4 py-2 text-sm font-semibold text-[#8c4b3b] disabled:opacity-60" type="button" disabled={busy} onClick={() => createRollbackPlan(confirmedEvaluation.evaluation_id)}>Rollback Recommendation / Plan作成</button> : null}
+                {(detail?.rollbackPlans || []).map((plan) => <div key={plan.rollback_plan_id} className="rounded border border-[#d7cabc] bg-white p-3"><Info label={`${plan.status} / ${plan.approval_status} / ${plan.risk_class}`} value={`${plan.reason} / ${plan.rollback_type}`} /><Info label="Steps / Scope" value={`${plan.steps_json || "[]"} / ${plan.affected_scope_json || "{}"}`} /><div className="mt-2 flex flex-wrap gap-2">{plan.status === "DRAFT" ? <><button className="rounded border border-[#596d51] px-3 py-2 text-xs font-semibold text-[#596d51]" type="button" disabled={busy} onClick={() => rollbackPlanAction(plan.rollback_plan_id, "approveRollbackPlan")}>承認</button><button className="rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold" type="button" disabled={busy} onClick={() => rollbackPlanAction(plan.rollback_plan_id, "rejectRollbackPlan")}>却下</button></> : null}</div></div>)}
+                {(detail?.feedback || []).map((item) => <div key={item.feedback_id} className="rounded border border-[#d7cabc] bg-white p-3"><Info label={`Feedback ${item.result}`} value={`${item.status} / Evidence Source: ${item.evidence_source_id}`} /></div>)}
+                {confirmedEvaluation ? <button className="rounded border border-[#596d51] px-4 py-2 text-sm font-semibold text-[#596d51] disabled:opacity-60" type="button" disabled={busy || Boolean(detail?.feedback?.some((item) => item.evaluation_id === confirmedEvaluation.evaluation_id))} onClick={() => registerFeedback(confirmedEvaluation.evaluation_id)}>確認済みResultを内部Evidenceへ登録</button> : null}
+              </div>
             </Panel> : null}
 
               {selected ? (
