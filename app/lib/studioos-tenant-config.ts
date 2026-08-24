@@ -134,12 +134,19 @@ export type SnsConfigSlice = {
 
 export type ReelConfigSlice = {
   enabled?: boolean;
+  tenantId: string;
   rendererProvider?: string;
   storage: { namespace: string };
   backgroundLibrary: string[];
   brandDefaults: { presetId: string; cta: string };
   defaultAspectRatio: string;
   defaultDuration: number;
+  storageRef?: string;
+  backgroundLibraryRef?: string;
+  publicBaseUrl?: string;
+  defaultLocale?: string;
+  renderDefaults?: { aspectRatio: string; duration: number };
+  providerRefs?: Record<string, string>;
 };
 
 export type GrowthConfigSlice = {
@@ -314,12 +321,19 @@ export function adaptRavenTenantConfig(legacy: RavenTenantConfig = RAVEN_TENANT_
     },
     reel: {
       enabled: true,
+      tenantId: legacy.id,
       rendererProvider: "configured",
       storage: { namespace: legacy.reel.storageNamespace },
       backgroundLibrary: legacy.reel.backgroundCategories,
       brandDefaults: { presetId: legacy.reel.brandPresetId, cta: legacy.reel.defaultCta },
       defaultAspectRatio: legacy.reel.defaultAspectRatio,
       defaultDuration: legacy.reel.defaultDuration,
+      storageRef: legacy.reel.storageNamespace,
+      backgroundLibraryRef: "media_video_assets",
+      publicBaseUrl: publicUrl,
+      defaultLocale: "ja-JP",
+      renderDefaults: { aspectRatio: legacy.reel.defaultAspectRatio, duration: legacy.reel.defaultDuration },
+      providerRefs: { renderer: "configured", storage: "r2", media: "r2" },
     },
     growth: {
       enabled: true,
