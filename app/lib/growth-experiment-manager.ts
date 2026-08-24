@@ -1,4 +1,5 @@
 import { GROWTH_ENGINE_TENANT_ID } from "@/app/lib/growth-engine";
+import { runExperimentPreflight } from "./growth-experiment-preflight.ts";
 
 type D1 = {
   prepare(sql: string): {
@@ -335,6 +336,17 @@ export async function transitionExperiment(db: D1, idOrCode: string, toStatusInp
   const toStatus = normalizeStatus(toStatusInput, fromStatus);
   if (fromStatus === toStatus) return current;
   if (!statusTransitions[fromStatus]?.includes(toStatus)) throw new Error(`Invalid transition: ${fromStatus} -> ${toStatus}`);
+  if (toStatus === "RUNNING") {
+    const preflight = await runExperimentPreflight(db, String(current.experiment_id), {
+      tenantId,
+      ...(input.guildId !== undefined || input.guild_id !== undefined ? { guildId: clean(input.guildId ?? input.guild_id, 120) || null } : {}),
+      ...(input.market !== undefined ? { market: clean(input.market, 80) || null } : {}),
+      ...(input.country !== undefined ? { country: clean(input.country, 80) || null } : {}),
+      ...(input.locale !== undefined ? { locale: clean(input.locale, 40) || null } : {}),
+      ...(input.characterId !== undefined || input.character_id !== undefined ? { characterId: clean(input.characterId ?? input.character_id, 120) || null } : {}),
+    }, clean(input.actor, 120) || "admin", true);
+    if (!preflight.allowed) throw new Error(`Experiment start blocked: ${preflight.decision}. ${preflight.blockers.join(" ")}`);
+  }
   const nowField = toStatus === "RUNNING" ? "actual_start_at = COALESCE(actual_start_at, CURRENT_TIMESTAMP)," : toStatus === "COMPLETED" ? "actual_end_at = COALESCE(actual_end_at, CURRENT_TIMESTAMP)," : "";
   await db.prepare(`UPDATE growth_experiments SET ${nowField} status = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND experiment_id = ?`)
     .bind(toStatus, tenantId, current.experiment_id)

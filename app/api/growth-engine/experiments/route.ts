@@ -13,6 +13,7 @@ import {
   transitionExperiment,
   updateExperiment,
 } from "@/app/lib/growth-experiment-manager";
+import { runExperimentPreflight } from "@/app/lib/growth-experiment-preflight";
 
 function clean(value: unknown, maxLength = 240) {
   return String(value ?? "").trim().slice(0, maxLength);
@@ -97,6 +98,16 @@ export async function POST(request: Request) {
       return Response.json({ ok: true, experiment: await createExperimentFromRecommendation(env.DB, recommendationId, actorBody, tenantId) }, { status: 201 });
     }
     if (!id) throw new Error("experiment id/code is required.");
+    if (action === "preflight") {
+      return Response.json({ ok: true, preflight: await runExperimentPreflight(env.DB, id, {
+        tenantId,
+        ...(body.guildId !== undefined || body.guild_id !== undefined ? { guildId: clean(body.guildId ?? body.guild_id, 120) || null } : {}),
+        ...(body.market !== undefined ? { market: clean(body.market, 80) || null } : {}),
+        ...(body.country !== undefined ? { country: clean(body.country, 80) || null } : {}),
+        ...(body.locale !== undefined ? { locale: clean(body.locale, 40) || null } : {}),
+        ...(body.characterId !== undefined || body.character_id !== undefined ? { characterId: clean(body.characterId ?? body.character_id, 120) || null } : {}),
+      }, auth.actor, false) });
+    }
     if (action === "update") return Response.json({ ok: true, experiment: await updateExperiment(env.DB, id, actorBody, tenantId) });
     if (action === "approve") return Response.json({ ok: true, experiment: await approveExperiment(env.DB, id, actorBody, tenantId) });
     if (action === "reject") return Response.json({ ok: true, experiment: await rejectExperiment(env.DB, id, actorBody, tenantId) });

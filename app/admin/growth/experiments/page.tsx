@@ -59,6 +59,7 @@ type Detail = {
   approvals: Record<string, unknown>[];
   audit: Record<string, unknown>[];
 };
+type Preflight = { experimentId: string; allowed: boolean; decision: string; approvalStatus: string; evidenceDecision: { decision?: string; sufficiency?: { level?: string } }; riskClass: string; guardrails: Array<{ type: string; result: string; reason: string }>; blockers: string[]; warnings: string[]; evaluatedAt: string };
 
 function growthTrace(sourceJson?: string) {
   try {
@@ -97,6 +98,7 @@ export default function GrowthExperimentsPage() {
   const [form, setForm] = useState(emptyForm);
   const [filters, setFilters] = useState({ q: "", status: "", character_id: "", result_status: "" });
   const [resultForm, setResultForm] = useState({ result_status: "NOT_MEASURED", measured_value: "", result_summary: "", learning: "", next_action: "", estimated_revenue_impact: "", sample_size: "" });
+  const [preflight, setPreflight] = useState<Preflight | null>(null);
 
   const selected = detail?.experiment || null;
   const filtered = useMemo(() => experiments, [experiments]);
@@ -136,6 +138,7 @@ export default function GrowthExperimentsPage() {
       const payload = await readJson(response);
       if (!response.ok || !payload.ok) throw new Error(payload.error || "Experiment詳細の読み込みに失敗しました。");
       setDetail(payload.detail);
+      setPreflight(null);
       const experiment = payload.detail.experiment;
       setResultForm({
         result_status: experiment.result_status || "NOT_MEASURED",
@@ -204,6 +207,12 @@ export default function GrowthExperimentsPage() {
     if (!selected) return;
     if (["reject", "cancel", "archive"].includes(action) && !window.confirm(`${selected.experiment_code} を ${action} します。よろしいですか？`)) return;
     await post({ action, id: selected.experiment_id, reason }, `${selected.experiment_code} に ${action} を実行しました。`);
+  }
+
+  async function runPreflight() {
+    if (!selected) return;
+    const payload = await post({ action: "preflight", id: selected.experiment_id }, "Preflightを実行しました。");
+    if (payload?.preflight) setPreflight(payload.preflight);
   }
 
   async function recordResult(action: "recordResult" | "complete") {
@@ -330,6 +339,7 @@ export default function GrowthExperimentsPage() {
                     <button className="rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold" type="button" disabled={busy} onClick={() => runAction("approve")}>承認</button>
                     <button className="rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold" type="button" disabled={busy} onClick={() => runAction("reject")}>却下</button>
                     <button className="rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold" type="button" disabled={busy} onClick={() => runAction("start")}>開始</button>
+                    <button className="rounded border border-[#596d51] px-3 py-2 text-xs font-semibold text-[#596d51]" type="button" disabled={busy} onClick={() => runPreflight()}>Preflight</button>
                     <button className="rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold" type="button" disabled={busy} onClick={() => runAction("pause")}>停止</button>
                     <button className="rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold" type="button" disabled={busy} onClick={() => runAction("resume")}>再開</button>
                     <button className="rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold" type="button" disabled={busy} onClick={() => runAction("measure")}>測定へ</button>
@@ -338,6 +348,8 @@ export default function GrowthExperimentsPage() {
                 </div>
               ) : <p className="text-sm text-[#5e625c]">Experimentを選択してください。</p>}
             </Panel>
+
+            {selected && preflight ? <Panel title="Preflight結果" eyebrow="Guardrail"><div className="grid gap-2"><Info label="判定" value={`${preflight.decision} / ${preflight.allowed ? "開始可能" : "開始不可"}`} /><Info label="Approval / Evidence / Risk" value={`${preflight.approvalStatus} / ${preflight.evidenceDecision?.decision || "-"} / ${preflight.riskClass}`} /><Info label="Guardrail" value={preflight.guardrails.map((item) => `${item.type}: ${item.result}`).join(" / ")} /><Info label="Blocker" value={preflight.blockers.join(" ") || "なし"} /><Info label="Warning" value={preflight.warnings.join(" ") || "なし"} /></div></Panel> : null}
 
               {selected ? (
                 <Panel title="結果登録" eyebrow="Result">
