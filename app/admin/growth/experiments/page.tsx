@@ -58,7 +58,11 @@ type Detail = {
   events: Record<string, unknown>[];
   approvals: Record<string, unknown>[];
   audit: Record<string, unknown>[];
+  variants: Variant[];
+  runs: Run[];
 };
+type Variant = { variant_id: string; name: string; kind: string; allocation_weight: number; status: string; configuration_json?: string };
+type Run = { run_id: string; status: string; started_at?: string; stopped_at?: string; start_reason?: string; stop_reason?: string; exposure_count?: number };
 type Preflight = { experimentId: string; allowed: boolean; decision: string; approvalStatus: string; evidenceDecision: { decision?: string; sufficiency?: { level?: string } }; riskClass: string; guardrails: Array<{ type: string; result: string; reason: string }>; blockers: string[]; warnings: string[]; evaluatedAt: string };
 
 function growthTrace(sourceJson?: string) {
@@ -99,6 +103,8 @@ export default function GrowthExperimentsPage() {
   const [filters, setFilters] = useState({ q: "", status: "", character_id: "", result_status: "" });
   const [resultForm, setResultForm] = useState({ result_status: "NOT_MEASURED", measured_value: "", result_summary: "", learning: "", next_action: "", estimated_revenue_impact: "", sample_size: "" });
   const [preflight, setPreflight] = useState<Preflight | null>(null);
+  const [variantForm, setVariantForm] = useState({ name: "", kind: "VARIANT", allocation_weight: "50", configuration: "{}" });
+  const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
 
   const selected = detail?.experiment || null;
   const filtered = useMemo(() => experiments, [experiments]);
@@ -213,6 +219,28 @@ export default function GrowthExperimentsPage() {
     if (!selected) return;
     const payload = await post({ action: "preflight", id: selected.experiment_id }, "Preflightを実行しました。");
     if (payload?.preflight) setPreflight(payload.preflight);
+  }
+
+  async function createVariant() {
+    if (!selected || !variantForm.name.trim()) return;
+    await post({ action: editingVariantId ? "updateVariant" : "createVariant", id: selected.experiment_id, ...(editingVariantId ? { variant_id: editingVariantId } : {}), ...variantForm, allocation_weight: Number(variantForm.allocation_weight) }, "Control / Variantを保存しました。");
+    setVariantForm({ name: "", kind: "VARIANT", allocation_weight: "50", configuration: "{}" });
+    setEditingVariantId(null);
+  }
+
+  function editVariant(item: Variant) {
+    setEditingVariantId(item.variant_id);
+    setVariantForm({ name: item.name, kind: item.kind, allocation_weight: String(item.allocation_weight), configuration: item.configuration_json || "{}" });
+  }
+
+  async function startRun() {
+    if (!selected) return;
+    await post({ action: "run", id: selected.experiment_id, start_reason: "管理画面から手動開始" }, "Execution Runを開始しました。");
+  }
+
+  async function stopRun(runId: string) {
+    if (!selected || !window.confirm("このExecution Runを停止しますか？")) return;
+    await post({ action: "stop", id: selected.experiment_id, run_id: runId, stop_reason: "管理画面から手動停止" }, "Execution Runを停止しました。");
   }
 
   async function recordResult(action: "recordResult" | "complete") {
@@ -338,7 +366,7 @@ export default function GrowthExperimentsPage() {
                   <div className="flex flex-wrap gap-2">
                     <button className="rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold" type="button" disabled={busy} onClick={() => runAction("approve")}>承認</button>
                     <button className="rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold" type="button" disabled={busy} onClick={() => runAction("reject")}>却下</button>
-                    <button className="rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold" type="button" disabled={busy} onClick={() => runAction("start")}>開始</button>
+                    <button className="rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold" type="button" disabled={busy} onClick={() => startRun()}>Run開始</button>
                     <button className="rounded border border-[#596d51] px-3 py-2 text-xs font-semibold text-[#596d51]" type="button" disabled={busy} onClick={() => runPreflight()}>Preflight</button>
                     <button className="rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold" type="button" disabled={busy} onClick={() => runAction("pause")}>停止</button>
                     <button className="rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold" type="button" disabled={busy} onClick={() => runAction("resume")}>再開</button>
@@ -350,6 +378,24 @@ export default function GrowthExperimentsPage() {
             </Panel>
 
             {selected && preflight ? <Panel title="Preflight結果" eyebrow="Guardrail"><div className="grid gap-2"><Info label="判定" value={`${preflight.decision} / ${preflight.allowed ? "開始可能" : "開始不可"}`} /><Info label="Approval / Evidence / Risk" value={`${preflight.approvalStatus} / ${preflight.evidenceDecision?.decision || "-"} / ${preflight.riskClass}`} /><Info label="Guardrail" value={preflight.guardrails.map((item) => `${item.type}: ${item.result}`).join(" / ")} /><Info label="Blocker" value={preflight.blockers.join(" ") || "なし"} /><Info label="Warning" value={preflight.warnings.join(" ") || "なし"} /></div></Panel> : null}
+
+            {selected ? <Panel title="Control / Variant" eyebrow="Allocation">
+              <div className="grid gap-3">
+                <div className="grid gap-2 md:grid-cols-2">
+                  <Field label="名前" value={variantForm.name} onChange={(value) => setVariantForm({ ...variantForm, name: value })} />
+                  <label className="grid gap-2 text-sm font-semibold">種類<select className="admin-field" value={variantForm.kind} onChange={(event) => setVariantForm({ ...variantForm, kind: event.target.value })}><option value="CONTROL">CONTROL</option><option value="VARIANT">VARIANT</option></select></label>
+                </div>
+                <Field label="割当比率（%）" value={variantForm.allocation_weight} onChange={(value) => setVariantForm({ ...variantForm, allocation_weight: value })} />
+                <TextField label="configuration（JSON）" value={variantForm.configuration} onChange={(value) => setVariantForm({ ...variantForm, configuration: value })} />
+                <div className="flex flex-wrap gap-2"><button className="rounded bg-[#222820] px-4 py-3 text-sm font-semibold text-[#fff8ed] disabled:opacity-60" type="button" disabled={busy || !variantForm.name.trim()} onClick={createVariant}>{editingVariantId ? "更新" : "追加"}</button>{editingVariantId ? <button className="rounded border border-[#d7cabc] px-4 py-3 text-sm font-semibold" type="button" disabled={busy} onClick={() => { setEditingVariantId(null); setVariantForm({ name: "", kind: "VARIANT", allocation_weight: "50", configuration: "{}" }); }}>編集を取消</button> : null}</div>
+                <div className="grid gap-2">{(detail?.variants || []).map((item) => <div key={item.variant_id} className="rounded border border-[#d7cabc] bg-white p-3"><Info label={`${item.kind} / ${item.name}`} value={`${item.allocation_weight}% / ${item.status}`} /><button className="mt-2 rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold" type="button" disabled={busy} onClick={() => editVariant(item)}>編集</button></div>)}{!detail?.variants?.length ? <p className="text-sm text-[#5e625c]">Control / Variantは未登録です。</p> : null}</div>
+                <p className="text-xs leading-5 text-[#5e625c]">Controlを1つ、Variantを1つ以上登録し、割当合計を100%にするとRunを開始できます。</p>
+              </div>
+            </Panel> : null}
+
+            {selected ? <Panel title="Execution Run" eyebrow="Run">
+              <div className="grid gap-2">{(detail?.runs || []).map((run) => <div key={run.run_id} className="rounded border border-[#d7cabc] bg-white p-3"><Info label={run.status} value={`${run.run_id} / Exposure ${run.exposure_count || 0} / ${run.started_at || ""}`} />{["STARTING", "RUNNING"].includes(run.status) ? <button className="mt-2 rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold" type="button" disabled={busy} onClick={() => stopRun(run.run_id)}>手動停止</button> : null}</div>)}{!detail?.runs?.length ? <p className="text-sm text-[#5e625c]">Runはまだありません。</p> : null}</div>
+            </Panel> : null}
 
               {selected ? (
                 <Panel title="結果登録" eyebrow="Result">

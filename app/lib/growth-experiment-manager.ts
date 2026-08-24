@@ -2,6 +2,7 @@ import { GROWTH_ENGINE_TENANT_ID } from "@/app/lib/growth-engine";
 import { runExperimentPreflight } from "./growth-experiment-preflight.ts";
 
 type D1 = {
+  batch?(statements: unknown[]): Promise<unknown[]>;
   prepare(sql: string): {
     bind(...values: unknown[]): {
       all<T = unknown>(): Promise<{ results?: T[] }>;
@@ -337,6 +338,11 @@ export async function transitionExperiment(db: D1, idOrCode: string, toStatusInp
   if (fromStatus === toStatus) return current;
   if (!statusTransitions[fromStatus]?.includes(toStatus)) throw new Error(`Invalid transition: ${fromStatus} -> ${toStatus}`);
   if (toStatus === "RUNNING") {
+    const executionRunId = clean(input.executionRunId ?? input.execution_run_id, 120);
+    if (!executionRunId) throw new Error("An Execution Run is required before RUNNING transition.");
+    const run = await db.prepare("SELECT run_id, status FROM growth_experiment_runs WHERE tenant_id = ? AND experiment_id = ? AND run_id = ? LIMIT 1")
+      .bind(tenantId, current.experiment_id, executionRunId).first<{ run_id: string; status: string }>();
+    if (!run || run.status !== "STARTING") throw new Error("Execution Run must be STARTING before RUNNING transition.");
     const preflight = await runExperimentPreflight(db, String(current.experiment_id), {
       tenantId,
       ...(input.guildId !== undefined || input.guild_id !== undefined ? { guildId: clean(input.guildId ?? input.guild_id, 120) || null } : {}),
@@ -348,9 +354,18 @@ export async function transitionExperiment(db: D1, idOrCode: string, toStatusInp
     if (!preflight.allowed) throw new Error(`Experiment start blocked: ${preflight.decision}. ${preflight.blockers.join(" ")}`);
   }
   const nowField = toStatus === "RUNNING" ? "actual_start_at = COALESCE(actual_start_at, CURRENT_TIMESTAMP)," : toStatus === "COMPLETED" ? "actual_end_at = COALESCE(actual_end_at, CURRENT_TIMESTAMP)," : "";
-  await db.prepare(`UPDATE growth_experiments SET ${nowField} status = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND experiment_id = ?`)
-    .bind(toStatus, tenantId, current.experiment_id)
-    .run();
+  const experimentUpdate = db.prepare(`UPDATE growth_experiments SET ${nowField} status = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND experiment_id = ?`)
+    .bind(toStatus, tenantId, current.experiment_id);
+  if (toStatus === "RUNNING") {
+    if (!db.batch) throw new Error("Atomic Execution Run transition is unavailable.");
+    await db.batch([
+      experimentUpdate,
+      db.prepare("UPDATE growth_experiment_runs SET status = 'RUNNING', started_at = COALESCE(started_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND experiment_id = ? AND run_id = ? AND status = 'STARTING'")
+        .bind(tenantId, current.experiment_id, clean(input.executionRunId ?? input.execution_run_id, 120)),
+    ]);
+  } else {
+    await experimentUpdate.run();
+  }
   const updated = await getExperiment(db, String(current.experiment_id), tenantId);
   await auditExperiment(db, {
     tenantId,

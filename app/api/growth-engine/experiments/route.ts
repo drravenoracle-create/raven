@@ -14,6 +14,15 @@ import {
   updateExperiment,
 } from "@/app/lib/growth-experiment-manager";
 import { runExperimentPreflight } from "@/app/lib/growth-experiment-preflight";
+import {
+  assignExperimentSubject,
+  createExperimentVariant,
+  listExperimentRuns,
+  listExperimentVariants,
+  startExperimentRun,
+  stopExperimentRun,
+  updateExperimentVariant,
+} from "@/app/lib/growth-experiment-execution";
 
 function clean(value: unknown, maxLength = 240) {
   return String(value ?? "").trim().slice(0, maxLength);
@@ -46,7 +55,15 @@ export async function GET(request: Request) {
   }
   const id = clean(url.searchParams.get("id") ?? url.searchParams.get("experiment_id") ?? url.searchParams.get("experiment_code"), 120);
   try {
-    if (id) return Response.json({ ok: true, detail: await listExperimentDetail(env.DB, id, tenantId) }, { headers: { "Cache-Control": "no-store" } });
+    if (id) {
+      const detail = await listExperimentDetail(env.DB, id, tenantId);
+      const experimentId = String(detail.experiment.experiment_id);
+      const [variants, runs] = await Promise.all([
+        listExperimentVariants(env.DB, experimentId, tenantId),
+        listExperimentRuns(env.DB, experimentId, tenantId),
+      ]);
+      return Response.json({ ok: true, detail: { ...detail, variants, runs } }, { headers: { "Cache-Control": "no-store" } });
+    }
     const [experiments, summary, recommendations] = await Promise.all([
       listExperiments(env.DB, {
         status: url.searchParams.get("status"),
@@ -98,6 +115,19 @@ export async function POST(request: Request) {
       return Response.json({ ok: true, experiment: await createExperimentFromRecommendation(env.DB, recommendationId, actorBody, tenantId) }, { status: 201 });
     }
     if (!id) throw new Error("experiment id/code is required.");
+    if (action === "createVariant") return Response.json({ ok: true, variant: await createExperimentVariant(env.DB, id, actorBody, tenantId) }, { status: 201 });
+    if (action === "updateVariant") {
+      const variantId = clean(body.variant_id ?? body.variantId, 120);
+      if (!variantId) throw new Error("variant_id is required.");
+      return Response.json({ ok: true, variant: await updateExperimentVariant(env.DB, id, variantId, actorBody, tenantId) });
+    }
+    if (action === "run") return Response.json({ ok: true, run: await startExperimentRun(env.DB, id, actorBody, tenantId) }, { status: 201 });
+    if (action === "stop") {
+      const runId = clean(body.run_id ?? body.runId, 120);
+      if (!runId) throw new Error("run_id is required.");
+      return Response.json({ ok: true, run: await stopExperimentRun(env.DB, id, runId, actorBody, tenantId) });
+    }
+    if (action === "assign") return Response.json({ ok: true, assignment: await assignExperimentSubject(env.DB, id, actorBody, tenantId) }, { status: 201 });
     if (action === "preflight") {
       return Response.json({ ok: true, preflight: await runExperimentPreflight(env.DB, id, {
         tenantId,
