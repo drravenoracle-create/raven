@@ -40,7 +40,7 @@ const statusTransitions: Record<string, string[]> = {
   ARCHIVED: [],
 };
 
-const riskyTargetTypes = new Set(["PRICE", "FREE_TRIAL", "CHARACTER", "SNS", "MEMBERSHIP"]);
+const riskyTargetTypes = new Set(["PRICE", "FREE_TRIAL", "CHARACTER", "GUILD", "MARKET", "BRAND", "DESTRUCTIVE", "AUTO_PUBLISH", "SNS", "MEMBERSHIP"]);
 
 function clean(value: unknown, maxLength = 1000) {
   return String(value ?? "").trim().slice(0, maxLength);
@@ -77,7 +77,7 @@ function normalizeResultStatus(value: unknown) {
 
 function normalizeTargetType(value: unknown) {
   const next = clean(value, 40).toUpperCase();
-  return ["PAGE", "CTA", "MENU", "PRICE", "FREE_TRIAL", "CHARACTER", "CONTENT", "SEO", "SNS", "FUNNEL", "MEMBERSHIP", "OTHER"].includes(next) ? next : "OTHER";
+  return ["PAGE", "CTA", "MENU", "PRICE", "FREE_TRIAL", "CHARACTER", "GUILD", "MARKET", "BRAND", "DESTRUCTIVE", "AUTO_PUBLISH", "CONTENT", "SEO", "SNS", "FUNNEL", "MEMBERSHIP", "OTHER"].includes(next) ? next : "OTHER";
 }
 
 function normalizePriority(value: unknown, score: number) {
@@ -97,7 +97,7 @@ export function requiresHumanApproval(input: { targetType: string; changeSummary
   if (input.approvalRequired === false || input.approvalRequired === 0) return riskyTargetTypes.has(input.targetType);
   if (input.approvalRequired === true || input.approvalRequired === 1) return true;
   const text = clean(input.changeSummary, 2000).toLowerCase();
-  return riskyTargetTypes.has(input.targetType) || /価格|課金|無料回数|system prompt|人格|sns自動|外部連携|個人情報|price|billing|prompt|privacy/.test(text);
+  return riskyTargetTypes.has(input.targetType) || /価格|課金|無料回数|ギルド|市場|ブランド|破壊|自動公開|system prompt|人格|sns自動|外部連携|個人情報|price|billing|prompt|privacy|guild|market|brand|destructive|auto.?publish/.test(text);
 }
 
 export async function nextExperimentCode(db: D1, tenantId = GROWTH_ENGINE_TENANT_ID) {
