@@ -155,7 +155,7 @@ export default function GrowthExperimentsPage() {
       const response = await fetch("/api/growth-engine/experiments", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ tenant_id: "raven-oracle", ...body }),
+        body: JSON.stringify(body),
       });
       const payload = await readJson(response);
       if (!response.ok || !payload.ok) throw new Error(payload.error || "操作に失敗しました。");

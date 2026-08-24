@@ -1,6 +1,7 @@
-import { RAVEN_TENANT_CONFIG } from "./tenant-config.ts";
+import { resolveGrowthConfig } from "./tenant-config-resolver.ts";
 
-export const GROWTH_ENGINE_TENANT_ID = RAVEN_TENANT_CONFIG.id;
+export const GROWTH_ENGINE_CONFIG = resolveGrowthConfig();
+export const GROWTH_ENGINE_TENANT_ID = GROWTH_ENGINE_CONFIG.tenantId;
 export const GROWTH_ENGINE_VERSION = "growth-engine-v3.0";
 
 const allowedConversionEvents = new Set([

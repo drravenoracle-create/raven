@@ -6,7 +6,7 @@ import { buildCalendarBlog, buildCalendarSocial, buildDailyAlmanac } from "../ap
 import { observeInstagramContainer, readInstagramMetaError, sanitizeInstagramResponse, type InstagramReelState } from "../app/lib/instagram-reel-state";
 import { RAVEN_CHARACTER_CONFIG } from "../app/lib/character-config";
 import { RAVEN_TENANT_CONFIG } from "../app/lib/tenant-config";
-import { resolveBlogConfig, resolveSnsConfig } from "../app/lib/tenant-config-resolver";
+import { resolveBlogConfig, resolveGrowthConfig, resolveSnsConfig } from "../app/lib/tenant-config-resolver";
 import { englishEntryRedirect } from "../app/lib/locale-entry";
 
 interface Env {
@@ -49,6 +49,8 @@ const BLOG_PUBLIC_URL = BLOG_CONFIG.publicBaseUrl;
 const SNS_CONFIG = resolveSnsConfig(TENANT_ID);
 const SNS_TENANT_ID = SNS_CONFIG.tenantId;
 const SNS_PUBLIC_URL = SNS_CONFIG.publicBaseUrl;
+const GROWTH_CONFIG = resolveGrowthConfig(TENANT_ID);
+const GROWTH_TENANT_ID = GROWTH_CONFIG.tenantId;
 const DEFAULT_SNS_SCHEDULE = { windows: [{ start: "01:00", end: "07:00" }, { start: "13:00", end: "17:00" }] };
 
 function json(body: unknown, init: ResponseInit = {}) {
@@ -978,10 +980,10 @@ async function upsertGrowthMetric(env: Env, input: {
       VALUES (COALESCE((SELECT id FROM growth_metric_points WHERE tenant_id = ? AND idempotency_key = ?), ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
-      TENANT_ID,
+      GROWTH_TENANT_ID,
       idempotencyKey,
       crypto.randomUUID(),
-      TENANT_ID,
+      GROWTH_TENANT_ID,
       input.source,
       input.entityType,
       input.entityId,
@@ -1005,12 +1007,12 @@ async function syncSnsEngineToGrowth(env: Env) {
 
   const statusRows = await env.DB.prepare(
     "SELECT platform, status, COUNT(*) AS count FROM sns_posts WHERE tenant_id = ? AND datetime(created_at) >= datetime(?) GROUP BY platform, status",
-  ).bind(TENANT_ID, since).all<{ platform: string; status: string; count: number }>();
+  ).bind(GROWTH_TENANT_ID, since).all<{ platform: string; status: string; count: number }>();
   for (const row of statusRows.results || []) {
     await upsertGrowthMetric(env, {
       source: "sns_engine",
       entityType: "tenant",
-      entityId: TENANT_ID,
+      entityId: GROWTH_TENANT_ID,
       metricName: `sns_posts_${row.platform}_${row.status}`,
       metricValue: Number(row.count || 0),
       measuredAt: now,
@@ -1023,12 +1025,12 @@ async function syncSnsEngineToGrowth(env: Env) {
 
   const typeRows = await env.DB.prepare(
     "SELECT platform, post_type, COUNT(*) AS count FROM sns_posts WHERE tenant_id = ? AND datetime(created_at) >= datetime(?) GROUP BY platform, post_type",
-  ).bind(TENANT_ID, since).all<{ platform: string; post_type: string; count: number }>();
+  ).bind(GROWTH_TENANT_ID, since).all<{ platform: string; post_type: string; count: number }>();
   for (const row of typeRows.results || []) {
     await upsertGrowthMetric(env, {
       source: "sns_engine",
       entityType: "tenant",
-      entityId: TENANT_ID,
+      entityId: GROWTH_TENANT_ID,
       metricName: `sns_posts_${row.platform}_${row.post_type}`,
       metricValue: Number(row.count || 0),
       measuredAt: now,
@@ -1041,12 +1043,12 @@ async function syncSnsEngineToGrowth(env: Env) {
 
   const logRows = await env.DB.prepare(
     "SELECT platform, action, status, COUNT(*) AS count FROM sns_publish_logs WHERE tenant_id = ? AND datetime(created_at) >= datetime(?) GROUP BY platform, action, status",
-  ).bind(TENANT_ID, since).all<{ platform: string; action: string; status: string; count: number }>();
+  ).bind(GROWTH_TENANT_ID, since).all<{ platform: string; action: string; status: string; count: number }>();
   for (const row of logRows.results || []) {
     await upsertGrowthMetric(env, {
       source: "sns_engine",
       entityType: "tenant",
-      entityId: TENANT_ID,
+      entityId: GROWTH_TENANT_ID,
       metricName: `sns_${row.action}_${row.platform}_${row.status}`,
       metricValue: Number(row.count || 0),
       measuredAt: now,
@@ -1063,7 +1065,7 @@ async function syncSnsEngineToGrowth(env: Env) {
       WHERE tenant_id = ? AND datetime(created_at) >= datetime(?)
       ORDER BY datetime(created_at) DESC
       LIMIT 200`,
-  ).bind(TENANT_ID, since).all<Record<string, unknown>>();
+  ).bind(GROWTH_TENANT_ID, since).all<Record<string, unknown>>();
   for (const post of postRows.results || []) {
     const postId = String(post.id || "");
     if (!postId) continue;
@@ -1099,11 +1101,11 @@ async function syncSnsEngineToGrowth(env: Env) {
       VALUES ('raven-sns-engine', ?, 'sns_engine', 'sns_engine', 1, 'available', ?, ?, 0, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(id) DO UPDATE SET sync_status = 'available', enabled = 1, last_success_at = excluded.last_success_at, last_attempt_at = excluded.last_attempt_at, retry_count = 0, provider_metadata_json = excluded.provider_metadata_json, updated_at = CURRENT_TIMESTAMP`,
   )
-    .bind(TENANT_ID, now, now, JSON.stringify({ synced_metrics: count, window_start: since, window_end: now }))
+    .bind(GROWTH_TENANT_ID, now, now, JSON.stringify({ synced_metrics: count, window_start: since, window_end: now }))
     .run();
 
   await env.DB.prepare("INSERT OR IGNORE INTO growth_events (event_id, tenant_id, event_type, source_engine, entity_refs_json, payload_json, idempotency_key) VALUES (?, ?, 'sns_engine.synced', 'sns_engine', ?, ?, ?)")
-    .bind(crypto.randomUUID(), TENANT_ID, JSON.stringify({ entity_type: "tenant", entity_id: TENANT_ID }), JSON.stringify({ synced_metrics: count }), `sns-engine-sync:${now.slice(0, 13)}`)
+    .bind(crypto.randomUUID(), GROWTH_TENANT_ID, JSON.stringify({ entity_type: "tenant", entity_id: GROWTH_TENANT_ID }), JSON.stringify({ synced_metrics: count }), `sns-engine-sync:${now.slice(0, 13)}`)
     .run();
   return count;
 }

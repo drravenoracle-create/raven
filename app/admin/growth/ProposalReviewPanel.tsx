@@ -38,7 +38,7 @@ export default function ProposalReviewPanel({ initial }: { initial: Proposal[] }
     if (!proposal || !window.confirm(`${proposal.title} を ${action} します。実行は発生しません。よろしいですか？`)) return;
     setBusy(proposalId);
     try {
-      const response = await fetch("/api/growth-engine/proposals", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ proposal_id: proposalId, tenant_id: "raven-oracle", action, review_note: `Admin review: ${action}` }) });
+      const response = await fetch("/api/growth-engine/proposals", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ proposal_id: proposalId, action, review_note: `Admin review: ${action}` }) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Review failed");
       setItems((current) => current.map((item) => item.proposal_id === proposalId ? { ...item, status: body.proposal.status, reviewed_at: body.proposal.reviewedAt, reviewed_by: body.proposal.reviewedBy, review_note: body.proposal.reviewNote } : item));
@@ -50,7 +50,7 @@ export default function ProposalReviewPanel({ initial }: { initial: Proposal[] }
     if (!proposal || !window.confirm(`${proposal.title} からExperiment draftを作成します。Experimentは開始されません。よろしいですか？`)) return;
     setBusy(proposalId);
     try {
-      const response = await fetch("/api/growth-engine/proposals", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ proposal_id: proposalId, tenant_id: "raven-oracle", action: "createExperimentDraft" }) });
+      const response = await fetch("/api/growth-engine/proposals", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ proposal_id: proposalId, action: "createExperimentDraft" }) });
       const body = await response.json(); if (!response.ok) throw new Error(body.error || "Draft creation failed");
       const experiment = body.result?.experiment || {}; setItems((current) => current.map((item) => item.proposal_id === proposalId ? { ...item, experiment_id: experiment.experiment_id, experiment_code: experiment.experiment_code, experiment_status: experiment.status, requires_start_approval: 1 } : item));
     } catch (error) { window.alert(error instanceof Error ? error.message : "Draft creation failed"); }
