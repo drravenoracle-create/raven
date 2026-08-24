@@ -6,6 +6,7 @@ import { buildCalendarBlog, buildCalendarSocial, buildDailyAlmanac } from "../ap
 import { observeInstagramContainer, readInstagramMetaError, sanitizeInstagramResponse, type InstagramReelState } from "../app/lib/instagram-reel-state";
 import { RAVEN_CHARACTER_CONFIG } from "../app/lib/character-config";
 import { RAVEN_TENANT_CONFIG } from "../app/lib/tenant-config";
+import { englishEntryRedirect } from "../app/lib/locale-entry";
 
 interface Env {
   ASSETS: Fetcher;
@@ -77,27 +78,6 @@ function getCloudflareGeo(request: Request) {
     region: sanitizeText(cf?.region, 120),
     city: sanitizeText(cf?.city, 120),
   };
-}
-
-function englishEntryRedirect(request: Request) {
-  if (request.method !== "GET") return null;
-  const url = new URL(request.url);
-  if (url.pathname !== "/" && url.pathname !== "") return null;
-  const explicit = url.searchParams.get("lang");
-  const cookie = request.headers.get("cookie") || "";
-  if (explicit === "ja") {
-    url.searchParams.delete("lang");
-    return new Response(null, { status: 302, headers: { Location: url.toString(), "Set-Cookie": "raven_locale=ja; Path=/; Max-Age=31536000; SameSite=Lax" } });
-  }
-  if (explicit === "en") return new Response(null, { status: 302, headers: { Location: "/en/", "Set-Cookie": "raven_locale=en; Path=/; Max-Age=31536000; SameSite=Lax" } });
-  if (/\braven_locale=(?:ja|en)\b/i.test(cookie)) return null;
-  const language = (request.headers.get("accept-language") || "").toLowerCase();
-  const english = /(^|,|;)\s*en(?:[-_][a-z]{2})?(?:\s*;\s*q=([0-9.]+))?/.exec(language);
-  const japanese = /(^|,|;)\s*ja(?:[-_][a-z]{2})?(?:\s*;\s*q=([0-9.]+))?/.exec(language);
-  const quality = (match: RegExpExecArray | null) => match?.[2] ? Number(match[2]) : match ? 1 : 0;
-  const location = quality(english) > quality(japanese) ? "/en/" : url.toString();
-  const locale = location === "/en/" ? "en" : "ja";
-  return new Response(null, { status: 302, headers: { Location: location, "Set-Cookie": `raven_locale=${locale}; Path=/; Max-Age=31536000; SameSite=Lax`, Vary: "Accept-Language, Cookie" } });
 }
 
 function toIsoDate(date = new Date()) {
