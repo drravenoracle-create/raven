@@ -2,6 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { RAVEN_STUDIOOS_TENANT_CONFIG } from "../../lib/studioos-tenant-config";
+import { resolveAnalyticsConfig } from "../../lib/tenant-config-resolver";
+
+const ANALYTICS_TENANT_ID = resolveAnalyticsConfig(RAVEN_STUDIOOS_TENANT_CONFIG.tenantId).tenantId;
 
 type Summary = { period: string; visits: number; readings: number; chatStarts: number; blogViews: number };
 type AnalyticsPayload = {
@@ -101,7 +105,7 @@ export default function AnalyticsAdminPage() {
     fetch("/api/growth-engine/external-sync", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tenantId: "raven-oracle", days: periodDays }),
+      body: JSON.stringify({ tenantId: ANALYTICS_TENANT_ID, days: periodDays }),
     })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("external sync failed"))))
       .then((payload) => {

@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
+import { RAVEN_STUDIOOS_TENANT_CONFIG } from "@/app/lib/studioos-tenant-config";
+import { resolveAnalyticsConfig } from "@/app/lib/tenant-config-resolver";
 
-const TENANT_ID = "raven-oracle";
+const DEFAULT_TENANT_ID = RAVEN_STUDIOOS_TENANT_CONFIG.tenantId;
 const allowedEvents = new Set([
   "page_view",
   "raven_text_reading",
@@ -64,8 +66,14 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return Response.json({ error: "Invalid JSON body." }, { status: 400 });
 
-  const tenantId = clean(body.tenantId ?? body.tenant_id, 80) || TENANT_ID;
-  if (tenantId !== TENANT_ID) return Response.json({ error: "Invalid tenant_id" }, { status: 400 });
+  const tenantId = clean(body.tenantId ?? body.tenant_id, 80) || DEFAULT_TENANT_ID;
+  let analyticsConfig;
+  try {
+    analyticsConfig = resolveAnalyticsConfig(tenantId);
+  } catch {
+    return Response.json({ error: "Analytics config not found." }, { status: 400 });
+  }
+  const TENANT_ID = analyticsConfig.tenantId;
 
   const eventName = clean(body.eventName ?? body.event_name, 80);
   if (!allowedEvents.has(eventName)) return Response.json({ error: "Invalid event_name" }, { status: 400 });

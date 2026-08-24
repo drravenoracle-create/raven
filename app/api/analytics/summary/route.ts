@@ -1,6 +1,8 @@
 ﻿import { env } from "cloudflare:workers";
+import { RAVEN_STUDIOOS_TENANT_CONFIG } from "@/app/lib/studioos-tenant-config";
+import { resolveAnalyticsConfig } from "@/app/lib/tenant-config-resolver";
 
-const TENANT_ID = "raven-oracle";
+const DEFAULT_TENANT_ID = RAVEN_STUDIOOS_TENANT_CONFIG.tenantId;
 
 type CountRow = { event_name: string; count: number };
 type PathRow = { page_path: string; count: number };
@@ -18,6 +20,14 @@ function daysFromPeriod(period: string | null) {
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  const requestedTenantId = url.searchParams.get("tenantId") || DEFAULT_TENANT_ID;
+  let analyticsConfig;
+  try {
+    analyticsConfig = resolveAnalyticsConfig(requestedTenantId);
+  } catch {
+    return Response.json({ error: "Analytics config not found." }, { status: 400 });
+  }
+  const TENANT_ID = analyticsConfig.tenantId;
   const days = daysFromPeriod(url.searchParams.get("days"));
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 

@@ -97,6 +97,7 @@ export type MarketPersonaConfig = {
 
 export type AnalyticsConfigSlice = {
   enabled?: boolean;
+  tenantId: string;
   provider?: string;
   referenceIds?: Record<string, string>;
   eventNamespace: string;
@@ -273,6 +274,7 @@ export function adaptRavenTenantConfig(legacy: RavenTenantConfig = RAVEN_TENANT_
     characterRef: legacy.primaryCharacterId,
     analytics: {
       enabled: legacy.analytics.enabled,
+      tenantId: legacy.id,
       provider: "external-connectors",
       referenceIds: {},
       eventNamespace: legacy.id,

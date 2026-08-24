@@ -1,4 +1,5 @@
-﻿const TENANT_ID = "raven-oracle";
+import { RAVEN_STUDIOOS_TENANT_CONFIG } from "./studioos-tenant-config";
+import { resolveAnalyticsConfig } from "./tenant-config-resolver";
 
 export type ExternalMetric = {
   source: "ga4" | "search_console" | "cloudflare";
@@ -107,11 +108,11 @@ async function googleAccessToken(env: unknown, scope: string) {
   return { configured: true, token: payload.access_token };
 }
 
-function metric(source: ExternalMetric["source"], metricName: string, value: number, start: string, end: string, metadata?: Record<string, unknown>): ExternalMetric {
+function metric(config: ReturnType<typeof resolveAnalyticsConfig>, source: ExternalMetric["source"], metricName: string, value: number, start: string, end: string, metadata?: Record<string, unknown>): ExternalMetric {
   return {
     source,
     entityType: "site",
-    entityId: TENANT_ID,
+    entityId: config.tenantId,
     metricName,
     metricValue: Number.isFinite(value) ? value : 0,
     measuredAt: new Date().toISOString(),
@@ -122,7 +123,8 @@ function metric(source: ExternalMetric["source"], metricName: string, value: num
   };
 }
 
-export async function fetchGa4Metrics(env: unknown, days: number): Promise<ConnectorSyncResult> {
+export async function fetchGa4Metrics(env: unknown, days: number, tenantId = RAVEN_STUDIOOS_TENANT_CONFIG.tenantId): Promise<ConnectorSyncResult> {
+  const config = resolveAnalyticsConfig(tenantId);
   const propertyId = envValue(env, "GA4_PROPERTY_ID");
   if (!propertyId) return { source: "ga4", configured: false, ok: false, metrics: [], error: "GA4_PROPERTY_ID is not configured" };
   try {
@@ -143,10 +145,10 @@ export async function fetchGa4Metrics(env: unknown, days: number): Promise<Conne
       configured: true,
       ok: true,
       metrics: [
-        metric("ga4", "active_users", Number(values[0]?.value || 0), start, end),
-        metric("ga4", "page_views", Number(values[1]?.value || 0), start, end),
-        metric("ga4", "sessions", Number(values[2]?.value || 0), start, end),
-        metric("ga4", "engagement_rate", Number(values[3]?.value || 0), start, end),
+        metric(config, "ga4", "active_users", Number(values[0]?.value || 0), start, end),
+        metric(config, "ga4", "page_views", Number(values[1]?.value || 0), start, end),
+        metric(config, "ga4", "sessions", Number(values[2]?.value || 0), start, end),
+        metric(config, "ga4", "engagement_rate", Number(values[3]?.value || 0), start, end),
       ],
     };
   } catch (error) {
@@ -154,8 +156,9 @@ export async function fetchGa4Metrics(env: unknown, days: number): Promise<Conne
   }
 }
 
-export async function fetchSearchConsoleMetrics(env: unknown, days: number): Promise<ConnectorSyncResult> {
-  const siteUrl = envValue(env, "SEARCH_CONSOLE_SITE_URL") || "https://raven.fortunestudios.jp/";
+export async function fetchSearchConsoleMetrics(env: unknown, days: number, tenantId = RAVEN_STUDIOOS_TENANT_CONFIG.tenantId): Promise<ConnectorSyncResult> {
+  const config = resolveAnalyticsConfig(tenantId);
+  const siteUrl = envValue(env, "SEARCH_CONSOLE_SITE_URL") || config.publicUrl;
   try {
     const auth = await googleAccessToken(env, "https://www.googleapis.com/auth/webmasters.readonly");
     if (!auth.configured) return { source: "search_console", configured: false, ok: false, metrics: [], error: "Google service account secrets are not configured" };
@@ -177,10 +180,10 @@ export async function fetchSearchConsoleMetrics(env: unknown, days: number): Pro
       configured: true,
       ok: true,
       metrics: [
-        metric("search_console", "clicks", totals.clicks, start, end, { siteUrl }),
-        metric("search_console", "impressions", totals.impressions, start, end, { siteUrl }),
-        metric("search_console", "ctr", totals.rows ? totals.ctr / totals.rows : 0, start, end, { siteUrl }),
-        metric("search_console", "average_position", totals.rows ? totals.position / totals.rows : 0, start, end, { siteUrl }),
+        metric(config, "search_console", "clicks", totals.clicks, start, end, { siteUrl }),
+        metric(config, "search_console", "impressions", totals.impressions, start, end, { siteUrl }),
+        metric(config, "search_console", "ctr", totals.rows ? totals.ctr / totals.rows : 0, start, end, { siteUrl }),
+        metric(config, "search_console", "average_position", totals.rows ? totals.position / totals.rows : 0, start, end, { siteUrl }),
       ],
     };
   } catch (error) {
@@ -188,7 +191,8 @@ export async function fetchSearchConsoleMetrics(env: unknown, days: number): Pro
   }
 }
 
-export async function fetchCloudflareAnalyticsMetrics(env: unknown, days: number): Promise<ConnectorSyncResult> {
+export async function fetchCloudflareAnalyticsMetrics(env: unknown, days: number, tenantId = RAVEN_STUDIOOS_TENANT_CONFIG.tenantId): Promise<ConnectorSyncResult> {
+  const config = resolveAnalyticsConfig(tenantId);
   const token = envValue(env, "CLOUDFLARE_API_TOKEN");
   const zoneTag = envValue(env, "CLOUDFLARE_ZONE_ID");
   if (!token || !zoneTag) return { source: "cloudflare", configured: false, ok: false, metrics: [], error: "CLOUDFLARE_API_TOKEN or CLOUDFLARE_ZONE_ID is not configured" };
@@ -210,10 +214,10 @@ export async function fetchCloudflareAnalyticsMetrics(env: unknown, days: number
       configured: true,
       ok: true,
       metrics: [
-        metric("cloudflare", "requests", total.requests, start, end, { zoneTag }),
-        metric("cloudflare", "page_views", total.pageViews, start, end, { zoneTag }),
-        metric("cloudflare", "bytes", total.bytes, start, end, { zoneTag }),
-        metric("cloudflare", "threats", total.threats, start, end, { zoneTag }),
+        metric(config, "cloudflare", "requests", total.requests, start, end, { zoneTag }),
+        metric(config, "cloudflare", "page_views", total.pageViews, start, end, { zoneTag }),
+        metric(config, "cloudflare", "bytes", total.bytes, start, end, { zoneTag }),
+        metric(config, "cloudflare", "threats", total.threats, start, end, { zoneTag }),
       ],
     };
   } catch (error) {
@@ -221,8 +225,8 @@ export async function fetchCloudflareAnalyticsMetrics(env: unknown, days: number
   }
 }
 
-export async function fetchExternalAnalyticsMetrics(env: unknown, days: number) {
-  return Promise.all([fetchGa4Metrics(env, days), fetchSearchConsoleMetrics(env, days), fetchCloudflareAnalyticsMetrics(env, days)]);
+export async function fetchExternalAnalyticsMetrics(env: unknown, days: number, tenantId = RAVEN_STUDIOOS_TENANT_CONFIG.tenantId) {
+  return Promise.all([fetchGa4Metrics(env, days, tenantId), fetchSearchConsoleMetrics(env, days, tenantId), fetchCloudflareAnalyticsMetrics(env, days, tenantId)]);
 }
 
 
