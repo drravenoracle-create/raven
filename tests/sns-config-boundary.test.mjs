@@ -38,7 +38,7 @@ test("SNS surfaces consume tenant and character config", async () => {
   ];
   const contents = await Promise.all(files.map(source));
   for (const [index, content] of contents.entries()) {
-    assert.match(content, /RAVEN_TENANT_CONFIG|RAVEN_CHARACTER_CONFIG|CHARACTER_CONFIG/,
+    assert.match(content, /resolveSnsConfig|RAVEN_TENANT_CONFIG|RAVEN_CHARACTER_CONFIG|CHARACTER_CONFIG/,
       `${files[index]} must consume the config boundary`);
   }
 });

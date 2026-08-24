@@ -28,6 +28,9 @@ test("Raven engine slices retain legacy values", () => {
   const tenant = RAVEN_STUDIOOS_TENANT_CONFIG;
   assert.equal(tenant.sns.defaultCta, "必要なら、レイヴン・ブラックウッドのテキスト鑑定で一緒に整理します。");
   assert.deepEqual(tenant.sns.hashtags, ["#レイヴンブラックウッド", "#文章鑑定", "#相談整理"]);
+  assert.equal(tenant.sns.defaultLocale, "ja-JP");
+  assert.equal(tenant.sns.providerRefs.instagram, "instagram");
+  assert.equal(tenant.sns.storageRefs.publicBaseUrl, tenant.urls.publicUrl);
   assert.equal(tenant.blog.defaultAuthor, "レイヴン・ブラックウッド");
   assert.equal(tenant.reel.defaultDuration, 30);
   assert.equal(tenant.reel.defaultAspectRatio, "9:16");
@@ -45,6 +48,7 @@ test("resolver exposes slices without returning the whole tenant", () => {
   assert.equal(resolver.getAnalyticsConfig("raven-oracle").eventNamespace, "raven-oracle");
   assert.equal(resolver.getBlogConfig("raven-oracle").publicBaseUrl, "https://raven.fortunestudios.jp");
   assert.equal(resolver.getSnsConfig("raven-oracle").tenantId, "raven-oracle");
+  assert.throws(() => resolver.getSnsConfig("unknown-tenant"), /Unknown tenant/);
   assert.equal(resolver.getReelConfig("raven-oracle").storage.namespace, "reel-assets");
   assert.equal(resolver.getGrowthConfig("raven-oracle").tenantId, "raven-oracle");
   assert.deepEqual(resolver.getEntitlements("raven-oracle").tenantOverrides, {});
