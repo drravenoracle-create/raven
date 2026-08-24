@@ -92,7 +92,7 @@ export const getTenantConfig = (tenantId: string) => tenantConfigResolver.getTen
 export const getTenantIdentity = (tenantId: string) => tenantConfigResolver.getTenantIdentity(tenantId);
 export const getTenantLocalization = (tenantId: string) => tenantConfigResolver.getTenantLocalization(tenantId);
 export const resolveAnalyticsConfig = (tenantId: string) => tenantConfigResolver.getAnalyticsConfig(tenantId);
-export const resolveBlogConfig = (tenantId: string) => tenantConfigResolver.getBlogConfig(tenantId);
+export const resolveBlogConfig = (tenantId = RAVEN_STUDIOOS_TENANT_CONFIG.tenantId) => tenantConfigResolver.getBlogConfig(tenantId);
 export const resolveSnsConfig = (tenantId: string) => tenantConfigResolver.getSnsConfig(tenantId);
 export const resolveReelConfig = (tenantId: string) => tenantConfigResolver.getReelConfig(tenantId);
 export const resolveGrowthConfig = (tenantId: string) => tenantConfigResolver.getGrowthConfig(tenantId);

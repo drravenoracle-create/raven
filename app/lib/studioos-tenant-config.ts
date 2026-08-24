@@ -107,6 +107,7 @@ export type AnalyticsConfigSlice = {
 
 export type BlogConfigSlice = {
   enabled?: boolean;
+  tenantId: string;
   defaultAuthor?: string;
   defaultCta?: string;
   defaultTags?: string[];
@@ -282,7 +283,8 @@ export function adaptRavenTenantConfig(legacy: RavenTenantConfig = RAVEN_TENANT_
       sources: legacy.analytics.sources,
     },
     blog: {
-      enabled: legacy.blog.enabled,
+      enabled: legacy.blog.enabled ?? true,
+      tenantId: legacy.id,
       defaultAuthor: legacy.branding.characterDisplayName,
       defaultCta: legacy.content.defaultCta,
       defaultTags: legacy.content.hashtags,
