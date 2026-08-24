@@ -1,4 +1,5 @@
 import { getSexagenaryDay, type SexagenaryDay } from "./sexagenary.ts";
+import { resolveBlogConfig } from "../tenant-config-resolver.ts";
 
 export type DailyAlmanacData = {
   tenantId: string;
@@ -24,7 +25,8 @@ function rokuyoFor(localDate: string) {
   return ROKUYO_BY_DATE[localDate] || { name: "六曜", reading: "ろくよう", note: "六曜は旧暦の日付に基づいて読みます。" };
 }
 
-export function buildDailyAlmanac(localDate: string, tenantId = "raven-oracle"): DailyAlmanacData {
+export function buildDailyAlmanac(localDate: string, tenantId = resolveBlogConfig().tenantId): DailyAlmanacData {
+  resolveBlogConfig(tenantId);
   const sexagenary = getSexagenaryDay(localDate);
   return {
     tenantId,

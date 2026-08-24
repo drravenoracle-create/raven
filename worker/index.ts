@@ -6,6 +6,7 @@ import { buildCalendarBlog, buildCalendarSocial, buildDailyAlmanac } from "../ap
 import { observeInstagramContainer, readInstagramMetaError, sanitizeInstagramResponse, type InstagramReelState } from "../app/lib/instagram-reel-state";
 import { RAVEN_CHARACTER_CONFIG } from "../app/lib/character-config";
 import { RAVEN_TENANT_CONFIG } from "../app/lib/tenant-config";
+import { resolveBlogConfig } from "../app/lib/tenant-config-resolver";
 import { englishEntryRedirect } from "../app/lib/locale-entry";
 
 interface Env {
@@ -42,6 +43,9 @@ interface ExecutionContext {
 const TENANT_ID = RAVEN_TENANT_CONFIG.id;
 const CHARACTER_CONFIG = RAVEN_TENANT_CONFIG.character;
 const PUBLIC_URL = RAVEN_TENANT_CONFIG.publicUrl;
+const BLOG_CONFIG = resolveBlogConfig(TENANT_ID);
+const BLOG_TENANT_ID = BLOG_CONFIG.tenantId;
+const BLOG_PUBLIC_URL = BLOG_CONFIG.publicBaseUrl;
 const DEFAULT_SNS_SCHEDULE = { windows: [{ start: "01:00", end: "07:00" }, { start: "13:00", end: "17:00" }] };
 
 function json(body: unknown, init: ResponseInit = {}) {
@@ -1337,7 +1341,7 @@ async function queueAndPublishBlogSnsPost(env: Env, article: { id: string; slug?
   const id = crypto.randomUUID();
   const title = sanitizeText(article.title || "今日の占い", 180);
   const keyMessage = sanitizeText(article.key_message || "今日の流れを整える一手を確認しましょう。", 240);
-  const blogUrl = article.slug ? `${PUBLIC_URL}/blog/${article.slug}/` : `${PUBLIC_URL}/blog/`;
+  const blogUrl = article.slug ? `${BLOG_PUBLIC_URL}/blog/${article.slug}/` : `${BLOG_PUBLIC_URL}/blog/`;
   const caption = `${title}\n\n${keyMessage}\n\n${CHARACTER_CONFIG.reelCta}\n${blogUrl}\n\n${CHARACTER_CONFIG.sns.hashtags.join(" ")}`;
   await env.DB.prepare(
     `INSERT INTO sns_posts
@@ -1356,8 +1360,8 @@ async function queueAndPublishBlogSnsPost(env: Env, article: { id: string; slug?
       caption,
       CHARACTER_CONFIG.sns.hashtags.join(" "),
       `${title}\n${keyMessage}\nブログへ誘導`,
-      `${PUBLIC_URL}/raven-blackwood-cover.png`,
-      `${PUBLIC_URL}/raven-blackwood-cover.png`,
+      `${BLOG_PUBLIC_URL}/raven-blackwood-cover.png`,
+      `${BLOG_PUBLIC_URL}/raven-blackwood-cover.png`,
       new Date().toISOString(),
       trackingId,
     )
@@ -1388,7 +1392,7 @@ async function processDailyCalendar(env: Env) {
   const publishMinutes = timeToMinutes(publishTime);
   const generationStart = Math.max(0, publishMinutes - leadMinutes);
   const shouldGenerate = nowMinutes >= generationStart && nowMinutes <= publishMinutes + 5;
-  const almanac = buildDailyAlmanac(date, TENANT_ID);
+  const almanac = buildDailyAlmanac(date, BLOG_TENANT_ID);
   const format = calendarSettings?.calendar_format === "short_video" ? "short_video" : calendarFormatFor(env, date);
   const runKey = `daily-calendar:${TENANT_ID}:${date}`;
   let run = await env.DB.prepare("SELECT id, blog_article_id FROM daily_calendar_runs WHERE tenant_id = ? AND local_date = ? AND content_type = 'daily_calendar' LIMIT 1")

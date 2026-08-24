@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getBlogPost, getSortedBlogPosts } from "../../lib/blog";
+import { resolveBlogConfig } from "../../lib/tenant-config-resolver";
 
 type BlogParams = Promise<{ slug: string }>;
 type DbPost = {
@@ -16,11 +17,12 @@ type DbPost = {
 };
 
 async function loadPost(slug: string) {
+  const blogConfig = resolveBlogConfig();
   try {
     const post = await env.DB.prepare(
-      "SELECT a.slug, a.title, a.description, a.body, a.published_at, a.created_at, a.category, COUNT(e.id) AS view_count FROM blog_engine_articles a LEFT JOIN analytics_events e ON e.tenant_id = a.tenant_id AND e.event_name = 'page_view' AND (e.page_path = '/blog/' || a.slug OR e.page_path = '/blog/' || a.slug || '/' ) WHERE a.tenant_id = 'raven-oracle' AND a.slug = ? AND a.status = 'published' GROUP BY a.id LIMIT 1",
+      "SELECT a.slug, a.title, a.description, a.body, a.published_at, a.created_at, a.category, COUNT(e.id) AS view_count FROM blog_engine_articles a LEFT JOIN analytics_events e ON e.tenant_id = a.tenant_id AND e.event_name = 'page_view' AND (e.page_path = '/blog/' || a.slug OR e.page_path = '/blog/' || a.slug || '/' ) WHERE a.tenant_id = ? AND a.slug = ? AND a.status = 'published' GROUP BY a.id LIMIT 1",
     )
-      .bind(slug)
+      .bind(blogConfig.tenantId, slug)
       .first<DbPost>();
     if (post) {
       return {

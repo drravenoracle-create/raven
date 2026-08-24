@@ -1,6 +1,7 @@
 ﻿import { env } from "cloudflare:workers";
 import Link from "next/link";
 import { getSortedBlogPosts } from "../lib/blog";
+import { resolveBlogConfig } from "../lib/tenant-config-resolver";
 
 type DbPost = {
   slug: string;
@@ -21,11 +22,12 @@ export const metadata = {
 };
 
 async function loadPublishedPosts() {
+  const blogConfig = resolveBlogConfig();
   const staticPosts = getSortedBlogPosts().map((post) => ({ ...post, viewCount: 0 }));
   try {
     const result = await env.DB.prepare(
-      "SELECT a.slug, a.title, a.description, a.published_at, a.created_at, a.category, a.tags_json, COUNT(e.id) AS view_count FROM blog_engine_articles a LEFT JOIN analytics_events e ON e.tenant_id = a.tenant_id AND e.event_name = 'page_view' AND (e.page_path = '/blog/' || a.slug OR e.page_path = '/blog/' || a.slug || '/' ) WHERE a.tenant_id = 'raven-oracle' AND a.status = 'published' GROUP BY a.id ORDER BY datetime(COALESCE(a.published_at, a.created_at)) DESC LIMIT 100",
-    ).all<DbPost>();
+      "SELECT a.slug, a.title, a.description, a.published_at, a.created_at, a.category, a.tags_json, COUNT(e.id) AS view_count FROM blog_engine_articles a LEFT JOIN analytics_events e ON e.tenant_id = a.tenant_id AND e.event_name = 'page_view' AND (e.page_path = '/blog/' || a.slug OR e.page_path = '/blog/' || a.slug || '/' ) WHERE a.tenant_id = ? AND a.status = 'published' GROUP BY a.id ORDER BY datetime(COALESCE(a.published_at, a.created_at)) DESC LIMIT 100",
+    ).bind(blogConfig.tenantId).all<DbPost>();
     const posts = (result.results || []).map((post) => ({
       slug: post.slug,
       title: post.title,

@@ -1,7 +1,10 @@
-﻿export const BLOG_ENGINE_TENANT_ID = "raven-oracle";
+﻿import { resolveBlogConfig } from "./tenant-config-resolver.ts";
+
+export const BLOG_ENGINE_TENANT_ID = resolveBlogConfig().tenantId;
 export const BLOG_ENGINE_VERSION = "blog-engine-v2.0";
 
 export type BlogEngineInput = {
+  tenantId?: string;
   topic?: string;
   category?: string;
   primaryKeyword?: string;
@@ -77,7 +80,7 @@ export function slugify(value: string) {
   return `raven-blog-${Date.now()}`;
 }
 
-function buildHomepageBenefitsDraft(input: Required<BlogEngineInput>): BlogEngineDraft {
+function buildHomepageBenefitsDraft(input: Required<BlogEngineInput>, blogConfig: ReturnType<typeof resolveBlogConfig>): BlogEngineDraft {
   const angle = input.topic || pick(homepageBenefitAngles);
   const title = angle;
   const primaryKeyword = input.primaryKeyword || "占い師 ホームページ メリット";
@@ -111,9 +114,9 @@ function buildHomepageBenefitsDraft(input: Required<BlogEngineInput>): BlogEngin
     primaryKeyword,
     secondaryKeywords: ["占い師 集客", "占い師 ブログ", "予約導線", "信頼作り"],
     searchIntent: input.searchIntent || "占い師としてホームページを持つ実務的な利点を知りたい",
-    targetReader: input.targetReader || "SNS発信だけに限界を感じている占い師・個人鑑定者",
+    targetReader: input.targetReader || blogConfig.defaultTargetReader,
     outline,
-    seoTitle: `${title} | レイヴン・ブラックウッド Blog`,
+    seoTitle: `${title} | ${blogConfig.seoTitleSuffix} Blog`,
     metaDescription: "占い師がホームページを持つメリットを、信頼形成、予約導線、ブログ蓄積の観点から整理します。",
     keyMessage: "ホームページは占い師の情報を一か所に整え、相談者が安心して判断するための拠点になる。",
     recommendedSocialAngle: "educational",
@@ -125,18 +128,20 @@ function buildHomepageBenefitsDraft(input: Required<BlogEngineInput>): BlogEngin
 }
 
 export function buildBlogDraft(input: BlogEngineInput = {}): BlogEngineDraft {
+  const blogConfig = resolveBlogConfig(input.tenantId || BLOG_ENGINE_TENANT_ID);
   const todaySeed = Number(new Date().toISOString().slice(8, 10));
-  const category = input.category?.trim() || pick(defaultCategories, todaySeed);
+  const category = input.category?.trim() || pick(blogConfig.defaultCategories.length ? blogConfig.defaultCategories : defaultCategories, todaySeed);
   const topic = input.topic?.trim() || (category === "占い師がホームページを持つメリット" ? pick(homepageBenefitAngles, todaySeed) : "迷った時に未来を決めつけず、選択肢を整える方法");
   const normalizedInput = {
     topic,
     category,
     primaryKeyword: input.primaryKeyword?.trim() || topic,
-    targetReader: input.targetReader?.trim() || "レイヴン・ブラックウッドで意思決定を整理したい読者",
-    searchIntent: input.searchIntent?.trim() || "不安を煽らず、選択肢と次の一手を整理したい",
+    targetReader: input.targetReader?.trim() || blogConfig.defaultTargetReader,
+    searchIntent: input.searchIntent?.trim() || blogConfig.defaultSearchIntent,
+    tenantId: input.tenantId || BLOG_ENGINE_TENANT_ID,
   };
   if (category === "占い師がホームページを持つメリット") {
-    return buildHomepageBenefitsDraft(normalizedInput);
+    return buildHomepageBenefitsDraft(normalizedInput, blogConfig);
   }
 
   const title = topic;
@@ -164,7 +169,7 @@ export function buildBlogDraft(input: BlogEngineInput = {}): BlogEngineDraft {
     searchIntent: normalizedInput.searchIntent,
     targetReader: normalizedInput.targetReader,
     outline,
-    seoTitle: `${title} | レイヴン・ブラックウッド`,
+    seoTitle: `${title} | ${blogConfig.seoTitleSuffix}`,
     metaDescription: `${normalizedInput.targetReader}に向けて、${normalizedInput.primaryKeyword}を落ち着いて整理します。`.slice(0, 150),
     keyMessage: "占いは未来を決めつけるものではなく、未来を選ぶ助けです。",
     recommendedSocialAngle: "educational",
@@ -211,12 +216,13 @@ export function createTrackingId(input: { articleId: string; platform: string; f
   return `${input.articleId}:${input.platform}:${input.format}:${input.angle}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 160);
 }
 
-export function createBlogEvent(input: { eventType: string; articleId?: string; article?: Partial<BlogEngineDraft> & { url?: string; publishedAt?: string } }) {
+export function createBlogEvent(input: { tenantId?: string; eventType: string; articleId?: string; article?: Partial<BlogEngineDraft> & { url?: string; publishedAt?: string } }) {
+  const tenantId = resolveBlogConfig(input.tenantId || BLOG_ENGINE_TENANT_ID).tenantId;
   return {
     event_id: crypto.randomUUID(),
     schema_version: "1.0",
     event_type: input.eventType,
-    tenant_id: BLOG_ENGINE_TENANT_ID,
+    tenant_id: tenantId,
     article_id: input.articleId,
     payload: {
       article_id: input.articleId,
@@ -239,10 +245,11 @@ export function createBlogEvent(input: { eventType: string; articleId?: string; 
   };
 }
 
-export function createSocialDerivatives(articleId: string, draft: BlogEngineDraft) {
+export function createSocialDerivatives(articleId: string, draft: BlogEngineDraft, tenantId = BLOG_ENGINE_TENANT_ID) {
+  const blogConfig = resolveBlogConfig(tenantId);
   const items = [
-    { platform: "instagram", format: "carousel", angle: draft.recommendedSocialAngle, content: `${draft.title}\n\n${draft.keyMessage}\n\n詳しくはレイヴン・ブラックウッドの記事へ。` },
-    { platform: "instagram", format: "reel_script", angle: "hook", content: `0-3秒: ${draft.primaryKeyword}\n3-10秒: ${draft.keyMessage}\n10-22秒: ${draft.outline.join(" / ")}\n22-30秒: レイヴン・ブラックウッドの記事へ案内` },
+    { platform: "instagram", format: "carousel", angle: draft.recommendedSocialAngle, content: `${draft.title}\n\n${draft.keyMessage}\n\n${blogConfig.defaultCta}` },
+    { platform: "instagram", format: "reel_script", angle: "hook", content: `0-3秒: ${draft.primaryKeyword}\n3-10秒: ${draft.keyMessage}\n10-22秒: ${draft.outline.join(" / ")}\n22-30秒: ${blogConfig.defaultCta}` },
     { platform: "instagram", format: "story", angle: "question", content: `${draft.primaryKeyword}で迷ったら、まず何を整理したいですか？\n記事で考え方をまとめています。` },
     { platform: "x", format: "short", angle: "question", content: `${draft.primaryKeyword}で迷った時は、結論を急ぐ前に問いを一つに絞る。${draft.keyMessage}` },
     { platform: "x", format: "thread", angle: "tips", content: `${draft.title}\n1. ${draft.outline[0]}\n2. ${draft.outline[1]}\n3. ${draft.outline[2]}\n詳しくは記事へ。` },
