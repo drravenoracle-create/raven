@@ -1,6 +1,7 @@
 import { env, requireEvidenceAdmin, tenantFrom, text } from "@/app/api/evidence/_shared";
 import { findEvidence } from "@/app/lib/evidence-layer";
 import { evaluateProposal, GrowthHypothesisProposalRepository, type CreateHypothesisInput, type CreateProposalInput } from "@/app/lib/growth-hypothesis-proposal";
+import { buildProposalDecision, generateHypothesisCandidate, generateProposalCandidate } from "@/app/lib/growth-intelligence-ai";
 
 function scopeFrom(input: Record<string, unknown>) {
   return {
@@ -23,6 +24,12 @@ async function responseData(repo: GrowthHypothesisProposalRepository, target: Re
   const [hypotheses, proposals] = await Promise.all([repo.listHypotheses(target), repo.listProposals(target)]);
   const hypothesisDetails = await Promise.all(hypotheses.map(async (hypothesis) => ({ hypothesis, evidenceLinks: await repo.listHypothesisEvidence(target.tenantId, hypothesis.id), evidence: await evidenceFor(repo, target.tenantId, hypothesis.id, target) })));
   return { hypotheses: hypothesisDetails, proposals };
+}
+
+async function logGeneration(tenantId: string, subjectType: string, subjectId: string, generationType: string, model: string, validationResult: string, evidenceIds: string[]) {
+  await env.DB.prepare("INSERT INTO growth_audit_log (id, tenant_id, actor, action, subject_type, subject_id, before_json, after_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(crypto.randomUUID(), tenantId, "growth_intelligence_ai", "ai_candidate_generated", subjectType, subjectId, JSON.stringify({ generationType, model, evidenceIds }), JSON.stringify({ validationResult }))
+    .run();
 }
 
 export async function GET(request: Request) {
@@ -75,6 +82,33 @@ export async function POST(request: Request) {
       const evidence = await evidenceFor(repo, target.tenantId, hypothesisId, target);
       const proposal = await repo.createProposal(input, evidence);
       return Response.json({ ok: true, proposal }, { status: 201 });
+    }
+    if (action === "generate_hypothesis") {
+      const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
+      if (!apiKey) return Response.json({ ok: false, errorCode: "AI_UNAVAILABLE", error: "OPENAI_API_KEY is not configured." }, { status: 503 });
+      const evidence = await findEvidence(env.DB, target);
+      const result = await generateHypothesisCandidate(target, evidence, apiKey, process.env.OPENAI_MODEL || undefined);
+      if (!result.ok) return Response.json({ ok: false, errorCode: result.errorCode, error: result.error, evidenceDecision: result.evidenceDecision }, { status: result.errorCode === "AI_UNAVAILABLE" ? 503 : 422 });
+      const hypothesisInput: CreateHypothesisInput = { id: crypto.randomUUID(), ...target, characterId: text(body.characterId ?? body.character_id, 120) || null, statement: result.candidate.statement, targetSegment: result.candidate.targetSegment, targetMetric: result.candidate.targetMetric, expectedDirection: result.candidate.expectedDirection, evidenceSufficiency: result.evidenceDecision.sufficiency.level, riskClass: "LOW", status: "DRAFT" };
+      const hypothesis = await repo.createHypothesis(hypothesisInput);
+      const evidenceIds: string[] = [];
+      for (const record of evidence) { if (record.claims.length) for (const claim of record.claims) { await repo.attachEvidence({ id: crypto.randomUUID(), hypothesisId: hypothesis!.id, tenantId: target.tenantId, sourceId: record.source.sourceId, claimId: claim.claimId }); evidenceIds.push(claim.claimId); } else { await repo.attachEvidence({ id: crypto.randomUUID(), hypothesisId: hypothesis!.id, tenantId: target.tenantId, sourceId: record.source.sourceId }); evidenceIds.push(record.source.sourceId); } }
+      await logGeneration(target.tenantId, "growth_hypothesis", hypothesis!.id, "hypothesis", result.model, "VALIDATED_DRAFT", evidenceIds);
+      return Response.json({ ok: true, candidate: result.candidate, evidenceDecision: result.evidenceDecision, hypothesis: await repo.getHypothesis(target.tenantId, hypothesis!.id) }, { status: 201 });
+    }
+    if (action === "generate_proposal") {
+      const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
+      if (!apiKey) return Response.json({ ok: false, errorCode: "AI_UNAVAILABLE", error: "OPENAI_API_KEY is not configured." }, { status: 503 });
+      const hypothesisId = text(body.hypothesisId ?? body.hypothesis_id, 160);
+      const hypothesis = await repo.getHypothesis(target.tenantId, hypothesisId);
+      if (!hypothesis) return Response.json({ ok: false, error: "Hypothesis is required and must belong to this tenant." }, { status: 400 });
+      const evidence = await evidenceFor(repo, target.tenantId, hypothesisId, target);
+      const result = await generateProposalCandidate(target, evidence, hypothesis, apiKey, process.env.OPENAI_MODEL || undefined);
+      if (!result.ok) return Response.json({ ok: false, errorCode: result.errorCode, error: result.error, evidenceDecision: result.evidenceDecision }, { status: result.errorCode === "AI_UNAVAILABLE" ? 503 : 422 });
+      const decision = buildProposalDecision(target, evidence, result.candidate, hypothesisId);
+      const proposal = await repo.createProposal({ id: crypto.randomUUID(), hypothesisId, ...target, characterId: hypothesis.characterId || null, ...result.candidate, authorizationStatus: "NOT_REQUIRED", status: "DRAFT" }, evidence);
+      await logGeneration(target.tenantId, "growth_proposal", proposal!.id, "proposal", result.model, `VALIDATED_DRAFT:${decision.decision}`, evidence.map((item) => item.source.sourceId));
+      return Response.json({ ok: true, candidate: result.candidate, evidenceDecision: result.evidenceDecision, decision, proposal }, { status: 201 });
     }
     if (action === "approve_proposal" || action === "reject_proposal") {
       const proposalId = text(body.proposalId ?? body.proposal_id, 160);

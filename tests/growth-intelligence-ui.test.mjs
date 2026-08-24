@@ -12,9 +12,9 @@ describe("Growth Intelligence Stage 1 UI", () => {
     for (const label of ["Hypothesis一覧", "Hypothesis詳細", "Proposal一覧", "Proposal詳細", "Supporting Evidence", "Missing Evidence", "Evidence Sufficiency", "Risk \/ Approval \/ Decision", "Hypothesisを作成", "Proposalを作成"]) assert.match(page, new RegExp(label));
   });
 
-  it("exposes the required manual operations without AI or experiment actions", () => {
+  it("exposes the required manual operations without experiment actions", () => {
     for (const action of ["create_hypothesis", "create_proposal", "approve_proposal", "reject_proposal"]) assert.match(route, new RegExp(action));
-    assert.doesNotMatch(route, /generateHypothesis|generateProposal|createFromRecommendation|growth_experiments/);
+    assert.doesNotMatch(route, /createFromRecommendation|growth_experiments/);
     assert.match(route, /requireEvidenceAdmin/);
     assert.match(route, /tenantFrom/);
     assert.match(route, /market/);
