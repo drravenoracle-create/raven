@@ -2,6 +2,7 @@ import { env, requireEvidenceAdmin, tenantFrom, text } from "@/app/api/evidence/
 import { findEvidence } from "@/app/lib/evidence-layer";
 import { evaluateProposal, GrowthHypothesisProposalRepository, type CreateHypothesisInput, type CreateProposalInput } from "@/app/lib/growth-hypothesis-proposal";
 import { buildProposalDecision, generateHypothesisCandidate, generateProposalCandidate } from "@/app/lib/growth-intelligence-ai";
+import { createExperimentDraftFromProposal, getExperimentDraftStatus } from "@/app/lib/growth-experiment-draft";
 
 function scopeFrom(input: Record<string, unknown>) {
   return {
@@ -23,7 +24,8 @@ async function evidenceFor(repo: GrowthHypothesisProposalRepository, tenantId: s
 async function responseData(repo: GrowthHypothesisProposalRepository, target: ReturnType<typeof scopeFrom>) {
   const [hypotheses, proposals] = await Promise.all([repo.listHypotheses(target), repo.listProposals(target)]);
   const hypothesisDetails = await Promise.all(hypotheses.map(async (hypothesis) => ({ hypothesis, evidenceLinks: await repo.listHypothesisEvidence(target.tenantId, hypothesis.id), evidence: await evidenceFor(repo, target.tenantId, hypothesis.id, target) })));
-  return { hypotheses: hypothesisDetails, proposals };
+  const proposalDetails = await Promise.all(proposals.map(async (proposal) => ({ ...proposal, draftEligibility: await getExperimentDraftStatus(env.DB, proposal.id, target.tenantId) })));
+  return { hypotheses: hypothesisDetails, proposals: proposalDetails };
 }
 
 async function logGeneration(tenantId: string, subjectType: string, subjectId: string, generationType: string, model: string, validationResult: string, evidenceIds: string[]) {
@@ -126,6 +128,18 @@ export async function POST(request: Request) {
       if (decision.decision === "INSUFFICIENT_EVIDENCE" || decision.decision === "HOLD") return Response.json({ ok: false, error: "Evidence不足のため承認できません。", decision }, { status: 400 });
       const approved = await repo.updateProposal(target.tenantId, proposalId, { status: "APPROVED", approvalStatus: "APPROVED", decision: decision.decision, evidenceSufficiency: decision.sufficiency.level, missingEvidence: decision.missingEvidence });
       return Response.json({ ok: true, proposal: approved });
+    }
+    if (action === "create_experiment_draft") {
+      const proposalId = text(body.proposalId ?? body.proposal_id, 160);
+      if (!proposalId) return Response.json({ ok: false, error: "proposalId is required." }, { status: 400 });
+      const result = await createExperimentDraftFromProposal(env.DB, proposalId, {
+        tenantId: target.tenantId,
+        ...(Object.prototype.hasOwnProperty.call(body, "guildId") || Object.prototype.hasOwnProperty.call(body, "guild_id") ? { guildId: target.guildId } : {}),
+        ...(Object.prototype.hasOwnProperty.call(body, "market") ? { market: target.market } : {}),
+        ...(Object.prototype.hasOwnProperty.call(body, "country") ? { country: target.country } : {}),
+        ...(Object.prototype.hasOwnProperty.call(body, "locale") ? { locale: target.locale } : {}),
+      }, "admin");
+      return Response.json({ ok: true, ...result }, { status: result.created ? 201 : 200 });
     }
     return Response.json({ ok: false, error: "Unknown action." }, { status: 400 });
   } catch (error) {

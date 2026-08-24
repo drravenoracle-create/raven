@@ -127,7 +127,7 @@ export async function listExperiments(db: D1, input: Record<string, unknown> = {
        target_type, target_id, primary_kpi, primary_kpi_direction, baseline_value, target_value, measured_value, absolute_change,
        relative_change, estimated_revenue_impact, status, priority, priority_score, impact_score, confidence_score, ease_score,
        owner, approval_required, approved_by, approved_at, result_status, result_summary, planned_start_at, planned_end_at,
-       actual_start_at, actual_end_at, learning, next_action, created_at, updated_at
+       actual_start_at, actual_end_at, learning, next_action, source_json, created_at, updated_at
      FROM growth_experiments
      WHERE tenant_id = ?
        AND (? = '' OR status = ?)

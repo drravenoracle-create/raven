@@ -38,6 +38,7 @@ type Experiment = {
   learning?: string;
   next_action?: string;
   sample_size?: number;
+  source_json?: string;
 };
 
 type Recommendation = {
@@ -58,6 +59,13 @@ type Detail = {
   approvals: Record<string, unknown>[];
   audit: Record<string, unknown>[];
 };
+
+function growthTrace(sourceJson?: string) {
+  try {
+    const source = sourceJson ? JSON.parse(sourceJson) : null;
+    return source?.origin === "growth_intelligence" ? source as { hypothesisId?: string; proposalId?: string; evidenceIds?: string[]; market?: string; locale?: string; riskClass?: string } : null;
+  } catch { return null; }
+}
 
 const emptyForm = {
   title: "",
@@ -331,8 +339,8 @@ export default function GrowthExperimentsPage() {
               ) : <p className="text-sm text-[#5e625c]">Experimentを選択してください。</p>}
             </Panel>
 
-            {selected ? (
-              <Panel title="結果登録" eyebrow="Result">
+              {selected ? (
+                <Panel title="結果登録" eyebrow="Result">
                 <div className="grid gap-3">
                   <label className="grid gap-2 text-sm font-semibold">Result<select className="admin-field" value={resultForm.result_status} onChange={(event) => setResultForm({ ...resultForm, result_status: event.target.value })}><option>WIN</option><option>LOSS</option><option>NEUTRAL</option><option>INCONCLUSIVE</option><option>NOT_MEASURED</option></select></label>
                   <Field label="測定値" value={String(resultForm.measured_value)} onChange={(value) => setResultForm({ ...resultForm, measured_value: value })} />
@@ -348,6 +356,8 @@ export default function GrowthExperimentsPage() {
                 </div>
               </Panel>
             ) : null}
+
+            {selected && growthTrace(selected.source_json) ? <Panel title="Growth Intelligence Trace" eyebrow="Traceability"><div className="grid gap-2"><Info label="Hypothesis / Proposal" value={`${growthTrace(selected.source_json)?.hypothesisId || "-"} / ${growthTrace(selected.source_json)?.proposalId || "-"}`} /><Info label="Evidence IDs" value={(growthTrace(selected.source_json)?.evidenceIds || []).join(", ") || "-"} /><Info label="Risk / Market / Locale" value={`${growthTrace(selected.source_json)?.riskClass || "-"} / ${growthTrace(selected.source_json)?.market || "-"} / ${growthTrace(selected.source_json)?.locale || "-"}`} /></div></Panel> : null}
 
             {detail ? (
               <Panel title="Timeline / Audit" eyebrow="Audit">
