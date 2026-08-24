@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 import { GROWTH_ENGINE_TENANT_ID } from "@/app/lib/growth-engine";
 import { experimentSummary } from "@/app/lib/growth-experiment-manager";
+import { GrowthMemoryRepository } from "@/app/lib/growth-memory";
+import { GrowthPrecisionService } from "@/app/lib/growth-precision";
 
 async function safeAll<T>(query: Promise<{ results?: T[] }>, fallback: T[] = []) {
   try {
@@ -20,7 +22,7 @@ async function safeFirst<T>(query: Promise<T | null>, fallback: T | null = null)
 }
 
 export async function GET() {
-  const [settings, connectors, metrics, conversions, insights, calendar, segments, experiments, experimentStats, costs, customers, revenue, actions, reports, proposals] = await Promise.all([
+  const [settings, connectors, metrics, conversions, insights, calendar, segments, experiments, experimentStats, costs, customers, revenue, actions, reports, proposals, memories, precision] = await Promise.all([
     safeFirst(env.DB.prepare("SELECT * FROM growth_engine_settings WHERE tenant_id = ? LIMIT 1").bind(GROWTH_ENGINE_TENANT_ID).first()),
     safeAll(env.DB.prepare("SELECT source, provider, enabled, sync_status, last_success_at, last_error FROM growth_data_connectors WHERE tenant_id = ? ORDER BY source").bind(GROWTH_ENGINE_TENANT_ID).all()),
     safeAll(env.DB.prepare("SELECT source, entity_type, metric_name, metric_value, data_quality, measured_at FROM growth_metric_points WHERE tenant_id = ? ORDER BY datetime(created_at) DESC LIMIT 20").bind(GROWTH_ENGINE_TENANT_ID).all()),
@@ -36,6 +38,8 @@ export async function GET() {
     safeAll(env.DB.prepare("SELECT id, action_type, channel, risk_level, requires_approval, guard_result, status, created_at FROM growth_autonomous_actions WHERE tenant_id = ? ORDER BY datetime(created_at) DESC LIMIT 20").bind(GROWTH_ENGINE_TENANT_ID).all()),
     safeAll(env.DB.prepare("SELECT period_type, period_start, period_end, summary, status, created_at FROM growth_executive_reports WHERE tenant_id = ? ORDER BY datetime(created_at) DESC LIMIT 10").bind(GROWTH_ENGINE_TENANT_ID).all()),
     safeAll(env.DB.prepare("SELECT p.proposal_id, p.hypothesis_id, p.title, p.summary, p.rationale, p.expected_outcome, p.target_metric, p.confidence, p.risk_class, p.evidence_ids_json, p.missing_evidence_json, p.market, p.country, p.locale, p.status, p.execution_allowed, p.created_at, p.updated_at, p.reviewed_at, p.reviewed_by, p.review_note, h.observation, h.hypothesis, e.experiment_id, e.experiment_code, e.status AS experiment_status, e.requires_start_approval FROM growth_proposals p LEFT JOIN growth_hypotheses h ON h.tenant_id = p.tenant_id AND h.hypothesis_id = p.hypothesis_id LEFT JOIN growth_experiments e ON e.tenant_id = p.tenant_id AND e.proposal_id = p.proposal_id WHERE p.tenant_id = ? ORDER BY datetime(p.created_at) DESC LIMIT 20").bind(GROWTH_ENGINE_TENANT_ID).all()),
+    new GrowthMemoryRepository(env.DB).list(GROWTH_ENGINE_TENANT_ID).catch(() => []),
+    new GrowthPrecisionService(env.DB).buildReport(GROWTH_ENGINE_TENANT_ID).catch(() => null),
   ]);
 
   return Response.json(
@@ -55,6 +59,8 @@ export async function GET() {
       actions,
       reports,
       proposals,
+      memories,
+      precision,
     },
     { headers: { "Cache-Control": "no-store" } },
   );

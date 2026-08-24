@@ -12,6 +12,7 @@ type Action = { id: string; action_type: string; channel?: string; risk_level: s
 type Report = { period_type: string; period_start: string; period_end: string; summary: string; status: string };
 type CalendarItem = { channel?: string; content_type?: string; topic?: string; scheduled_at?: string; status?: string; guard_status?: string };
 type Proposal = { proposal_id: string; title: string; summary: string; rationale: string; expected_outcome?: string | null; target_metric?: string | null; confidence: number; risk_class: string; evidence_ids_json: string; missing_evidence_json: string; market?: string | null; locale?: string | null; status: string; execution_allowed: number; created_at?: string; reviewed_by?: string | null; review_note?: string | null };
+type Memory = { id: string; title: string; successLevel: string; actionSignature?: string | null; confidenceAtProposal?: number | null; predictedValue?: number | null; actualValue?: number | null; absoluteError?: number | null; reusable: boolean; suppressed: boolean; supersededBy?: string | null; proposalId?: string | null; experimentId?: string | null; reuseCount: number };
 
 async function loadDashboard() {
   const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || ""}/api/growth-engine/dashboard`, { cache: "no-store" }).catch(() => null);
@@ -60,6 +61,7 @@ export default async function GrowthAdminPage() {
 
         <section className="mt-8 grid gap-5 lg:grid-cols-2">
           <ProposalReviewPanel initial={proposals} />
+          <PrecisionPanel precision={dashboard.precision} memories={(dashboard.memories || []) as Memory[]} />
           <Panel title="Executive Brief">
             {reports.map((item, index) => <Row key={`${item.period_type}-${index}`} title={`${item.period_type}: ${item.period_start} - ${item.period_end}`} meta={item.status} body={item.summary} />)}
             {!reports.length ? <Empty text="Executive Reportはまだありません。" /> : null}
@@ -106,6 +108,24 @@ export default async function GrowthAdminPage() {
     </main>
   );
 }
+
+function PrecisionPanel({ precision, memories }: { precision: any; memories: Memory[] }) {
+  return <Panel title="Learning / Precision">
+    <div className="grid gap-3 sm:grid-cols-2">
+      <Summary title="Proposal acceptance" value={formatRate(precision?.proposalAcceptanceRate)} note="承認済み / reviewed" />
+      <Summary title="Experiment success" value={formatRate(precision?.experimentSuccessRate)} note="WIN / measurable results" />
+      <Summary title="Mean absolute error" value={formatNumber(precision?.meanAbsoluteError)} note="予測と実測の差" />
+      <Summary title="Direction accuracy" value={formatRate(precision?.directionAccuracy)} note="方向予測の一致率" />
+    </div>
+    <p className="text-sm text-[#5e625c]">Repeated failures: {precision?.repeatedFailureCount || 0} / Reuse: {precision?.reuseCount || 0} / Suppressed: {precision?.suppressedCount || 0}</p>
+    {(precision?.calibration || []).map((item: any) => <Row key={item.range} title={`Confidence ${item.range}`} meta={`${item.sampleSize} samples / ${item.reliability}`} body={`observed ${formatRate(item.observedSuccessRate)} / error ${formatRate(item.calibrationError)}`} />)}
+    {memories.map((item) => <Row key={item.id} title={item.title} meta={`${item.successLevel} / confidence ${item.confidenceAtProposal ?? "未設定"} / reuse ${item.reuseCount}`} body={`predicted ${item.predictedValue ?? "-"} → actual ${item.actualValue ?? "-"} / error ${item.absoluteError ?? "-"} / ${item.reusable ? "reusable" : "not reusable"}${item.suppressed ? " / suppressed" : ""}${item.supersededBy ? " / superseded" : ""}`} />)}
+    {!memories.length ? <Empty text="Experiment Learningはまだありません。" /> : null}
+  </Panel>;
+}
+
+function formatRate(value: unknown) { return value === null || value === undefined ? "未計測" : `${(Number(value) * 100).toFixed(1)}%`; }
+function formatNumber(value: unknown) { return value === null || value === undefined ? "未計測" : Number(value).toFixed(3); }
 
 function Summary({ title, value, note }: { title: string; value: string; note: string }) {
   return <div className="rounded border border-[#d7cabc] bg-[#fffaf2] p-5"><p className="text-sm font-semibold uppercase text-[#6c5f3d]">{title}</p><p className="mt-2 text-3xl font-semibold">{value}</p><p className="mt-2 text-sm text-[#5e625c]">{note}</p></div>;
