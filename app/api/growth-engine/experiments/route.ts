@@ -14,6 +14,7 @@ import {
   updateExperiment,
 } from "@/app/lib/growth-experiment-manager";
 import { runExperimentPreflight } from "@/app/lib/growth-experiment-preflight";
+import { listExperimentMeasurements, recordExperimentMeasurement } from "@/app/lib/growth-experiment-measurement";
 import {
   assignExperimentSubject,
   createExperimentVariant,
@@ -58,11 +59,12 @@ export async function GET(request: Request) {
     if (id) {
       const detail = await listExperimentDetail(env.DB, id, tenantId);
       const experimentId = String(detail.experiment.experiment_id);
-      const [variants, runs] = await Promise.all([
+      const [variants, runs, measurements] = await Promise.all([
         listExperimentVariants(env.DB, experimentId, tenantId),
         listExperimentRuns(env.DB, experimentId, tenantId),
+        listExperimentMeasurements(env.DB, experimentId, tenantId),
       ]);
-      return Response.json({ ok: true, detail: { ...detail, variants, runs } }, { headers: { "Cache-Control": "no-store" } });
+      return Response.json({ ok: true, detail: { ...detail, variants, runs, measurements: measurements.measurements, measurementGuardrails: measurements.guardrails } }, { headers: { "Cache-Control": "no-store" } });
     }
     const [experiments, summary, recommendations] = await Promise.all([
       listExperiments(env.DB, {
@@ -128,6 +130,7 @@ export async function POST(request: Request) {
       return Response.json({ ok: true, run: await stopExperimentRun(env.DB, id, runId, actorBody, tenantId) });
     }
     if (action === "assign") return Response.json({ ok: true, assignment: await assignExperimentSubject(env.DB, id, actorBody, tenantId) }, { status: 201 });
+    if (action === "measure") return Response.json({ ok: true, ...await recordExperimentMeasurement(env.DB, id, actorBody, tenantId) }, { status: 201 });
     if (action === "preflight") {
       return Response.json({ ok: true, preflight: await runExperimentPreflight(env.DB, id, {
         tenantId,

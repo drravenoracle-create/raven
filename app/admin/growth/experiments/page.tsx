@@ -14,6 +14,7 @@ type Experiment = {
   target_id?: string;
   primary_kpi?: string;
   primary_metric?: string;
+  guardrail_kpis?: string;
   primary_kpi_direction?: string;
   baseline_value?: number;
   target_value?: number;
@@ -60,10 +61,21 @@ type Detail = {
   audit: Record<string, unknown>[];
   variants: Variant[];
   runs: Run[];
+  measurements: Measurement[];
+  measurementGuardrails: Guardrail[];
 };
 type Variant = { variant_id: string; name: string; kind: string; allocation_weight: number; status: string; configuration_json?: string };
 type Run = { run_id: string; status: string; started_at?: string; stopped_at?: string; start_reason?: string; stop_reason?: string; exposure_count?: number };
+type Measurement = { id: string; run_id?: string; variant_id?: string; metric_name: string; metric_role?: string; baseline_value?: number | null; measured_value?: number | null; absolute_change?: number | null; relative_change?: number | null; sample_size?: number; availability?: string; source?: string; measured_at?: string };
+type Guardrail = { result: string; reasons_json?: string; checked_at?: string };
 type Preflight = { experimentId: string; allowed: boolean; decision: string; approvalStatus: string; evidenceDecision: { decision?: string; sufficiency?: { level?: string } }; riskClass: string; guardrails: Array<{ type: string; result: string; reason: string }>; blockers: string[]; warnings: string[]; evaluatedAt: string };
+
+function metricOptions(experiment?: Experiment) {
+  if (!experiment) return [];
+  const options = [experiment.primary_kpi || experiment.primary_metric || "Conversion Rate"];
+  try { const guardrails = experiment.guardrail_kpis ? JSON.parse(experiment.guardrail_kpis) : []; if (Array.isArray(guardrails)) options.push(...guardrails.map(String)); } catch { /* invalid legacy JSON is treated as no extra metrics */ }
+  return [...new Set(options.filter(Boolean))];
+}
 
 function growthTrace(sourceJson?: string) {
   try {
@@ -105,6 +117,7 @@ export default function GrowthExperimentsPage() {
   const [preflight, setPreflight] = useState<Preflight | null>(null);
   const [variantForm, setVariantForm] = useState({ name: "", kind: "VARIANT", allocation_weight: "50", configuration: "{}" });
   const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
+  const [measurementForm, setMeasurementForm] = useState({ run_id: "", variant_id: "", metric_key: "", baseline_value: "", measured_value: "", sample_size: "1", availability: "AVAILABLE", source: "manual", guardrail_result: "UNKNOWN", guardrail_reason: "" });
 
   const selected = detail?.experiment || null;
   const filtered = useMemo(() => experiments, [experiments]);
@@ -155,6 +168,10 @@ export default function GrowthExperimentsPage() {
         estimated_revenue_impact: String(experiment.estimated_revenue_impact ?? ""),
         sample_size: String(experiment.sample_size ?? ""),
       });
+      const firstRun = (payload.detail.runs || []).find((item: Run) => ["RUNNING", "MEASURING"].includes(item.status));
+      const firstVariant = payload.detail.variants?.[0];
+      const options = metricOptions(experiment);
+      setMeasurementForm((current) => ({ ...current, run_id: firstRun?.run_id || current.run_id, variant_id: firstVariant?.variant_id || current.variant_id, metric_key: options[0] || current.metric_key }));
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Experiment詳細の読み込みに失敗しました。");
     }
@@ -241,6 +258,11 @@ export default function GrowthExperimentsPage() {
   async function stopRun(runId: string) {
     if (!selected || !window.confirm("このExecution Runを停止しますか？")) return;
     await post({ action: "stop", id: selected.experiment_id, run_id: runId, stop_reason: "管理画面から手動停止" }, "Execution Runを停止しました。");
+  }
+
+  async function recordMeasurement() {
+    if (!selected) return;
+    await post({ action: "measure", id: selected.experiment_id, ...measurementForm, baseline_value: measurementForm.baseline_value === "" ? undefined : Number(measurementForm.baseline_value), measured_value: measurementForm.measured_value === "" ? undefined : Number(measurementForm.measured_value), sample_size: Number(measurementForm.sample_size) }, "測定値を保存しました。");
   }
 
   async function recordResult(action: "recordResult" | "complete") {
@@ -395,6 +417,22 @@ export default function GrowthExperimentsPage() {
 
             {selected ? <Panel title="Execution Run" eyebrow="Run">
               <div className="grid gap-2">{(detail?.runs || []).map((run) => <div key={run.run_id} className="rounded border border-[#d7cabc] bg-white p-3"><Info label={run.status} value={`${run.run_id} / Exposure ${run.exposure_count || 0} / ${run.started_at || ""}`} />{["STARTING", "RUNNING"].includes(run.status) ? <button className="mt-2 rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold" type="button" disabled={busy} onClick={() => stopRun(run.run_id)}>手動停止</button> : null}</div>)}{!detail?.runs?.length ? <p className="text-sm text-[#5e625c]">Runはまだありません。</p> : null}</div>
+            </Panel> : null}
+
+            {selected ? <Panel title="KPI / Guardrail測定" eyebrow="Measurement">
+              <div className="grid gap-3">
+                <label className="grid gap-2 text-sm font-semibold">Run<select className="admin-field" value={measurementForm.run_id} onChange={(event) => setMeasurementForm({ ...measurementForm, run_id: event.target.value })}><option value="">Runを選択</option>{(detail?.runs || []).map((run) => <option key={run.run_id} value={run.run_id}>{run.status} / {run.run_id}</option>)}</select></label>
+                <label className="grid gap-2 text-sm font-semibold">Variant<select className="admin-field" value={measurementForm.variant_id} onChange={(event) => setMeasurementForm({ ...measurementForm, variant_id: event.target.value })}><option value="">Variantを選択</option>{(detail?.variants || []).map((item) => <option key={item.variant_id} value={item.variant_id}>{item.kind} / {item.name}</option>)}</select></label>
+                <label className="grid gap-2 text-sm font-semibold">Metric<select className="admin-field" value={measurementForm.metric_key} onChange={(event) => setMeasurementForm({ ...measurementForm, metric_key: event.target.value })}>{metricOptions(selected).map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+                <div className="grid grid-cols-2 gap-2"><Field label="Baseline" value={measurementForm.baseline_value} onChange={(value) => setMeasurementForm({ ...measurementForm, baseline_value: value })} /><Field label="Measured" value={measurementForm.measured_value} onChange={(value) => setMeasurementForm({ ...measurementForm, measured_value: value })} /></div>
+                <div className="grid grid-cols-2 gap-2"><Field label="Sample Size" value={measurementForm.sample_size} onChange={(value) => setMeasurementForm({ ...measurementForm, sample_size: value })} /><label className="grid gap-2 text-sm font-semibold">Availability<select className="admin-field" value={measurementForm.availability} onChange={(event) => setMeasurementForm({ ...measurementForm, availability: event.target.value })}><option>AVAILABLE</option><option>UNAVAILABLE</option><option>NOT_SUPPORTED</option><option>ERROR</option></select></label></div>
+                <Field label="Source" value={measurementForm.source} onChange={(value) => setMeasurementForm({ ...measurementForm, source: value })} />
+                <div className="grid grid-cols-2 gap-2"><label className="grid gap-2 text-sm font-semibold">Guardrail result<select className="admin-field" value={measurementForm.guardrail_result} onChange={(event) => setMeasurementForm({ ...measurementForm, guardrail_result: event.target.value })}><option>UNKNOWN</option><option>PASS</option><option>WARNING</option><option>FAIL</option></select></label><Field label="Guardrail reason" value={measurementForm.guardrail_reason} onChange={(value) => setMeasurementForm({ ...measurementForm, guardrail_reason: value })} /></div>
+                <button className="rounded bg-[#222820] px-4 py-3 text-sm font-semibold text-[#fff8ed] disabled:opacity-60" type="button" disabled={busy || !measurementForm.run_id || !measurementForm.variant_id || !measurementForm.metric_key} onClick={recordMeasurement}>測定値を追加</button>
+                <div className="grid gap-2">{(detail?.measurements || []).map((item) => <Info key={item.id} label={`${item.metric_name} / ${item.variant_id || "-"}`} value={`Baseline ${item.baseline_value ?? "-"} / Current ${item.measured_value ?? "-"} / Abs ${item.absolute_change ?? "-"} / Rel ${item.relative_change ?? "-"}% / n=${item.sample_size ?? 0} / ${item.availability || "AVAILABLE"} / ${item.source || "-"} / ${item.measured_at || ""}`} />)}{!detail?.measurements?.length ? <p className="text-sm text-[#5e625c]">測定値はまだありません。</p> : null}</div>
+                <div className="grid gap-2">{(detail?.measurementGuardrails || []).map((item, index) => <Info key={`${item.checked_at}-${index}`} label={`Guardrail ${item.result}`} value={`${item.reasons_json || ""} / ${item.checked_at || ""}`} />)}</div>
+                <p className="text-xs leading-5 text-[#5e625c]">測定結果は保存・表示のみです。自動停止、勝敗判定、Rollbackは行いません。</p>
+              </div>
             </Panel> : null}
 
               {selected ? (
