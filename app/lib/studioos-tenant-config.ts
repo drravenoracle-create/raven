@@ -24,7 +24,7 @@ export type TenantPublicUrlConfig = {
 };
 
 export type TenantPlanConfig = {
-  planId?: string;
+  planId?: "LIGHT" | "STANDARD" | "PREMIUM" | "BUSINESS" | "ENTERPRISE" | string;
   planVersion?: string;
 };
 
@@ -279,7 +279,7 @@ export function adaptRavenTenantConfig(legacy: RavenTenantConfig = RAVEN_TENANT_
       publicUrl,
       profileUrl: legacy.character.publicProfile.profileUrl,
     },
-    plan: {},
+    plan: { planId: "PREMIUM", planVersion: "1" },
     entitlements: {
       planDefaults: {},
       featureFlags: legacy.entitlements.features || {},
