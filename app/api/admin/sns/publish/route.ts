@@ -1,8 +1,8 @@
 import { env } from "cloudflare:workers";
 import { observeInstagramContainer, readInstagramMetaError, sanitizeInstagramResponse } from "@/app/lib/instagram-reel-state";
-import { RAVEN_TENANT_CONFIG } from "@/app/lib/tenant-config";
+import { resolveSnsConfig } from "@/app/lib/tenant-config-resolver";
 
-const TENANT_ID = RAVEN_TENANT_CONFIG.id;
+const TENANT_ID = resolveSnsConfig().tenantId;
 
 function clean(value: unknown, maxLength: number) {
   return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, maxLength);

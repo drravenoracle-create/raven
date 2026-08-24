@@ -2,8 +2,9 @@ import { env } from "cloudflare:workers";
 import { NextResponse } from "next/server";
 import { decryptDriveRefreshToken, encryptDriveRefreshToken } from "@/app/lib/google-drive-oauth";
 import { getAdminSession } from "@/app/lib/google-admin-auth";
+import { resolveSnsConfig } from "@/app/lib/tenant-config-resolver";
 
-const TENANT_ID = "raven-oracle";
+const TENANT_ID = resolveSnsConfig().tenantId;
 
 export async function GET() {
   const session = await getAdminSession();

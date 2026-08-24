@@ -2,9 +2,10 @@ import { env } from "cloudflare:workers";
 import { findSnsDuplicate, fingerprintSnsContent, type SnsDuplicateCandidate } from "@/app/lib/sns-dedupe";
 import { recordCardUsage, selectCards } from "@/app/lib/card-library";
 import { RAVEN_CHARACTER_CONFIG } from "@/app/lib/character-config";
-import { RAVEN_TENANT_CONFIG } from "@/app/lib/tenant-config";
+import { resolveSnsConfig } from "@/app/lib/tenant-config-resolver";
 
-const TENANT_ID = RAVEN_TENANT_CONFIG.id;
+const SNS_CONFIG = resolveSnsConfig();
+const TENANT_ID = SNS_CONFIG.tenantId;
 const DUPLICATE_LOOKBACK_DAYS = 45;
 const DEFAULT_SCHEDULE = { windows: [{ start: "01:00", end: "07:00" }, { start: "13:00", end: "17:00" }] };
 
@@ -127,8 +128,8 @@ export async function POST(request: Request) {
   }
 
   const theme = clean(body.theme, 180) || "返信前の文章を整える3つの視点";
-  const cta = clean(body.cta, 240) || RAVEN_CHARACTER_CONFIG.defaultCta;
-  const captionBase = cleanCaption(body.caption, 2200) || `${theme}\n\n送る前に、気持ち・目的・相手に伝えたいことを分けて見直します。\n\n${cta}\n\n${RAVEN_CHARACTER_CONFIG.sns.hashtags.join(" ")}`;
+  const cta = clean(body.cta, 240) || SNS_CONFIG.defaultCta || RAVEN_CHARACTER_CONFIG.defaultCta;
+  const captionBase = cleanCaption(body.caption, 2200) || `${theme}\n\n送る前に、気持ち・目的・相手に伝えたいことを分けて見直します。\n\n${cta}\n\n${SNS_CONFIG.hashtags.join(" ")}`;
   const caption = selectedCardPayload ? cleanCaption(`${captionBase}\n\n今日のカード\n${selectedCardPayload}`, 2200) : captionBase;
   const title = clean(body.title, 180) || theme;
   const scriptBase = clean(body.script, 4000);
@@ -182,7 +183,7 @@ export async function POST(request: Request) {
       clean(body.purpose, 180) || "テキスト鑑定への案内",
       cta,
       caption,
-      clean(body.hashtags, 500) || RAVEN_CHARACTER_CONFIG.sns.hashtags.join(" "),
+      clean(body.hashtags, 500) || SNS_CONFIG.hashtags.join(" "),
       script,
       clean(body.media_type ?? body.mediaType, 40),
       clean(body.media_url ?? body.mediaUrl, 1000),

@@ -6,7 +6,7 @@ import { buildCalendarBlog, buildCalendarSocial, buildDailyAlmanac } from "../ap
 import { observeInstagramContainer, readInstagramMetaError, sanitizeInstagramResponse, type InstagramReelState } from "../app/lib/instagram-reel-state";
 import { RAVEN_CHARACTER_CONFIG } from "../app/lib/character-config";
 import { RAVEN_TENANT_CONFIG } from "../app/lib/tenant-config";
-import { resolveBlogConfig } from "../app/lib/tenant-config-resolver";
+import { resolveBlogConfig, resolveSnsConfig } from "../app/lib/tenant-config-resolver";
 import { englishEntryRedirect } from "../app/lib/locale-entry";
 
 interface Env {
@@ -46,6 +46,9 @@ const PUBLIC_URL = RAVEN_TENANT_CONFIG.publicUrl;
 const BLOG_CONFIG = resolveBlogConfig(TENANT_ID);
 const BLOG_TENANT_ID = BLOG_CONFIG.tenantId;
 const BLOG_PUBLIC_URL = BLOG_CONFIG.publicBaseUrl;
+const SNS_CONFIG = resolveSnsConfig(TENANT_ID);
+const SNS_TENANT_ID = SNS_CONFIG.tenantId;
+const SNS_PUBLIC_URL = SNS_CONFIG.publicBaseUrl;
 const DEFAULT_SNS_SCHEDULE = { windows: [{ start: "01:00", end: "07:00" }, { start: "13:00", end: "17:00" }] };
 
 function json(body: unknown, init: ResponseInit = {}) {
@@ -283,7 +286,7 @@ function buildSnsDraft(input: Record<string, unknown>) {
   const title = toJsonText(input.title, 180) || theme;
   const caption =
     toJsonText(input.caption, 2200) ||
-    `${theme}\n\n送る前に、気持ち、目的、相手に求めることを一度分けてみてください。\n\n${cta}\n\n${CHARACTER_CONFIG.sns.hashtags.join(" ")}`;
+    `${theme}\n\n送る前に、気持ち、目的、相手に求めることを一度分けてみてください。\n\n${cta}\n\n${SNS_CONFIG.hashtags.join(" ")}`;
   const script =
     toJsonText(input.script, 4000) ||
     `0-3秒: ${theme}\n3-10秒: まず気持ちと目的を分けます。\n10-22秒: 相手に何を求めているかを一文にします。\n22-27秒: 送る、待つ、保留するを選びます。\n27-30秒: ${cta}`;
@@ -319,7 +322,7 @@ async function createSnsPost(request: Request, env: Env) {
       draft.purpose,
       draft.cta,
       draft.caption,
-      toJsonText(body.hashtags, 500) || CHARACTER_CONFIG.sns.hashtags.join(" "),
+      toJsonText(body.hashtags, 500) || SNS_CONFIG.hashtags.join(" "),
       draft.script,
       toJsonText(body.media_type ?? body.mediaType, 40),
       toJsonText(body.media_url ?? body.mediaUrl, 1000),
@@ -1342,7 +1345,7 @@ async function queueAndPublishBlogSnsPost(env: Env, article: { id: string; slug?
   const title = sanitizeText(article.title || "今日の占い", 180);
   const keyMessage = sanitizeText(article.key_message || "今日の流れを整える一手を確認しましょう。", 240);
   const blogUrl = article.slug ? `${BLOG_PUBLIC_URL}/blog/${article.slug}/` : `${BLOG_PUBLIC_URL}/blog/`;
-  const caption = `${title}\n\n${keyMessage}\n\n${CHARACTER_CONFIG.reelCta}\n${blogUrl}\n\n${CHARACTER_CONFIG.sns.hashtags.join(" ")}`;
+  const caption = `${title}\n\n${keyMessage}\n\n${SNS_CONFIG.defaultCta}\n${blogUrl}\n\n${SNS_CONFIG.hashtags.join(" ")}`;
   await env.DB.prepare(
     `INSERT INTO sns_posts
       (id, tenant_id, platform, post_type, title, theme, category, character, purpose, cta, caption, hashtags, script, media_type, media_url, thumbnail_url, status, scheduled_at, ai_generated, duplicate_warning)
@@ -1356,9 +1359,9 @@ async function queueAndPublishBlogSnsPost(env: Env, article: { id: string; slug?
       article.category || "今日の占い",
       CHARACTER_CONFIG.displayName,
       "ブログ「今日の占い」からSNS導線を作る",
-      CHARACTER_CONFIG.reelCta,
+      SNS_CONFIG.defaultCta,
       caption,
-      CHARACTER_CONFIG.sns.hashtags.join(" "),
+      SNS_CONFIG.hashtags.join(" "),
       `${title}\n${keyMessage}\nブログへ誘導`,
       `${BLOG_PUBLIC_URL}/raven-blackwood-cover.png`,
       `${BLOG_PUBLIC_URL}/raven-blackwood-cover.png`,

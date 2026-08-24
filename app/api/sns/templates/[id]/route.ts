@@ -2,9 +2,10 @@ import { env } from "cloudflare:workers";
 import { POST as previewThreeChoice } from "@/app/api/sns/videos/three-choice/preview/route";
 import { POST as renderThreeChoice } from "@/app/api/sns/videos/three-choice/render/route";
 import { captionFromThreeChoice } from "@/app/lib/three-choice-video";
-import { RAVEN_TENANT_CONFIG } from "@/app/lib/tenant-config";
+import { resolveSnsConfig } from "@/app/lib/tenant-config-resolver";
 
-const TENANT_ID = RAVEN_TENANT_CONFIG.id;
+const SNS_CONFIG = resolveSnsConfig();
+const TENANT_ID = SNS_CONFIG.tenantId;
 const DEFAULT_RENDER_BACKGROUND = "https://raven.fortunestudios.jp/api/reel-engine/assets?assetId=98ce1cea-851a-4811-8751-fe128d179702";
 function text(value: unknown, max = 4000) { return String(value ?? "").trim().slice(0, max); }
 
@@ -63,7 +64,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         category: text(content.category, 80) || "near_future",
         hook: text(content.hook, 80) || "72時間以内、あなたに起こること。",
         character: text(content.characterId, 80) || "raven",
-        cta: text(content.cta, 160) || template.default_cta || "プロフィールから無料鑑定",
+        cta: text(content.cta, 160) || template.default_cta || SNS_CONFIG.defaultCta,
       }) });
       const previewResponse = await previewThreeChoice(previewRequest);
       const preview = await previewResponse.json().catch(() => ({})) as { ok?: boolean; payload?: Record<string, unknown>; error?: string };
@@ -82,7 +83,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       const payload = rendererPayload as { theme?: string; hook?: string; cta?: string; character?: string; timeline?: unknown; cards?: unknown[] };
       const caption = captionFromThreeChoice(payload as any);
       await env.DB.prepare("INSERT INTO sns_posts (id,tenant_id,platform,post_type,title,theme,category,character,purpose,cta,caption,hashtags,script,media_type,media_url,thumbnail_url,status,ai_generated,duplicate_warning) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-        .bind(postId, tenantId, platform, platform === "youtube" ? "short" : "reel", text(content.title, 180) || template.name, payload.theme || template.name, template.category, payload.character || "raven", "テンプレートからレンダリングした動画を投稿する", payload.cta || template.default_cta, caption, "#レイヴンブラックウッド #3択占い #占い", JSON.stringify(payload.timeline || []), "video", renderResult.outputUrl, renderResult.thumbnailUrl || "", "draft", 1, `template:${template.id}:${template.version}:${postId}`).run();
+        .bind(postId, tenantId, platform, platform === "youtube" ? "short" : "reel", text(content.title, 180) || template.name, payload.theme || template.name, template.category, payload.character || SNS_CONFIG.displayName, "テンプレートからレンダリングした動画を投稿する", payload.cta || template.default_cta || SNS_CONFIG.defaultCta, caption, SNS_CONFIG.hashtags.join(" "), JSON.stringify(payload.timeline || []), "video", renderResult.outputUrl, renderResult.thumbnailUrl || "", "draft", 1, `template:${template.id}:${template.version}:${postId}`).run();
       return Response.json({ ok: true, status: "draft", postId, renderJobId: renderResult.jobId, outputUrl: renderResult.outputUrl, templateId: template.id, templateVersion: template.version });
     }
     const postId = crypto.randomUUID();

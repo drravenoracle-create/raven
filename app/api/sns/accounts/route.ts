@@ -1,7 +1,8 @@
 import { env } from "cloudflare:workers";
-import { RAVEN_TENANT_CONFIG } from "@/app/lib/tenant-config";
+import { resolveSnsConfig } from "@/app/lib/tenant-config-resolver";
 
-const TENANT_ID = RAVEN_TENANT_CONFIG.id;
+const SNS_CONFIG = resolveSnsConfig();
+const TENANT_ID = SNS_CONFIG.tenantId;
 
 export async function GET(request: Request) {
   const tenantId = new URL(request.url).searchParams.get("tenantId") || TENANT_ID;

@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
-import { RAVEN_TENANT_CONFIG } from "@/app/lib/tenant-config";
+import { resolveSnsConfig } from "@/app/lib/tenant-config-resolver";
 
-const TENANT_ID = RAVEN_TENANT_CONFIG.id;
+const TENANT_ID = resolveSnsConfig().tenantId;
 
 function metricValueFromInsights(data: unknown, names: string[]) {
   const rows = Array.isArray((data as { data?: unknown[] })?.data) ? (data as { data: unknown[] }).data : [];

@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
+import { resolveSnsConfig } from "@/app/lib/tenant-config-resolver";
 
-const TENANT_ID = "raven-oracle";
+const TENANT_ID = resolveSnsConfig().tenantId;
 const PLATFORMS = ["instagram", "tiktok", "youtube"] as const;
 
 function normalize(value: unknown) {

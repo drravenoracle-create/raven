@@ -1,7 +1,8 @@
 import { env } from "cloudflare:workers";
 import { classifyInstagramReconciliation } from "@/app/lib/instagram-reconciliation";
+import { resolveSnsConfig } from "@/app/lib/tenant-config-resolver";
 
-const TENANT_ID = "raven-oracle";
+const TENANT_ID = resolveSnsConfig().tenantId;
 
 function clean(value: unknown, maxLength: number) {
   return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, maxLength);

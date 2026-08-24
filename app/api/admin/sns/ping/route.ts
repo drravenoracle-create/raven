@@ -1,5 +1,7 @@
 import { env } from "cloudflare:workers";
-import { RAVEN_TENANT_CONFIG } from "@/app/lib/tenant-config";
+import { resolveSnsConfig } from "@/app/lib/tenant-config-resolver";
+
+const SNS_CONFIG = resolveSnsConfig();
 
 function addDays(date: Date, days: number) {
   const next = new Date(date);
@@ -62,8 +64,8 @@ export function GET() {
   return Response.json(
     {
       ok: true,
-      worker: RAVEN_TENANT_CONFIG.id,
-      tenantId: RAVEN_TENANT_CONFIG.id,
+      worker: SNS_CONFIG.tenantId,
+      tenantId: SNS_CONFIG.tenantId,
       version: "sns-engine-raven-2026-08-09",
       instagram: {
         access_token_configured: Boolean(env.INSTAGRAM_ACCESS_TOKEN),
