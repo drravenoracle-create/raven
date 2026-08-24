@@ -1,16 +1,20 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
-import { copyFileSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 import { observeInstagramContainer, sanitizeInstagramResponse } from "../app/lib/instagram-reel-state.ts";
+import { findFixtureDatabase } from "./helpers/local-d1-fixture.mjs";
 
-const d1Dir = fileURLToPath(new URL("../.wrangler/state/v3/d1/miniflare-D1DatabaseObject/", import.meta.url));
-const sourceDb = readdirSync(d1Dir).find((name) => name.endsWith(".sqlite") && name !== "metadata.sqlite");
+const sourcePath = findFixtureDatabase();
+const d1Dir = join(sourcePath, "..");
+const sourceDb = sourcePath.split(/[\\/]/).at(-1);
 const testDir = mkdtempSync(join(tmpdir(), "raven-reel-d1-"));
-for (const suffix of ["", "-shm", "-wal"]) copyFileSync(join(d1Dir, `${sourceDb}${suffix}`), join(testDir, `${sourceDb}${suffix}`));
+for (const suffix of ["", "-shm", "-wal"]) {
+  const source = join(d1Dir, `${sourceDb}${suffix}`);
+  if (existsSync(source)) copyFileSync(source, join(testDir, `${sourceDb}${suffix}`));
+}
 const db = new DatabaseSync(join(testDir, sourceDb));
 const postId = `fixture-reel-${Date.now()}`;
 const tenantId = "fixture-tenant";
