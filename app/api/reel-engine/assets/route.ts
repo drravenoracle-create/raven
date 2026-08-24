@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { REEL_ENGINE_TENANT_ID } from "@/app/lib/reel-engine";
+import { REEL_ENGINE_CONFIG, REEL_ENGINE_TENANT_ID } from "@/app/lib/reel-engine";
 
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 const allowedMimeTypes = new Set([
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
   const tags = clean(form.get("tags"), 500).split(",").map((tag) => tag.trim()).filter(Boolean);
   const buffer = await file.arrayBuffer();
   const checksum = await sha256Hex(buffer);
-  const storageKey = `reel-assets/${REEL_ENGINE_TENANT_ID}/${assetId}.${extFromMime(file.type)}`;
+  const storageKey = `${REEL_ENGINE_CONFIG.storageRef || REEL_ENGINE_CONFIG.storage.namespace}/${REEL_ENGINE_TENANT_ID}/${assetId}.${extFromMime(file.type)}`;
 
   await mediaBucket.put(storageKey, buffer, {
     httpMetadata: { contentType: file.type },

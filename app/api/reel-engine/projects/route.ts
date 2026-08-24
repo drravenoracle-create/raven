@@ -1,5 +1,5 @@
 ﻿import { env } from "cloudflare:workers";
-import { REEL_ENGINE_TENANT_ID, REEL_ENGINE_VERSION, composeScenes, defaultEntitlement, generateReelScript, reelProjectToSnsDraft, selectBackgroundAssets, validateComposition, type ReelDuration, type VideoAsset } from "@/app/lib/reel-engine";
+import { REEL_ENGINE_CONFIG, REEL_ENGINE_TENANT_ID, REEL_ENGINE_VERSION, composeScenes, defaultEntitlement, generateReelScript, reelProjectToSnsDraft, selectBackgroundAssets, validateComposition, type ReelDuration, type VideoAsset } from "@/app/lib/reel-engine";
 
 function clean(value: unknown, maxLength: number) {
   return String(value ?? "").trim().slice(0, maxLength);
@@ -10,7 +10,7 @@ function parseJson<T>(value: unknown, fallback: T): T {
 }
 
 function duration(value: unknown): ReelDuration {
-  const n = Number(value || 30);
+  const n = Number(value || REEL_ENGINE_CONFIG.defaultDuration);
   return n === 15 || n === 60 ? n : 30;
 }
 
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
       (reel_id, tenant_id, title, objective, platform, aspect_ratio, duration, status, script_json, scenes_json, background_asset_ids_json, text_layers_json, brand_preset_id, renderer_provider, campaign_id, source_content_id, source_type, metadata_json, idempotency_key)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(reelId, REEL_ENGINE_TENANT_ID, title, objective, platform, "9:16", reelDuration, "planned", JSON.stringify(script), JSON.stringify(composition.scenes), JSON.stringify(backgroundAssetIds), JSON.stringify(composition.textLayers), clean(body.brand_preset_id ?? body.brandPresetId, 120) || "Raven Blackwood", config.rendererProvider, clean(body.campaign_id ?? body.campaignId, 120), sourceContentId, sourceContentId ? "blog_article" : "manual", JSON.stringify({ version: REEL_ENGINE_VERSION, tempo: script.tempo, bgmMood: script.bgmMood }), idempotencyKey)
+    .bind(reelId, REEL_ENGINE_TENANT_ID, title, objective, platform, REEL_ENGINE_CONFIG.defaultAspectRatio, reelDuration, "planned", JSON.stringify(script), JSON.stringify(composition.scenes), JSON.stringify(backgroundAssetIds), JSON.stringify(composition.textLayers), clean(body.brand_preset_id ?? body.brandPresetId, 120) || REEL_ENGINE_CONFIG.brandDefaults.presetId, config.rendererProvider, clean(body.campaign_id ?? body.campaignId, 120), sourceContentId, sourceContentId ? "blog_article" : "manual", JSON.stringify({ version: REEL_ENGINE_VERSION, tempo: script.tempo, bgmMood: script.bgmMood }), idempotencyKey)
     .run();
   for (const assetId of backgroundAssetIds) await env.DB.prepare("UPDATE media_video_assets SET usage_count = usage_count + 1 WHERE tenant_id = ? AND asset_id = ?").bind(REEL_ENGINE_TENANT_ID, assetId).run();
   await env.DB.prepare("INSERT INTO reel_engine_audit_logs (id, tenant_id, reel_id, action, detail_json) VALUES (?, ?, ?, ?, ?)").bind(crypto.randomUUID(), REEL_ENGINE_TENANT_ID, reelId, "reel.created", JSON.stringify({ sourceContentId, platform, duration: reelDuration })).run();

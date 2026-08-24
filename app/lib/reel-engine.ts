@@ -1,4 +1,7 @@
-﻿export const REEL_ENGINE_TENANT_ID = "raven-oracle";
+﻿import { resolveReelConfig } from "./tenant-config-resolver.ts";
+
+export const REEL_ENGINE_CONFIG = resolveReelConfig();
+export const REEL_ENGINE_TENANT_ID = REEL_ENGINE_CONFIG.tenantId;
 export const REEL_ENGINE_VERSION = "reel-engine-v1.0";
 
 export type ReelDuration = 15 | 30 | 60;

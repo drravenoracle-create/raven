@@ -94,6 +94,6 @@ export const getTenantLocalization = (tenantId: string) => tenantConfigResolver.
 export const resolveAnalyticsConfig = (tenantId: string) => tenantConfigResolver.getAnalyticsConfig(tenantId);
 export const resolveBlogConfig = (tenantId = RAVEN_STUDIOOS_TENANT_CONFIG.tenantId) => tenantConfigResolver.getBlogConfig(tenantId);
 export const resolveSnsConfig = (tenantId = RAVEN_STUDIOOS_TENANT_CONFIG.tenantId) => tenantConfigResolver.getSnsConfig(tenantId);
-export const resolveReelConfig = (tenantId: string) => tenantConfigResolver.getReelConfig(tenantId);
+export const resolveReelConfig = (tenantId = RAVEN_STUDIOOS_TENANT_CONFIG.tenantId) => tenantConfigResolver.getReelConfig(tenantId);
 export const resolveGrowthConfig = (tenantId: string) => tenantConfigResolver.getGrowthConfig(tenantId);
 export const getEntitlements = (tenantId: string) => tenantConfigResolver.getEntitlements(tenantId);
