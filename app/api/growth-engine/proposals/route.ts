@@ -4,6 +4,7 @@ import { GROWTH_ENGINE_TENANT_ID } from "@/app/lib/growth-engine";
 import { EvidenceRepository, type EvidenceClaim, type EvidenceSource } from "@/app/lib/growth-evidence";
 import { HypothesisRepository } from "@/app/lib/growth-hypothesis";
 import { GrowthProposalRepository, GrowthProposalService, type ProposalReviewAction } from "@/app/lib/growth-proposal";
+import { GrowthProposalExperimentService } from "@/app/lib/growth-proposal-experiment";
 
 function clean(value: unknown, maxLength = 240) { return String(value ?? "").trim().slice(0, maxLength); }
 function tenant(value: unknown) {
@@ -56,9 +57,13 @@ export async function PATCH(request: Request) {
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return Response.json({ ok: false, error: "Invalid JSON body." }, { status: 400 });
   let tenantId: string; try { tenantId = tenant(body.tenant_id ?? body.tenantId); } catch { return Response.json({ ok: false, error: "Invalid tenant_id." }, { status: 400 }); }
-  const proposalId = clean(body.proposal_id ?? body.proposalId, 160); const action = clean(body.action, 40) as ProposalReviewAction;
-  if (!proposalId || !["approve", "reject", "defer"].includes(action)) return Response.json({ ok: false, error: "proposal_id and approve/reject/defer action are required." }, { status: 400 });
+  const proposalId = clean(body.proposal_id ?? body.proposalId, 160); const action = clean(body.action, 40) as ProposalReviewAction | "createExperimentDraft";
+  if (!proposalId || !["approve", "reject", "defer", "createExperimentDraft"].includes(action)) return Response.json({ ok: false, error: "proposal_id and a supported action are required." }, { status: 400 });
   try {
+    if (action === "createExperimentDraft") {
+      const result = await new GrowthProposalExperimentService(env.DB).createDraftFromApprovedProposal(tenantId, proposalId, auth.actor);
+      return Response.json({ ok: result.created || result.duplicate, result });
+    }
     const proposal = await new GrowthProposalRepository(env.DB).updateReviewStatus(tenantId, proposalId, action, auth.actor, clean(body.review_note ?? body.reviewNote, 2000));
     return Response.json({ ok: true, proposal });
   } catch (error) { return Response.json({ ok: false, error: error instanceof Error ? error.message : "Proposal review failed." }, { status: 400 }); }
