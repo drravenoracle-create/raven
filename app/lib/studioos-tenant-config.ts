@@ -155,6 +155,17 @@ export type GrowthConfigSlice = {
   targetAudience?: string;
   automationLevel?: string;
   constraints?: string[];
+  defaultMarket?: string;
+  defaultLocale?: string;
+  providerRefs?: Record<string, string>;
+  experimentPolicy?: {
+    requiresStartApproval: boolean;
+    autoStart: boolean;
+  };
+  approvalPolicy?: {
+    humanApprovalRequired: boolean;
+    restrictedActions: string[];
+  };
   tenantId: string;
 };
 
@@ -338,6 +349,16 @@ export function adaptRavenTenantConfig(legacy: RavenTenantConfig = RAVEN_TENANT_
     growth: {
       enabled: true,
       kpi: [],
+      targetAudience: undefined,
+      automationLevel: "read-only",
+      defaultMarket: "jp",
+      defaultLocale: "ja-JP",
+      providerRefs: { analytics: "external-connectors", sns: "sns-engine" },
+      experimentPolicy: { requiresStartApproval: true, autoStart: false },
+      approvalPolicy: {
+        humanApprovalRequired: true,
+        restrictedActions: ["price", "trial", "billing", "campaign", "character", "menu", "advertising", "external_send", "sns_publish"],
+      },
       constraints: [],
       tenantId: legacy.growth.tenantId,
     },
