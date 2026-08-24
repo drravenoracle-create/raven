@@ -63,11 +63,13 @@ type Detail = {
   runs: Run[];
   measurements: Measurement[];
   measurementGuardrails: Guardrail[];
+  resultEvaluations: ResultEvaluation[];
 };
 type Variant = { variant_id: string; name: string; kind: string; allocation_weight: number; status: string; configuration_json?: string };
 type Run = { run_id: string; status: string; started_at?: string; stopped_at?: string; start_reason?: string; stop_reason?: string; exposure_count?: number };
 type Measurement = { id: string; run_id?: string; variant_id?: string; metric_name: string; metric_role?: string; baseline_value?: number | null; measured_value?: number | null; absolute_change?: number | null; relative_change?: number | null; sample_size?: number; availability?: string; source?: string; measured_at?: string };
 type Guardrail = { result: string; reasons_json?: string; checked_at?: string };
+type ResultEvaluation = { evaluation_id: string; candidate_result: string; stop_recommendation: string; primary_metric: string; control_value?: number | null; variant_value?: number | null; absolute_difference?: number | null; relative_difference?: number | null; sample_size: number; confidence?: number | null; guardrail_status: string; reasons_json?: string; blockers_json?: string; evaluated_at?: string; status: string };
 type Preflight = { experimentId: string; allowed: boolean; decision: string; approvalStatus: string; evidenceDecision: { decision?: string; sufficiency?: { level?: string } }; riskClass: string; guardrails: Array<{ type: string; result: string; reason: string }>; blockers: string[]; warnings: string[]; evaluatedAt: string };
 
 function metricOptions(experiment?: Experiment) {
@@ -120,6 +122,7 @@ export default function GrowthExperimentsPage() {
   const [measurementForm, setMeasurementForm] = useState({ run_id: "", variant_id: "", metric_key: "", baseline_value: "", measured_value: "", sample_size: "1", availability: "AVAILABLE", source: "manual", guardrail_result: "UNKNOWN", guardrail_reason: "" });
 
   const selected = detail?.experiment || null;
+  const candidate = detail?.resultEvaluations?.find((item) => item.status === "CANDIDATE") || null;
   const filtered = useMemo(() => experiments, [experiments]);
 
   async function readJson(response: Response) {
@@ -263,6 +266,21 @@ export default function GrowthExperimentsPage() {
   async function recordMeasurement() {
     if (!selected) return;
     await post({ action: "measure", id: selected.experiment_id, ...measurementForm, baseline_value: measurementForm.baseline_value === "" ? undefined : Number(measurementForm.baseline_value), measured_value: measurementForm.measured_value === "" ? undefined : Number(measurementForm.measured_value), sample_size: Number(measurementForm.sample_size) }, "測定値を保存しました。");
+  }
+
+  async function evaluateResult() {
+    if (!selected) return;
+    await post({ action: "evaluateResult", id: selected.experiment_id, run_id: measurementForm.run_id || undefined }, "Result Candidateを評価しました。");
+  }
+
+  async function confirmResult(evaluationId: string) {
+    if (!selected || !window.confirm("このResult Candidateを人間確認してExperimentを完了しますか？")) return;
+    await post({ action: "confirmResult", id: selected.experiment_id, evaluation_id: evaluationId, reason: "管理画面でResult Candidateを確認しました。" }, "Resultを確定し、Experimentを完了しました。");
+  }
+
+  async function rejectResult(evaluationId: string) {
+    if (!selected) return;
+    await post({ action: "rejectResult", id: selected.experiment_id, evaluation_id: evaluationId, reason: "再評価が必要なためResult Candidateを却下しました。" }, "Result Candidateを却下しました。");
   }
 
   async function recordResult(action: "recordResult" | "complete") {
@@ -429,10 +447,16 @@ export default function GrowthExperimentsPage() {
                 <Field label="Source" value={measurementForm.source} onChange={(value) => setMeasurementForm({ ...measurementForm, source: value })} />
                 <div className="grid grid-cols-2 gap-2"><label className="grid gap-2 text-sm font-semibold">Guardrail result<select className="admin-field" value={measurementForm.guardrail_result} onChange={(event) => setMeasurementForm({ ...measurementForm, guardrail_result: event.target.value })}><option>UNKNOWN</option><option>PASS</option><option>WARNING</option><option>FAIL</option></select></label><Field label="Guardrail reason" value={measurementForm.guardrail_reason} onChange={(value) => setMeasurementForm({ ...measurementForm, guardrail_reason: value })} /></div>
                 <button className="rounded bg-[#222820] px-4 py-3 text-sm font-semibold text-[#fff8ed] disabled:opacity-60" type="button" disabled={busy || !measurementForm.run_id || !measurementForm.variant_id || !measurementForm.metric_key} onClick={recordMeasurement}>測定値を追加</button>
+                <button className="rounded border border-[#596d51] px-4 py-3 text-sm font-semibold text-[#596d51] disabled:opacity-60" type="button" disabled={busy || !measurementForm.run_id} onClick={evaluateResult}>Resultを評価</button>
                 <div className="grid gap-2">{(detail?.measurements || []).map((item) => <Info key={item.id} label={`${item.metric_name} / ${item.variant_id || "-"}`} value={`Baseline ${item.baseline_value ?? "-"} / Current ${item.measured_value ?? "-"} / Abs ${item.absolute_change ?? "-"} / Rel ${item.relative_change ?? "-"}% / n=${item.sample_size ?? 0} / ${item.availability || "AVAILABLE"} / ${item.source || "-"} / ${item.measured_at || ""}`} />)}{!detail?.measurements?.length ? <p className="text-sm text-[#5e625c]">測定値はまだありません。</p> : null}</div>
                 <div className="grid gap-2">{(detail?.measurementGuardrails || []).map((item, index) => <Info key={`${item.checked_at}-${index}`} label={`Guardrail ${item.result}`} value={`${item.reasons_json || ""} / ${item.checked_at || ""}`} />)}</div>
                 <p className="text-xs leading-5 text-[#5e625c]">測定結果は保存・表示のみです。自動停止、勝敗判定、Rollbackは行いません。</p>
               </div>
+            </Panel> : null}
+
+            {selected ? <Panel title="Result Candidate" eyebrow="Decision">
+              {candidate ? <div className="grid gap-2"><Info label="候補 / 推奨" value={`${candidate.candidate_result} / ${candidate.stop_recommendation}`} /><Info label="Primary KPI" value={`${candidate.primary_metric} / Control ${candidate.control_value ?? "-"} / Variant ${candidate.variant_value ?? "-"}`} /><Info label="差分 / Sample" value={`Absolute ${candidate.absolute_difference ?? "-"} / Relative ${candidate.relative_difference ?? "-"}% / n=${candidate.sample_size}`} /><Info label="Guardrail" value={candidate.guardrail_status} /><Info label="Blocker / Reason" value={`${candidate.blockers_json || "[]"} / ${candidate.reasons_json || "[]"}`} /><Info label="Evaluation time" value={candidate.evaluated_at || "-"} /><div className="flex flex-wrap gap-2"><button className="rounded bg-[#222820] px-4 py-2 text-sm font-semibold text-[#fff8ed] disabled:opacity-60" type="button" disabled={busy} onClick={() => confirmResult(candidate.evaluation_id)}>Confirm Result</button><button className="rounded border border-[#d7cabc] px-4 py-2 text-sm font-semibold disabled:opacity-60" type="button" disabled={busy} onClick={() => rejectResult(candidate.evaluation_id)}>再評価 / 却下</button></div></div> : <p className="text-sm text-[#5e625c]">Result Candidateはありません。最新測定後に評価してください。</p>}
+              <p className="mt-3 text-xs leading-5 text-[#5e625c]">候補は自動確定されません。Confirm Result時に最新測定値・Guardrail・Sample Sizeを再確認します。Rollbackや外部変更は行いません。</p>
             </Panel> : null}
 
               {selected ? (
@@ -447,7 +471,6 @@ export default function GrowthExperimentsPage() {
                   <TextField label="次アクション" value={resultForm.next_action} onChange={(value) => setResultForm({ ...resultForm, next_action: value })} />
                   <div className="flex flex-wrap gap-2">
                     <button className="rounded border border-[#d7cabc] px-4 py-2 text-sm font-semibold disabled:opacity-60" type="button" disabled={busy} onClick={() => recordResult("recordResult")}>結果だけ保存</button>
-                    <button className="rounded bg-[#222820] px-4 py-2 text-sm font-semibold text-[#fff8ed] disabled:opacity-60" type="button" disabled={busy} onClick={() => recordResult("complete")}>保存して完了</button>
                   </div>
                 </div>
               </Panel>

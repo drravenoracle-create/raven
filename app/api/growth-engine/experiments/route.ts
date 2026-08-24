@@ -8,13 +8,13 @@ import {
   experimentSummary,
   listExperimentDetail,
   listExperiments,
-  recordExperimentResult,
   rejectExperiment,
   transitionExperiment,
   updateExperiment,
 } from "@/app/lib/growth-experiment-manager";
 import { runExperimentPreflight } from "@/app/lib/growth-experiment-preflight";
 import { listExperimentMeasurements, recordExperimentMeasurement } from "@/app/lib/growth-experiment-measurement";
+import { confirmExperimentResult, evaluateExperimentResult, listResultEvaluations, rejectExperimentResult } from "@/app/lib/growth-experiment-result";
 import {
   assignExperimentSubject,
   createExperimentVariant,
@@ -59,12 +59,13 @@ export async function GET(request: Request) {
     if (id) {
       const detail = await listExperimentDetail(env.DB, id, tenantId);
       const experimentId = String(detail.experiment.experiment_id);
-      const [variants, runs, measurements] = await Promise.all([
+      const [variants, runs, measurements, evaluations] = await Promise.all([
         listExperimentVariants(env.DB, experimentId, tenantId),
         listExperimentRuns(env.DB, experimentId, tenantId),
         listExperimentMeasurements(env.DB, experimentId, tenantId),
+        listResultEvaluations(env.DB, experimentId, tenantId),
       ]);
-      return Response.json({ ok: true, detail: { ...detail, variants, runs, measurements: measurements.measurements, measurementGuardrails: measurements.guardrails } }, { headers: { "Cache-Control": "no-store" } });
+      return Response.json({ ok: true, detail: { ...detail, variants, runs, measurements: measurements.measurements, measurementGuardrails: measurements.guardrails, resultEvaluations: evaluations } }, { headers: { "Cache-Control": "no-store" } });
     }
     const [experiments, summary, recommendations] = await Promise.all([
       listExperiments(env.DB, {
@@ -131,6 +132,15 @@ export async function POST(request: Request) {
     }
     if (action === "assign") return Response.json({ ok: true, assignment: await assignExperimentSubject(env.DB, id, actorBody, tenantId) }, { status: 201 });
     if (action === "measure") return Response.json({ ok: true, ...await recordExperimentMeasurement(env.DB, id, actorBody, tenantId) }, { status: 201 });
+    if (action === "evaluateResult") return Response.json({ ok: true, evaluation: await evaluateExperimentResult(env.DB, id, actorBody, tenantId) }, { status: 201 });
+    if (action === "confirmResult") {
+      const evaluationId = clean(body.evaluation_id ?? body.evaluationId, 120); if (!evaluationId) throw new Error("evaluation_id is required.");
+      return Response.json({ ok: true, evaluation: await confirmExperimentResult(env.DB, evaluationId, actorBody, tenantId) });
+    }
+    if (action === "rejectResult") {
+      const evaluationId = clean(body.evaluation_id ?? body.evaluationId, 120); if (!evaluationId) throw new Error("evaluation_id is required.");
+      return Response.json({ ok: true, evaluation: await rejectExperimentResult(env.DB, evaluationId, actorBody, tenantId) });
+    }
     if (action === "preflight") {
       return Response.json({ ok: true, preflight: await runExperimentPreflight(env.DB, id, {
         tenantId,
@@ -147,12 +157,8 @@ export async function POST(request: Request) {
     if (action === "start") return Response.json({ ok: true, experiment: await transitionExperiment(env.DB, id, "RUNNING", actorBody, tenantId) });
     if (action === "pause") return Response.json({ ok: true, experiment: await transitionExperiment(env.DB, id, "PAUSED", actorBody, tenantId) });
     if (action === "resume") return Response.json({ ok: true, experiment: await transitionExperiment(env.DB, id, "RUNNING", actorBody, tenantId) });
-    if (action === "measure") return Response.json({ ok: true, experiment: await transitionExperiment(env.DB, id, "MEASURING", actorBody, tenantId) });
-    if (action === "complete") {
-      const recorded = await recordExperimentResult(env.DB, id, actorBody, tenantId);
-      return Response.json({ ok: true, experiment: await transitionExperiment(env.DB, String(recorded?.experiment_id || id), "COMPLETED", actorBody, tenantId) });
-    }
-    if (action === "recordResult") return Response.json({ ok: true, experiment: await recordExperimentResult(env.DB, id, actorBody, tenantId) });
+    if (action === "complete") throw new Error("Human-confirmed Result is required. Use confirmResult.");
+    if (action === "recordResult") throw new Error("Use evaluateResult and confirmResult for Result decisions.");
     if (action === "archive") return Response.json({ ok: true, experiment: await transitionExperiment(env.DB, id, "ARCHIVED", actorBody, tenantId) });
     if (action === "cancel") return Response.json({ ok: true, experiment: await transitionExperiment(env.DB, id, "CANCELLED", actorBody, tenantId) });
     return Response.json({ ok: false, error: "Unknown action." }, { status: 400 });
