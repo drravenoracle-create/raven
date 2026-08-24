@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     const settings = await env.DB.prepare("SELECT * FROM sns_template_settings WHERE tenant_id = ? LIMIT 1").bind(tenantId).first();
     const flags = parseFlags((settings as { feature_flags?: unknown } | null)?.feature_flags);
     const presetsEnabled = flags.sns_format_presets_v1_enabled !== false;
-    const templates = (result.results || []).filter((item: any) => !item.is_system_preset || presetsEnabled);
+    const templates = (result.results || []).filter((item: Record<string, unknown>) => !item.is_system_preset || presetsEnabled);
     return Response.json({ templates, settings, flags: { sns_format_presets_v1_enabled: presetsEnabled } }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Template list failed." }, { status: 400 }); }
 }

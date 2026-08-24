@@ -55,7 +55,7 @@ export default function AnalyticsAdminPage() {
 
   useEffect(() => {
     let active = true;
-    setLoadState("実データを読み込み中です。");
+    queueMicrotask(() => setLoadState("実データを読み込み中です。"));
     fetch(`/api/analytics/summary?days=${periodDays}`, { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("summary failed"))))
       .then((payload: AnalyticsPayload) => {

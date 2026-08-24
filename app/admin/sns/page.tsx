@@ -212,12 +212,16 @@ export default function SnsAdminPage() {
       .finally(() => {
         if (active) setActiveAction("idle");
       });
-    loadDecks();
-    loadDriveVideos().catch(() => {});
-    loadVideoJobs();
-    loadGrowthLoop();
-    loadSnsPing();
-    loadPlatformSettings();
+    queueMicrotask(() => {
+      void loadDecks();
+      void loadDriveVideos().catch(() => {});
+      void loadVideoJobs();
+      void loadGrowthLoop();
+    });
+    queueMicrotask(() => {
+      void loadSnsPing();
+      void loadPlatformSettings();
+    });
     return () => {
       active = false;
     };
@@ -226,7 +230,7 @@ export default function SnsAdminPage() {
   useEffect(() => {
     if (!threeChoiceDeckId) {
       const firstActive = decks.find((deck) => deck.status === "active" && deck.sns_use_allowed);
-      if (firstActive) setThreeChoiceDeckId(firstActive.id);
+      if (firstActive) queueMicrotask(() => setThreeChoiceDeckId(firstActive.id));
     }
   }, [decks, threeChoiceDeckId]);
 

@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import Link from "next/link";
 import { getSortedBlogPosts } from "./lib/blog";
 
 type HomePost = {
@@ -166,11 +167,11 @@ export default async function Home() {
             <h2>AI無料占い</h2>
             <span>今日・恋愛・仕事・金運・易断から、短い結果を確認できます。</span>
           </a>
-          <a className="raven-path-card" href="/divination-dictionary/yijing-64-hexagrams/">
+          <Link className="raven-path-card" href="/divination-dictionary/yijing-64-hexagrams/">
             <p>古典占術の解説を見る</p>
             <h2>易経 六十四卦</h2>
             <span>各卦の意味、変爻、変卦、物語上の位置を個別に読めます。</span>
-          </a>
+          </Link>
         </div>
       </section>
 
@@ -200,7 +201,7 @@ export default async function Home() {
           </p>
           <div className="mt-5 flex flex-wrap gap-3 text-sm font-semibold text-[#596d51]">
             <a className="underline underline-offset-4" href="/guild/">ギルドメンバー紹介を見る</a>
-            <a className="underline underline-offset-4" href="/divination-dictionary/">古典占術辞典を読む</a>
+            <Link className="underline underline-offset-4" href="/divination-dictionary/">古典占術辞典を読む</Link>
           </div>
         </section>
 
@@ -232,7 +233,7 @@ export default async function Home() {
               <p className="text-sm font-semibold text-[#8d6a2f]">ブログ</p>
               <h2 className="mt-1 text-2xl font-semibold">最新記事</h2>
             </div>
-            <a className="text-sm font-semibold text-[#596d51] underline underline-offset-4" href="/blog/">一覧を見る</a>
+            <Link className="text-sm font-semibold text-[#596d51] underline underline-offset-4" href="/blog/">一覧を見る</Link>
           </div>
           <div className="grid gap-3">
             {latestPosts.map((post) => (
@@ -249,8 +250,8 @@ export default async function Home() {
       <footer className="border-t border-[#d8cdbd] px-5 py-6">
         <nav className="mx-auto flex max-w-7xl flex-wrap gap-4 text-sm font-semibold text-[#596d51]">
           <a href="/guild/">ギルドメンバー紹介</a>
-          <a href="/divination-methods/">レイヴンの占術</a>
-          <a href="/divination-dictionary/">古典占術辞典</a>
+          <Link href="/divination-methods/">レイヴンの占術</Link>
+          <Link href="/divination-dictionary/">古典占術辞典</Link>
           <a href="/member/">マイページ</a>
           <a href="/faq/">FAQ</a>
           <a href="/tokushoho/">特定商取引法に基づく表記</a>

@@ -20,7 +20,7 @@ function assertTenant(value: unknown) {
 }
 
 function rendererUrl() {
-  return clean((env as any).VIDEO_RENDERER_URL, 1000);
+  return clean((env as unknown as Record<string, unknown>).VIDEO_RENDERER_URL, 1000);
 }
 
 function normalizeRendererOutputUrl(outputUrl: string | undefined) {
@@ -66,7 +66,7 @@ async function submitRenderer(jobId: string, payload: ThreeChoiceVideoJobPayload
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(clean((env as any).VIDEO_RENDERER_TOKEN, 500) ? { Authorization: `Bearer ${clean((env as any).VIDEO_RENDERER_TOKEN, 500)}` } : {}),
+      ...(clean((env as unknown as Record<string, unknown>).VIDEO_RENDERER_TOKEN, 500) ? { Authorization: `Bearer ${clean((env as unknown as Record<string, unknown>).VIDEO_RENDERER_TOKEN, 500)}` } : {}),
     },
     body: JSON.stringify({ jobId, payload }),
   });

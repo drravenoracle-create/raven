@@ -178,8 +178,10 @@ export default function DeckManagerPage() {
   }
 
   useEffect(() => {
-    loadAll("");
-    loadDriveJobs();
+    queueMicrotask(() => {
+      void loadAll("");
+      void loadDriveJobs();
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

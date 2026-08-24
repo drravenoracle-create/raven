@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type MemberStatus = {
   ok?: boolean;
@@ -112,7 +113,7 @@ export default function MemberPageClient() {
   return (
     <main className="raven-page min-h-screen bg-[#f5f0e8] text-[#20241f]">
       <section className="raven-content-shell mx-auto max-w-6xl px-4 py-5 sm:px-5 sm:py-8">
-        <a className="text-sm font-semibold text-[#596d51] underline underline-offset-4" href="/">トップへ戻る</a>
+        <Link className="text-sm font-semibold text-[#596d51] underline underline-offset-4" href="/">トップへ戻る</Link>
 
         <header className="raven-member-hero mt-4 p-5 sm:p-7">
             <p className="text-sm font-semibold text-[#d8b15f]">会員ページ</p>
@@ -130,9 +131,9 @@ export default function MemberPageClient() {
 
             {session?.authenticated ? (
               <div className="mt-4 grid gap-3">
-                <a className="raven-primary-button inline-flex items-center justify-center" href="/member/history/">
+                <Link className="raven-primary-button inline-flex items-center justify-center" href="/member/history/">
                   鑑定履歴を見る
-                </a>
+                </Link>
                 <a className="rounded border border-[#596d51] px-4 py-3 text-center font-semibold text-[#596d51]" href="/text-reading/">
                   新しいAIテキスト鑑定へ
                 </a>

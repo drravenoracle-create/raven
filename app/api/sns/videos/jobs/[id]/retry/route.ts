@@ -41,7 +41,7 @@ export async function POST(_request: Request, { params }: { params: Params }) {
   }
   const validation = validateVideoJobPayload(payload);
   if (!validation.valid) return Response.json({ error: "Stored job payload is invalid.", details: validation.errors }, { status: 422 });
-  const rendererUrl = clean((env as any).VIDEO_RENDERER_URL, 1000);
+  const rendererUrl = clean((env as unknown as Record<string, unknown>).VIDEO_RENDERER_URL, 1000);
   if (!rendererUrl) {
     await env.DB.prepare("UPDATE three_choice_video_jobs SET retry_count = retry_count + 1, status = 'failed', error_code = 'renderer_unconfigured', error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
       .bind("VIDEO_RENDERER_URL is not configured.", THREE_CHOICE_TENANT_ID, jobId)
@@ -57,7 +57,7 @@ export async function POST(_request: Request, { params }: { params: Params }) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(clean((env as any).VIDEO_RENDERER_TOKEN, 500) ? { Authorization: `Bearer ${clean((env as any).VIDEO_RENDERER_TOKEN, 500)}` } : {}),
+      ...(clean((env as unknown as Record<string, unknown>).VIDEO_RENDERER_TOKEN, 500) ? { Authorization: `Bearer ${clean((env as unknown as Record<string, unknown>).VIDEO_RENDERER_TOKEN, 500)}` } : {}),
     },
     body: JSON.stringify({ jobId, payload }),
   });

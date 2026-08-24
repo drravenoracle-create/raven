@@ -22,7 +22,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const tenantId = text(body?.tenant_id ?? body?.tenantId, 80) || TENANT_ID;
   if (tenantId !== TENANT_ID) return Response.json({ error: "Invalid tenant_id" }, { status: 400 });
-  const current = await env.DB.prepare("SELECT * FROM sns_post_templates WHERE tenant_id = ? AND id = ? LIMIT 1").bind(tenantId, id).first<any>();
+  const current = await env.DB.prepare("SELECT * FROM sns_post_templates WHERE tenant_id = ? AND id = ? LIMIT 1").bind(tenantId, id).first<Record<string, unknown>>();
   if (!current) return Response.json({ error: "Template not found." }, { status: 404 });
   const version = Number(current.version || 1) + 1;
   await env.DB.prepare("UPDATE sns_post_templates SET name=?, description=?, category=?, status=?, duration_seconds=?, aspect_ratio=?, scene_schema=?, content_schema=?, default_cta=?, supported_platforms=?, supported_characters=?, tags=?, version=?, updated_at=CURRENT_TIMESTAMP WHERE tenant_id=? AND id=?")
@@ -36,7 +36,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const tenantId = text(body?.tenant_id ?? body?.tenantId, 80) || TENANT_ID;
   if (tenantId !== TENANT_ID) return Response.json({ error: "Invalid tenant_id" }, { status: 400 });
-  const template = await env.DB.prepare("SELECT * FROM sns_post_templates WHERE tenant_id = ? AND id = ? AND status != 'archived' LIMIT 1").bind(tenantId, id).first<any>();
+  const template = await env.DB.prepare("SELECT * FROM sns_post_templates WHERE tenant_id = ? AND id = ? AND status != 'archived' LIMIT 1").bind(tenantId, id).first<Record<string, unknown>>();
   if (!template) return Response.json({ error: "Template not found." }, { status: 404 });
   const action = text(body?.action, 40) || "preview";
   if (action === "duplicate") {
@@ -79,7 +79,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       const postId = crypto.randomUUID();
       const platform = text(content.platform, 30) || "instagram";
       const payload = rendererPayload as { theme?: string; hook?: string; cta?: string; character?: string; timeline?: unknown; cards?: unknown[] };
-      const caption = captionFromThreeChoice(payload as any);
+      const caption = captionFromThreeChoice(payload as Parameters<typeof captionFromThreeChoice>[0]);
       await env.DB.prepare("INSERT INTO sns_posts (id,tenant_id,platform,post_type,title,theme,category,character,purpose,cta,caption,hashtags,script,media_type,media_url,thumbnail_url,status,ai_generated,duplicate_warning) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
         .bind(postId, tenantId, platform, platform === "youtube" ? "short" : "reel", text(content.title, 180) || template.name, payload.theme || template.name, template.category, payload.character || "raven", "テンプレートからレンダリングした動画を投稿する", payload.cta || template.default_cta, caption, "#レイヴンブラックウッド #3択占い #占い", JSON.stringify(payload.timeline || []), "video", renderResult.outputUrl, renderResult.thumbnailUrl || "", "draft", 1, `template:${template.id}:${template.version}:${postId}`).run();
       return Response.json({ ok: true, status: "draft", postId, renderJobId: renderResult.jobId, outputUrl: renderResult.outputUrl, templateId: template.id, templateVersion: template.version });

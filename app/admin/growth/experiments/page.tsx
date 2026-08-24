@@ -144,7 +144,7 @@ export default function GrowthExperimentsPage() {
   }
 
   useEffect(() => {
-    loadAll();
+    queueMicrotask(() => { void loadAll(); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

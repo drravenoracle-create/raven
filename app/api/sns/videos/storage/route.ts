@@ -7,7 +7,7 @@ export async function POST(request: Request) {
   let sourceUrl: URL;
   try { sourceUrl = new URL(body.source_url); } catch { return Response.json({ error: "source_url must be a valid URL." }, { status: 400 }); }
   if (sourceUrl.protocol !== "https:" || !["raven.fortunestudios.jp", "raven-oracle.dr-ravenoracle.workers.dev"].includes(sourceUrl.hostname)) return Response.json({ error: "source_url host is not allowed." }, { status: 400 });
-  const folderId = String(body.folder_id || (env as any).GOOGLE_DRIVE_VIDEO_FOLDER_ID || "").trim();
+  const folderId = String(body.folder_id || (env as unknown as Record<string, unknown>).GOOGLE_DRIVE_VIDEO_FOLDER_ID || "").trim();
   if (!folderId) return Response.json({ error: "GOOGLE_DRIVE_VIDEO_FOLDER_ID is not configured." }, { status: 503 });
   const source = await fetch(sourceUrl);
   if (!source.ok) return Response.json({ error: `Source video returned ${source.status}.` }, { status: 502 });

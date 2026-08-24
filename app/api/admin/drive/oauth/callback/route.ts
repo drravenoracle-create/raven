@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   const token = await tokenResponse.json() as { refresh_token?: string; access_token?: string; error?: string; error_description?: string };
   if (!tokenResponse.ok || !token.refresh_token) return NextResponse.json({ error: token.error_description || token.error || "Google did not return a refresh token. Retry with consent." }, { status: 502 });
   const encrypted = await encryptDriveRefreshToken(token.refresh_token);
-  await (env as any).DB.prepare(`INSERT INTO google_drive_credentials (id, tenant_id, google_email, refresh_token_ciphertext) VALUES (?, ?, ?, ?) ON CONFLICT(tenant_id) DO UPDATE SET google_email=excluded.google_email, refresh_token_ciphertext=excluded.refresh_token_ciphertext, updated_at=CURRENT_TIMESTAMP`).bind(crypto.randomUUID(), "raven-oracle", session.email, encrypted).run();
+  await (env as unknown as { DB: D1Database }).DB.prepare(`INSERT INTO google_drive_credentials (id, tenant_id, google_email, refresh_token_ciphertext) VALUES (?, ?, ?, ?) ON CONFLICT(tenant_id) DO UPDATE SET google_email=excluded.google_email, refresh_token_ciphertext=excluded.refresh_token_ciphertext, updated_at=CURRENT_TIMESTAMP`).bind(crypto.randomUUID(), "raven-oracle", session.email, encrypted).run();
   const response = NextResponse.redirect(new URL("/admin/sns?drive=connected", request.url));
   response.cookies.delete(GOOGLE_STATE_COOKIE);
   return response;

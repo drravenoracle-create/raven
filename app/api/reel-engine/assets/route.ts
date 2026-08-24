@@ -18,7 +18,7 @@ function clean(value: unknown, maxLength: number) {
 }
 
 function bucket() {
-  return (env as any).MEDIA_BUCKET as {
+  return (env as unknown as Record<string, unknown>).MEDIA_BUCKET as {
     put(key: string, value: ArrayBuffer | Blob | ReadableStream, options?: Record<string, unknown>): Promise<unknown>;
     get(key: string): Promise<{ body: ReadableStream; size?: number; httpMetadata?: { contentType?: string } } | null>;
     delete(key: string): Promise<void>;

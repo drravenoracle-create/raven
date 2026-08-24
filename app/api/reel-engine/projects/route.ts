@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   const script = generateReelScript({ title, objective, duration: reelDuration, cta: clean(body.cta, 240) });
   const assets = await env.DB.prepare("SELECT * FROM media_video_assets WHERE tenant_id = ? ORDER BY usage_count ASC, performance_score DESC LIMIT 20")
     .bind(REEL_ENGINE_TENANT_ID)
-    .all<any>();
+    .all<Record<string, unknown>>();
   const normalizedAssets: VideoAsset[] = (assets.results || []).map((asset) => ({ assetId: asset.asset_id, tenantId: asset.tenant_id, source: asset.source, storageKey: asset.storage_key, duration: Number(asset.duration || 0), width: Number(asset.width || 1080), height: Number(asset.height || 1920), tags: parseJson(asset.tags_json, []), category: asset.category, mood: asset.mood, usageCount: Number(asset.usage_count || 0), performanceScore: Number(asset.performance_score || 0) }));
   const selectedAssets = selectBackgroundAssets(script, normalizedAssets, script.scenes.length);
   const backgroundAssetIds = selectedAssets.map((asset) => asset.assetId);
@@ -86,7 +86,7 @@ export async function PUT(request: Request) {
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return Response.json({ error: "Invalid JSON body." }, { status: 400 });
   const reelId = clean(body.reel_id ?? body.reelId, 120);
-  const project = await env.DB.prepare("SELECT * FROM reel_projects WHERE tenant_id = ? AND reel_id = ? LIMIT 1").bind(REEL_ENGINE_TENANT_ID, reelId).first<any>();
+  const project = await env.DB.prepare("SELECT * FROM reel_projects WHERE tenant_id = ? AND reel_id = ? LIMIT 1").bind(REEL_ENGINE_TENANT_ID, reelId).first<Record<string, unknown>>();
   if (!project) return Response.json({ error: "Reel project not found." }, { status: 404 });
   const script = parseJson(project.script_json, { hook: project.title, scenes: [], cta: "", backgroundCategories: [], tempo: "medium", bgmMood: "calm" });
   const snsDraft = reelProjectToSnsDraft({ tenantId: project.tenant_id, reelId: project.reel_id, title: project.title, objective: project.objective, platform: project.platform, aspectRatio: project.aspect_ratio, duration: project.duration, status: project.status, script, scenes: parseJson(project.scenes_json, []), backgroundAssetIds: parseJson(project.background_asset_ids_json, []), textLayers: parseJson(project.text_layers_json, []), brandPresetId: project.brand_preset_id, rendererProvider: project.renderer_provider, outputAssetId: project.output_asset_id, campaignId: project.campaign_id, sourceContentId: project.source_content_id });

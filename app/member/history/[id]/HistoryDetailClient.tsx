@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type DetailPayload = {
   ok?: boolean;
@@ -91,7 +92,7 @@ export default function HistoryDetailClient({ id }: { id: string }) {
     <main className="raven-page min-h-screen bg-[#f5f0e8] text-[#20241f]">
       <section className="raven-content-shell mx-auto max-w-4xl px-4 py-5 sm:px-5 sm:py-8">
         <div className="flex flex-wrap gap-3 text-sm font-semibold text-[#596d51]">
-          <a className="underline underline-offset-4" href="/member/history/">履歴一覧へ戻る</a>
+          <Link className="underline underline-offset-4" href="/member/history/">履歴一覧へ戻る</Link>
           <a className="underline underline-offset-4" href="/text-reading/">もう一度鑑定する</a>
         </div>
         <article className="raven-card mt-4 p-5 sm:p-6">

@@ -12,23 +12,24 @@ function jsonArray(value: unknown, fallback: string[]) {
   return Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean) : fallback;
 }
 
-function normalizeAiDraft(raw: any, fallback: BlogEngineDraft, date: string): BlogEngineDraft {
+function normalizeAiDraft(raw: unknown, fallback: BlogEngineDraft, date: string): BlogEngineDraft {
+  const data = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
   const draft: BlogEngineDraft = {
-    title: String(raw?.title || fallback.title).slice(0, 180),
-    slug: String(raw?.slug || `daily-fortune-${date}`).slice(0, 160),
-    description: String(raw?.description || fallback.description).slice(0, 220),
-    body: String(raw?.body || fallback.body),
-    category: String(raw?.category || fallback.category).slice(0, 120),
-    tags: jsonArray(raw?.tags, fallback.tags).slice(0, 12),
-    primaryKeyword: String(raw?.primaryKeyword || raw?.primary_keyword || fallback.primaryKeyword).slice(0, 120),
-    secondaryKeywords: jsonArray(raw?.secondaryKeywords || raw?.secondary_keywords, fallback.secondaryKeywords).slice(0, 10),
-    searchIntent: String(raw?.searchIntent || raw?.search_intent || fallback.searchIntent).slice(0, 240),
-    targetReader: String(raw?.targetReader || raw?.target_reader || fallback.targetReader).slice(0, 240),
-    outline: jsonArray(raw?.outline, fallback.outline).slice(0, 8),
-    seoTitle: String(raw?.seoTitle || raw?.seo_title || raw?.title || fallback.seoTitle).slice(0, 180),
-    metaDescription: String(raw?.metaDescription || raw?.meta_description || raw?.description || fallback.metaDescription).slice(0, 160),
-    keyMessage: String(raw?.keyMessage || raw?.key_message || fallback.keyMessage).slice(0, 240),
-    recommendedSocialAngle: String(raw?.recommendedSocialAngle || raw?.recommended_social_angle || fallback.recommendedSocialAngle).slice(0, 80),
+    title: String(data.title || fallback.title).slice(0, 180),
+    slug: String(data.slug || `daily-fortune-${date}`).slice(0, 160),
+    description: String(data.description || fallback.description).slice(0, 220),
+    body: String(data.body || fallback.body),
+    category: String(data.category || fallback.category).slice(0, 120),
+    tags: jsonArray(data.tags, fallback.tags).slice(0, 12),
+    primaryKeyword: String(data.primaryKeyword || data.primary_keyword || fallback.primaryKeyword).slice(0, 120),
+    secondaryKeywords: jsonArray(data.secondaryKeywords || data.secondary_keywords, fallback.secondaryKeywords).slice(0, 10),
+    searchIntent: String(data.searchIntent || data.search_intent || fallback.searchIntent).slice(0, 240),
+    targetReader: String(data.targetReader || data.target_reader || fallback.targetReader).slice(0, 240),
+    outline: jsonArray(data.outline, fallback.outline).slice(0, 8),
+    seoTitle: String(data.seoTitle || data.seo_title || data.title || fallback.seoTitle).slice(0, 180),
+    metaDescription: String(data.metaDescription || data.meta_description || data.description || fallback.metaDescription).slice(0, 160),
+    keyMessage: String(data.keyMessage || data.key_message || fallback.keyMessage).slice(0, 240),
+    recommendedSocialAngle: String(data.recommendedSocialAngle || data.recommended_social_angle || fallback.recommendedSocialAngle).slice(0, 80),
     qualityScore: 92,
     brandScore: 96,
     safetyScore: 98,
@@ -40,9 +41,9 @@ function normalizeAiDraft(raw: any, fallback: BlogEngineDraft, date: string): Bl
 }
 
 async function buildAiBlogDraft(input: { topic: string; category: string; primaryKeyword: string; targetReader: string; searchIntent: string }, fallback: BlogEngineDraft, date: string) {
-  const apiKey = (env as any).OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+  const apiKey = (env as unknown as Record<string, unknown>).OPENAI_API_KEY || process.env.OPENAI_API_KEY;
   if (!apiKey) return { draft: fallback, provider: "fallback-template" };
-  const model = (env as any).OPENAI_MODEL || process.env.OPENAI_MODEL || "gpt-4.1-mini";
+  const model = (env as unknown as Record<string, unknown>).OPENAI_MODEL || process.env.OPENAI_MODEL || "gpt-4.1-mini";
   const prompt = [
     "You are Fortune Studio Blog Engine for Raven Blackwood.",
     "Write a production-ready Japanese blog article. Return JSON only, no markdown fences.",
@@ -153,23 +154,26 @@ async function insertSocialDerivatives(articleId: string, draft: ReturnType<type
 
 async function createDueDailyDraft(settingsRow: { schedule_json?: string | null }) {
   const { date, time } = jstParts();
-  let schedule: any = {};
+  let schedule: Record<string, unknown> = {};
   try {
-    schedule = JSON.parse(settingsRow.schedule_json || "{}");
+    const parsed = JSON.parse(settingsRow.schedule_json || "{}");
+    if (parsed && typeof parsed === "object") schedule = parsed as Record<string, unknown>;
   } catch {
     schedule = {};
   }
-  const enabledSeries = (schedule.daily_series || []).filter((item: any) => item?.enabled);
+  const enabledSeries = Array.isArray(schedule.daily_series)
+    ? schedule.daily_series.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && (item as Record<string, unknown>).enabled))
+    : [];
   let created = 0;
 
   for (const series of enabledSeries) {
-    const draftTime = series.draft_time || schedule.draft_time || "07:00";
-    const publishTime = series.publish_time || schedule.publish_time || draftTime;
+    const draftTime = String(series.draft_time || schedule.draft_time || "07:00");
+    const publishTime = String(series.publish_time || schedule.publish_time || draftTime);
     const currentMinutes = timeToMinutes(time);
     const draftMinutes = timeToMinutes(draftTime);
     if (currentMinutes < draftMinutes || currentMinutes > draftMinutes + 45) continue;
 
-    const idempotencyKey = `daily:${BLOG_ENGINE_TENANT_ID}:${series.id}:${date}`;
+    const idempotencyKey = `daily:${BLOG_ENGINE_TENANT_ID}:${String(series.id || "series")}:${date}`;
     const existing = await env.DB.prepare("SELECT id FROM blog_engine_articles WHERE tenant_id = ? AND idempotency_key = ? LIMIT 1")
       .bind(BLOG_ENGINE_TENANT_ID, idempotencyKey)
       .first<{ id: string }>();

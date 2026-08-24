@@ -16,23 +16,24 @@ function jsonArray(value: unknown, fallback: string[]) {
   return Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean) : fallback;
 }
 
-function normalizeAiDraft(raw: any, fallback: BlogEngineDraft): BlogEngineDraft {
+function normalizeAiDraft(raw: unknown, fallback: BlogEngineDraft): BlogEngineDraft {
+  const data = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
   const draft: BlogEngineDraft = {
-    title: String(raw?.title || fallback.title).slice(0, 180),
-    slug: slugify(String(raw?.slug || raw?.title || fallback.slug)),
-    description: String(raw?.description || fallback.description).slice(0, 220),
-    body: String(raw?.body || fallback.body),
-    category: String(raw?.category || fallback.category).slice(0, 120),
-    tags: jsonArray(raw?.tags, fallback.tags).slice(0, 12),
-    primaryKeyword: String(raw?.primaryKeyword || raw?.primary_keyword || fallback.primaryKeyword).slice(0, 120),
-    secondaryKeywords: jsonArray(raw?.secondaryKeywords || raw?.secondary_keywords, fallback.secondaryKeywords).slice(0, 10),
-    searchIntent: String(raw?.searchIntent || raw?.search_intent || fallback.searchIntent).slice(0, 240),
-    targetReader: String(raw?.targetReader || raw?.target_reader || fallback.targetReader).slice(0, 240),
-    outline: jsonArray(raw?.outline, fallback.outline).slice(0, 8),
-    seoTitle: String(raw?.seoTitle || raw?.seo_title || raw?.title || fallback.seoTitle).slice(0, 180),
-    metaDescription: String(raw?.metaDescription || raw?.meta_description || raw?.description || fallback.metaDescription).slice(0, 160),
-    keyMessage: String(raw?.keyMessage || raw?.key_message || fallback.keyMessage).slice(0, 240),
-    recommendedSocialAngle: String(raw?.recommendedSocialAngle || raw?.recommended_social_angle || fallback.recommendedSocialAngle).slice(0, 80),
+    title: String(data.title || fallback.title).slice(0, 180),
+    slug: slugify(String(data.slug || data.title || fallback.slug)),
+    description: String(data.description || fallback.description).slice(0, 220),
+    body: String(data.body || fallback.body),
+    category: String(data.category || fallback.category).slice(0, 120),
+    tags: jsonArray(data.tags, fallback.tags).slice(0, 12),
+    primaryKeyword: String(data.primaryKeyword || data.primary_keyword || fallback.primaryKeyword).slice(0, 120),
+    secondaryKeywords: jsonArray(data.secondaryKeywords || data.secondary_keywords, fallback.secondaryKeywords).slice(0, 10),
+    searchIntent: String(data.searchIntent || data.search_intent || fallback.searchIntent).slice(0, 240),
+    targetReader: String(data.targetReader || data.target_reader || fallback.targetReader).slice(0, 240),
+    outline: jsonArray(data.outline, fallback.outline).slice(0, 8),
+    seoTitle: String(data.seoTitle || data.seo_title || data.title || fallback.seoTitle).slice(0, 180),
+    metaDescription: String(data.metaDescription || data.meta_description || data.description || fallback.metaDescription).slice(0, 160),
+    keyMessage: String(data.keyMessage || data.key_message || fallback.keyMessage).slice(0, 240),
+    recommendedSocialAngle: String(data.recommendedSocialAngle || data.recommended_social_angle || fallback.recommendedSocialAngle).slice(0, 80),
     qualityScore: 92,
     brandScore: 96,
     safetyScore: 98,
@@ -43,9 +44,9 @@ function normalizeAiDraft(raw: any, fallback: BlogEngineDraft): BlogEngineDraft 
 }
 
 async function buildAiBlogDraft(input: { topic: string; category: string; primaryKeyword: string; targetReader: string; searchIntent: string; customPrompt?: string }, fallback: BlogEngineDraft) {
-  const apiKey = (env as any).OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+  const apiKey = (env as unknown as Record<string, unknown>).OPENAI_API_KEY || process.env.OPENAI_API_KEY;
   if (!apiKey) return { draft: fallback, provider: "fallback-template" };
-  const model = (env as any).OPENAI_MODEL || process.env.OPENAI_MODEL || "gpt-4.1-mini";
+  const model = (env as unknown as Record<string, unknown>).OPENAI_MODEL || process.env.OPENAI_MODEL || "gpt-4.1-mini";
   const basePrompt = input.customPrompt?.trim() || [
     "You are Fortune Studio Blog Engine for Raven Blackwood.",
     "Write a production-ready Japanese blog article. Do not output markdown fences. Return JSON only.",

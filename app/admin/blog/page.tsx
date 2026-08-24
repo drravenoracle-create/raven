@@ -155,8 +155,10 @@ export default function BlogAdminPage() {
   }
 
   useEffect(() => {
-    void loadEngineDashboard();
-    void loadCalendarPreview();
+    queueMicrotask(() => {
+      void loadEngineDashboard();
+      void loadCalendarPreview();
+    });
   }, []);
 
   function refreshTopicSuggestion() {

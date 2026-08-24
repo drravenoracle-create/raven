@@ -27,7 +27,7 @@ function assertTenant(value: unknown) {
 }
 
 function bucket() {
-  return (env as any).MEDIA_BUCKET as MediaBucket | undefined;
+  return (env as unknown as Record<string, unknown>).MEDIA_BUCKET as MediaBucket | undefined;
 }
 
 async function sha256Hex(buffer: ArrayBuffer) {
@@ -77,7 +77,7 @@ export async function GET(request: Request) {
     presets: presets.results || [],
     prompts: prompts.results || [],
     providers: providers.results || [],
-    hasOpenAiSecret: Boolean(clean((env as any).OPENAI_API_KEY, 20)),
+    hasOpenAiSecret: Boolean(clean((env as unknown as Record<string, unknown>).OPENAI_API_KEY, 20)),
     hasMediaBucket: Boolean(bucket()),
   }, { headers: { "Cache-Control": "no-store" } });
 }
@@ -151,7 +151,7 @@ export async function POST(request: Request) {
 
   try {
     await env.DB.prepare("UPDATE ai_media_jobs SET status = 'generating', started_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND job_id = ?").bind(AI_MEDIA_TENANT_ID, jobId).run();
-    const provider = new OpenAiImageProvider(clean((env as any).OPENAI_API_KEY, 4000));
+    const provider = new OpenAiImageProvider(clean((env as unknown as Record<string, unknown>).OPENAI_API_KEY, 4000));
     const result = await provider.generateImage({ ...requestPayload, prompt, model: config.model, quality: config.quality, size: size.size });
     const checksum = await sha256Hex(result.bytes);
     const assetId = crypto.randomUUID();

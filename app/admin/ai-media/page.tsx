@@ -42,7 +42,7 @@ export default function AiMediaAdminPage() {
   }
 
   useEffect(() => {
-    load();
+    queueMicrotask(() => { void load(); });
   }, []);
 
   async function generateImage() {

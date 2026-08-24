@@ -9,7 +9,7 @@ function parseJson<T>(value: unknown, fallback: T): T {
   try { return typeof value === "string" ? JSON.parse(value) as T : fallback; } catch { return fallback; }
 }
 
-function toProject(row: any): ReelProject {
+function toProject(row: Record<string, unknown>): ReelProject {
   return {
     tenantId: row.tenant_id,
     reelId: row.reel_id,
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
 
   const row = await env.DB.prepare("SELECT * FROM reel_projects WHERE tenant_id = ? AND reel_id = ? LIMIT 1")
     .bind(REEL_ENGINE_TENANT_ID, reelId)
-    .first<any>();
+    .first<Record<string, unknown>>();
   if (!row) return Response.json({ error: "Reel project not found." }, { status: 404 });
 
   const duplicate = await env.DB.prepare("SELECT job_id, status FROM reel_render_jobs WHERE tenant_id = ? AND reel_id = ? AND status IN ('queued','rendering','unavailable') LIMIT 1")

@@ -35,8 +35,8 @@ export default function ReelAdminPage() {
   const selected = useMemo(() => projects.find((item) => item.reel_id === selectedId) || projects[0], [projects, selectedId]);
   const previewAsset = useMemo(() => assets.find((item) => item.asset_id === assetPreviewId), [assets, assetPreviewId]);
   const script = selected ? parse<Script>(selected.script_json, {}) : {};
-  const scenes = selected ? parse<any[]>(selected.scenes_json, []) : [];
-  const textLayers = selected ? parse<any[]>(selected.text_layers_json, []) : [];
+  const scenes = selected ? parse<Record<string, unknown>[]>(selected.scenes_json, []) : [];
+  const textLayers = selected ? parse<Record<string, unknown>[]>(selected.text_layers_json, []) : [];
   const backgroundAssetIds = selected ? parse<string[]>(selected.background_asset_ids_json, []) : [];
 
   async function loadAll() {
@@ -59,7 +59,7 @@ export default function ReelAdminPage() {
     }
   }
 
-  useEffect(() => { void loadAll(); }, []);
+  useEffect(() => { queueMicrotask(() => { void loadAll(); }); }, []);
 
   async function createProject() {
     if (isBusy) return;

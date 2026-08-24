@@ -69,7 +69,7 @@ export async function GET(request: Request) {
   if (isDriveConnection) {
     if (!token.refresh_token) return new Response("Google did not return a refresh token. Retry the Drive connection with consent.", { status: 502 });
     const encrypted = await encryptDriveRefreshToken(token.refresh_token);
-    await (env as any).DB.prepare(`INSERT INTO google_drive_credentials (id, tenant_id, google_email, refresh_token_ciphertext) VALUES (?, ?, ?, ?) ON CONFLICT(tenant_id) DO UPDATE SET google_email=excluded.google_email, refresh_token_ciphertext=excluded.refresh_token_ciphertext, updated_at=CURRENT_TIMESTAMP`).bind(crypto.randomUUID(), "raven-oracle", user.email, encrypted).run();
+    await (env as unknown as { DB: D1Database }).DB.prepare(`INSERT INTO google_drive_credentials (id, tenant_id, google_email, refresh_token_ciphertext) VALUES (?, ?, ?, ?) ON CONFLICT(tenant_id) DO UPDATE SET google_email=excluded.google_email, refresh_token_ciphertext=excluded.refresh_token_ciphertext, updated_at=CURRENT_TIMESTAMP`).bind(crypto.randomUUID(), "raven-oracle", user.email, encrypted).run();
   }
 
   const response = NextResponse.redirect(new URL(returnTo, origin));

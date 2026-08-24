@@ -26,7 +26,7 @@ export default function SnsTemplateManagerPage() {
     if (!response.ok) { setStatus(payload.error || "テンプレートを取得できませんでした。"); return; }
     setTemplates(payload.templates || []); setStatus(`${(payload.templates || []).length}件のテンプレートを読み込みました。`);
   }
-  useEffect(() => { load().catch(() => setStatus("テンプレートを取得できませんでした。")); }, []);
+  useEffect(() => { queueMicrotask(() => { void load().catch(() => setStatus("テンプレートを取得できませんでした。")); }); }, []);
 
   async function action(id: string, actionName: string) {
     try {
