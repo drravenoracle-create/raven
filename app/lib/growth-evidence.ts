@@ -151,6 +151,15 @@ function assertStatus(value: unknown): EvidenceSourceStatus {
   return next;
 }
 
+async function auditIfAvailable(db: D1, tenantId: string, actor: string, action: string, subjectId: string, after: unknown) {
+  try {
+    await db.prepare("INSERT INTO growth_audit_log (id, tenant_id, actor, action, subject_type, subject_id, before_json, after_json) VALUES (?, ?, ?, ?, ?, ?, '{}', ?)")
+      .bind(crypto.randomUUID(), tenantId, actor || "growth_engine", action, "growth_evidence", subjectId, JSON.stringify(after || {})).run();
+  } catch {
+    // Older isolated evidence fixtures do not include the shared audit table.
+  }
+}
+
 function parseJson(value: unknown) {
   try { return JSON.parse(String(value || "{}")); } catch { return {}; }
 }
@@ -201,7 +210,9 @@ export class EvidenceRepository {
         optional(input.publishedAt, 80), optional(input.retrievedAt, 80), optional(input.observedAt, 80), optional(input.validUntil, 80),
         score(input.qualityScore), assertStatus(input.status), JSON.stringify(sanitizeEvidenceMetadata(input.metadata)))
       .run();
-    return this.getSource(tenantId, sourceId);
+    const source = await this.getSource(tenantId, sourceId);
+    await auditIfAvailable(this.db, tenantId, "growth_engine", "evidence_source_registered", sourceId, { sourceType: input.sourceType, market: input.market, locale: input.locale });
+    return source;
   }
 
   async getSource(tenantId: string, sourceId: string) {
@@ -237,7 +248,9 @@ export class EvidenceRepository {
         optional(input.metricName, 160), input.metricValue === null || input.metricValue === undefined ? null : Number(input.metricValue), optional(input.unit, 80),
         optional(input.market), optional(input.country), optional(input.locale), optional(input.periodStart, 80), optional(input.periodEnd, 80),
         score(input.confidence)).run();
-    return this.getClaim(tenantId, claimId);
+    const claim = await this.getClaim(tenantId, claimId);
+    await auditIfAvailable(this.db, tenantId, "growth_engine", "evidence_claim_registered", claimId, { sourceId: input.sourceId, scope: input.evidenceScope, market: input.market, locale: input.locale });
+    return claim;
   }
 
   async getClaim(tenantId: string, claimId: string) {

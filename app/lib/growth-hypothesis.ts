@@ -74,6 +74,15 @@ function mapHypothesis(row: Record<string, unknown>): GrowthHypothesis {
   };
 }
 
+async function auditHypothesisIfAvailable(db: D1, tenantId: string, hypothesisId: string, after: unknown) {
+  try {
+    await db.prepare("INSERT INTO growth_audit_log (id, tenant_id, actor, action, subject_type, subject_id, before_json, after_json) VALUES (?, ?, 'growth_engine', 'hypothesis_created', 'hypothesis', ?, '{}', ?)")
+      .bind(crypto.randomUUID(), tenantId, hypothesisId, JSON.stringify(after || {})).run();
+  } catch {
+    // Isolated hypothesis fixtures may intentionally omit the shared audit table.
+  }
+}
+
 export class HypothesisRepository {
   private readonly db: D1;
 
@@ -91,7 +100,9 @@ export class HypothesisRepository {
         clean(input.observation), clean(input.hypothesis), clean(input.expectedOutcome), clean(input.targetMetric), JSON.stringify(input.evidenceIds),
         input.confidence, input.evidenceSufficiency, input.riskClass, JSON.stringify(input.missingEvidence), input.status)
       .run();
-    return this.get(input.tenantId, input.hypothesisId);
+    const hypothesis = await this.get(input.tenantId, input.hypothesisId);
+    await auditHypothesisIfAvailable(this.db, input.tenantId, input.hypothesisId, { evidenceIds: input.evidenceIds, market: input.market, locale: input.locale, riskClass: input.riskClass });
+    return hypothesis;
   }
 
   async get(tenantId: string, hypothesisId: string) {
