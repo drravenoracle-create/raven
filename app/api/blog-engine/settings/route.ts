@@ -1,6 +1,8 @@
 ﻿import { env } from "cloudflare:workers";
 
-const TENANT_ID = "raven-oracle";
+import { resolveBlogConfig } from "@/app/lib/tenant-config-resolver";
+
+const TENANT_ID = resolveBlogConfig().tenantId;
 
 function boolValue(value: unknown) {
   return value === true || value === "true" || value === 1 || value === "1";

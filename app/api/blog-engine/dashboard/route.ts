@@ -1,6 +1,8 @@
 ﻿import { env } from "cloudflare:workers";
 
-const TENANT_ID = "raven-oracle";
+import { resolveBlogConfig } from "@/app/lib/tenant-config-resolver";
+
+const TENANT_ID = resolveBlogConfig().tenantId;
 
 async function safeQuery<T>(promise: Promise<T>, fallback: T) {
   try {
