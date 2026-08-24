@@ -1,4 +1,4 @@
-import { RAVEN_TENANT_CONFIG } from "./tenant-config";
+import { RAVEN_TENANT_CONFIG } from "./tenant-config.ts";
 
 export const GROWTH_ENGINE_TENANT_ID = RAVEN_TENANT_CONFIG.id;
 export const GROWTH_ENGINE_VERSION = "growth-engine-v3.0";

@@ -1,4 +1,4 @@
-import { GROWTH_ENGINE_TENANT_ID } from "@/app/lib/growth-engine";
+import { GROWTH_ENGINE_TENANT_ID } from "./growth-engine.ts";
 
 type D1 = {
   prepare(sql: string): {

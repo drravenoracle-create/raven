@@ -102,7 +102,7 @@ export async function auditGrowthProposal(db: D1, input: { tenantId: string; act
     (id, tenant_id, actor, action, subject_type, subject_id, before_json, after_json)
     VALUES (?, ?, ?, ?, 'proposal', ?, ?, ?)`)
     .bind(crypto.randomUUID(), assertTenant(input.tenantId), clean(input.actor, 160) || "admin", clean(input.action, 120), clean(input.proposalId, 160),
-      input.before === undefined ? null : JSON.stringify(input.before), input.after === undefined ? null : JSON.stringify({ ...(input.after as Record<string, unknown>), reason: input.reason || undefined }))
+      input.before === undefined ? "{}" : JSON.stringify(input.before), input.after === undefined ? "{}" : JSON.stringify({ ...(input.after as Record<string, unknown>), reason: input.reason || undefined }))
     .run();
 }
 
