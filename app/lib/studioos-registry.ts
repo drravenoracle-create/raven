@@ -247,10 +247,12 @@ export const VERSION_CENTER_FIXTURES: RegistrySet = {
   ],
 };
 
-function mergeRegistry(includeFixtures = false): RegistrySet {
-  return includeFixtures
-    ? { guilds: [...RAVEN_REGISTRY.guilds, ...VERSION_CENTER_FIXTURES.guilds], tenants: [...RAVEN_REGISTRY.tenants, ...VERSION_CENTER_FIXTURES.tenants], workers: [...RAVEN_REGISTRY.workers, ...VERSION_CENTER_FIXTURES.workers] }
-    : RAVEN_REGISTRY;
+function mergeRegistry(includeFixtures = false, extra?: RegistrySet): RegistrySet {
+  return {
+    guilds: [...RAVEN_REGISTRY.guilds, ...(includeFixtures ? VERSION_CENTER_FIXTURES.guilds : []), ...(extra?.guilds || [])],
+    tenants: [...RAVEN_REGISTRY.tenants, ...(includeFixtures ? VERSION_CENTER_FIXTURES.tenants : []), ...(extra?.tenants || [])],
+    workers: [...RAVEN_REGISTRY.workers, ...(includeFixtures ? VERSION_CENTER_FIXTURES.workers : []), ...(extra?.workers || [])],
+  };
 }
 
 export class UnknownRegistryRecordError extends Error {
@@ -287,8 +289,8 @@ function getEntitlements(tenant: TenantRecord): FeatureDecision[] {
   return [];
 }
 
-export function buildVersionCenterEntries(options: { includeFixtures?: boolean; targetVersion?: string } = {}): VersionCenterEntry[] {
-  const set = mergeRegistry(options.includeFixtures);
+export function buildVersionCenterEntries(options: { includeFixtures?: boolean; targetVersion?: string; registry?: RegistrySet } = {}): VersionCenterEntry[] {
+  const set = mergeRegistry(options.includeFixtures, options.registry);
   const guilds = new GuildRegistryRepository(set);
   const workers = new WorkerRegistryRepository(set);
   const tenants = new TenantRegistryRepository(set);

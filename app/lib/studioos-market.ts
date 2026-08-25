@@ -74,6 +74,16 @@ export type ResolvedTenantMarket = {
   character: CharacterCore;
 };
 
+export const LUNA_CHARACTER_CORE: CharacterCore = {
+  characterId: "luna",
+  canonicalName: "luna",
+  corePersonality: ["curious", "warm", "reflective"],
+  values: ["clarity", "care", "personal agency"],
+  specialties: ["moon cycles", "emotional reflection", "gentle guidance"],
+  worldbuilding: ["a quiet lunar observatory for reflection"],
+  visualIdentity: ["silver-blue", "soft night light", "calm editorial space"],
+};
+
 const PLATFORM_MARKET_DEFAULTS: MarketConfig = {
   marketId: "platform-default",
   country: "US",
@@ -129,6 +139,20 @@ export const MARKET_PERSONAS: MarketPersona[] = [
     prohibitedExpressions: [],
     marketPersonaSchemaVersion: 1,
   },
+  {
+    characterId: LUNA_CHARACTER_CORE.characterId,
+    marketId: "jp",
+    locale: "ja-JP",
+    tone: "warm, gentle",
+    formality: "neutral",
+    humorStyle: "light",
+    relationshipDistance: "friendly",
+    ctaStyle: "community-oriented",
+    visualDirection: ["silver-blue", "soft night light", "calm density"],
+    culturalRules: ["use Japanese date and number conventions", "keep guidance reflective rather than deterministic"],
+    prohibitedExpressions: [],
+    marketPersonaSchemaVersion: 1,
+  },
 ];
 
 export const GUILD_MARKET_DEFAULTS: Record<string, GuildMarketDefaults> = {
@@ -139,6 +163,7 @@ export const GUILD_MARKET_DEFAULTS: Record<string, GuildMarketDefaults> = {
 export const TENANT_MARKET_BINDINGS: TenantMarketBinding[] = [
   { tenantId: "raven-oracle", guildId: "raven-guild", characterId: RAVEN_CHARACTER_CORE.characterId, marketId: "jp" },
   { tenantId: "test-up-to-date", guildId: "test-global-guild", characterId: RAVEN_CHARACTER_CORE.characterId, marketId: "en-us" },
+  { tenantId: "luna-oracle", guildId: "raven-guild", characterId: LUNA_CHARACTER_CORE.characterId, marketId: "jp" },
 ];
 
 export class UnknownMarketError extends Error {
@@ -180,6 +205,7 @@ function adaptCharacterCore(config: CharacterCoreConfig): CharacterCore {
 }
 
 export function getCharacterCoreForMarket(characterId: string): CharacterCore {
+  if (characterId === LUNA_CHARACTER_CORE.characterId) return { ...LUNA_CHARACTER_CORE, corePersonality: [...LUNA_CHARACTER_CORE.corePersonality], values: [...LUNA_CHARACTER_CORE.values], specialties: [...LUNA_CHARACTER_CORE.specialties], worldbuilding: [...LUNA_CHARACTER_CORE.worldbuilding], visualIdentity: [...(LUNA_CHARACTER_CORE.visualIdentity || [])] };
   const core = getCharacterCore(characterId);
   if (!core) throw new UnknownCharacterError(characterId);
   return adaptCharacterCore(core);

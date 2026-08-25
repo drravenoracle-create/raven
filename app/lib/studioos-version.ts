@@ -25,7 +25,7 @@ export type StudioOSBuildInfo = {
 };
 
 export type StudioOSMigrationState = {
-  migrationState: "controlled" | "unknown" | "not_required";
+  migrationState: "controlled" | "unknown" | "not_required" | "not_provisioned";
   d1MigrationVersion: string | null;
   migrationLedgerRef: string | null;
   schemaCompatibility: CompatibilityStatus;
