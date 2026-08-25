@@ -16,7 +16,7 @@ import { featureEntitlementResolver, type FeatureDecision } from "./feature-enti
 
 export type GuildStatus = "active" | "inactive" | "planned";
 export type TenantStatus = "active" | "inactive" | "planned" | "attention_required";
-export type WorkerStatus = "healthy" | "unknown" | "attention_required";
+export type WorkerStatus = "healthy" | "unknown" | "planned" | "attention_required";
 
 export type GuildRecord = {
   guildId: string;

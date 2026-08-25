@@ -63,7 +63,7 @@ export const LUNA_MIGRATION_STATE: StudioOSMigrationState = { migrationState: "n
 export const LUNA_PILOT_REGISTRY: RegistrySet = {
   guilds: [],
   tenants: [{ tenantId: "luna-oracle", tenantKey: "luna-oracle", guildId: "raven-guild", characterId: "luna", characterCoreId: "luna", marketPersonaId: "luna-jp", displayName: "Luna", plan: "PREMIUM", environment: "preview", status: "planned", studioOsVersion: STUDIOOS_VERSION, tenantSchemaVersion: 1, buildCommit: "pilot-fixture", migration: LUNA_MIGRATION_STATE, engineVersions: ENGINE_VERSIONS, lastDeploy: null, isFixture: true, market: "jp", country: "JP", locale: "ja-JP", timezone: "Asia/Tokyo", currency: "JPY" }],
-  workers: [{ workerId: "luna-oracle-preview", tenantId: "luna-oracle", workerName: "luna-oracle-preview", provider: "cloudflare", environment: "preview", publicUrl: LUNA_PREVIEW_URL, deployedVersion: null, buildCommit: "pilot-fixture", status: "unknown", isFixture: true }],
+  workers: [{ workerId: "luna-oracle-preview", tenantId: "luna-oracle", workerName: "luna-oracle-preview", provider: "cloudflare", environment: "preview", publicUrl: LUNA_PREVIEW_URL, deployedVersion: null, buildCommit: "pilot-fixture", status: "planned", isFixture: true }],
 };
 
 export const LUNA_PROVISIONING_MANIFEST = {
