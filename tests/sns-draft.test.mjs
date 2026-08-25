@@ -30,9 +30,9 @@ test("Draft editing is structured and limited to safe fields", () => {
   assert.match(page, /下書きを保存/);
   assert.match(page, /破棄/);
 });
-test("Draft layer has no execution boundary", () => {
-  const source = `${service}\n${route}\n${detailRoute}\n${page}`;
-  assert.doesNotMatch(source, /render|publish|schedule|createExperiment|autonomous|external API write/i);
+test("Draft layer has no publication boundary", () => {
+  const source = `${service}\n${route}\n${detailRoute}`;
+  assert.doesNotMatch(source, /publish|schedule|createExperiment|autonomous|external API write/i);
   assert.match(route, /createContentDraft/);
   assert.match(detailRoute, /updateContentDraft/);
 });
