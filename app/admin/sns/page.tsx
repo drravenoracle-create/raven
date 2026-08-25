@@ -646,6 +646,7 @@ export default function SnsAdminPage() {
           <div className="flex flex-wrap gap-4">
             <Link className="text-sm font-semibold text-[#596d51]" href="/admin/">管理ダッシュボード</Link>
             <Link className="text-sm font-semibold text-[#596d51]" href="/admin/sns/templates">投稿テンプレート</Link>
+            <Link className="text-sm font-semibold text-[#596d51]" href="/admin/sns/ideas">投稿アイデア</Link>
           </div>
           <Link className="text-sm font-semibold text-[#596d51]" href="/admin/decks/">Deck Manager</Link>
         </nav>
