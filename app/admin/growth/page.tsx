@@ -92,6 +92,7 @@ export default async function GrowthAdminPage() {
           </Panel>
 
           <Panel title="Audience / Experiment">
+            <Link className="rounded border border-[#596d51] bg-white p-4 text-sm font-semibold text-[#596d51]" href="/admin/growth/learning">Learning Patternsを開く</Link>
             <Link className="rounded border border-[#596d51] bg-white p-4 text-sm font-semibold text-[#596d51]" href="/admin/growth/intelligence/">Growth Intelligenceを開く</Link>
             <Link className="rounded border border-[#596d51] bg-white p-4 text-sm font-semibold text-[#596d51]" href="/admin/growth/experiments/">Experiment Managerを開く</Link>
             {segments.map((item) => <Row key={item.segment_key} title={item.label} meta={item.basis} body={`推定 ${item.estimated ? "yes" : "no"} / sensitive ${item.sensitive_attribute_used ? "yes" : "no"} / confidence ${item.confidence}`} />)}
