@@ -46,6 +46,13 @@ export type TenantRecord = {
   engineVersions: Record<string, string>;
   lastDeploy?: string | null;
   isFixture?: boolean;
+  market?: string | null;
+  country?: string | null;
+  locale?: string | null;
+  timezone?: string | null;
+  currency?: string | null;
+  characterCoreId?: string | null;
+  marketPersonaId?: string | null;
 };
 
 export type WorkerRecord = {
@@ -111,6 +118,13 @@ const RAVEN_TENANT: TenantRecord = {
   migration: PRODUCTION_MIGRATION_STATE,
   engineVersions: ENGINE_VERSIONS,
   lastDeploy: null,
+  market: "jp",
+  country: "JP",
+  locale: "ja-JP",
+  timezone: "Asia/Tokyo",
+  currency: "JPY",
+  characterCoreId: RAVEN_STUDIOOS_TENANT_CONFIG.characterRef,
+  marketPersonaId: "raven-jp",
 };
 
 const RAVEN_WORKER: WorkerRecord = {
@@ -153,6 +167,7 @@ export const VERSION_CENTER_FIXTURES: RegistrySet = {
       engineVersions: ENGINE_VERSIONS,
       lastDeploy: "2026-08-25T00:00:00Z",
       isFixture: true,
+      market: "en-us", country: "US", locale: "en-US", timezone: "America/New_York", currency: "USD", characterCoreId: RAVEN_STUDIOOS_TENANT_CONFIG.characterRef, marketPersonaId: "raven-en-us",
     },
     {
       tenantId: "test-update-available",
@@ -169,6 +184,7 @@ export const VERSION_CENTER_FIXTURES: RegistrySet = {
       engineVersions: ENGINE_VERSIONS,
       lastDeploy: null,
       isFixture: true,
+      market: "en-us", country: "US", locale: "en-US", timezone: "America/New_York", currency: "USD", characterCoreId: RAVEN_STUDIOOS_TENANT_CONFIG.characterRef, marketPersonaId: "raven-en-us",
     },
     {
       tenantId: "test-migration-required",
@@ -185,6 +201,7 @@ export const VERSION_CENTER_FIXTURES: RegistrySet = {
       engineVersions: ENGINE_VERSIONS,
       lastDeploy: null,
       isFixture: true,
+      market: "jp", country: "JP", locale: "ja-JP", timezone: "Asia/Tokyo", currency: "JPY", characterCoreId: RAVEN_STUDIOOS_TENANT_CONFIG.characterRef, marketPersonaId: "raven-jp",
     },
     {
       tenantId: "test-incompatible",
@@ -201,6 +218,7 @@ export const VERSION_CENTER_FIXTURES: RegistrySet = {
       engineVersions: ENGINE_VERSIONS,
       lastDeploy: null,
       isFixture: true,
+      market: "en-us", country: "US", locale: "en-US", timezone: "America/New_York", currency: "USD", characterCoreId: RAVEN_STUDIOOS_TENANT_CONFIG.characterRef, marketPersonaId: "raven-en-us",
     },
     {
       tenantId: "test-attention-required",
@@ -217,6 +235,7 @@ export const VERSION_CENTER_FIXTURES: RegistrySet = {
       engineVersions: ENGINE_VERSIONS,
       lastDeploy: null,
       isFixture: true,
+      market: "en-us", country: "US", locale: "en-US", timezone: "America/New_York", currency: "USD", characterCoreId: RAVEN_STUDIOOS_TENANT_CONFIG.characterRef, marketPersonaId: "raven-en-us",
     },
   ],
   workers: [
