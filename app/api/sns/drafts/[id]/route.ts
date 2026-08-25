@@ -1,0 +1,9 @@
+import { env } from "cloudflare:workers";
+import { getAdminSession, adminEmail } from "@/app/lib/google-admin-auth";
+import { GROWTH_ENGINE_TENANT_ID } from "@/app/lib/growth-engine";
+import { getContentDraft, updateContentDraft } from "@/app/lib/sns-content-draft";
+
+async function admin() { const session = await getAdminSession(); return session && session.email.toLowerCase() === adminEmail().toLowerCase(); }
+function tenant(value: unknown) { const id = String(value || GROWTH_ENGINE_TENANT_ID); if (id !== GROWTH_ENGINE_TENANT_ID) throw new Error("Invalid tenant_id."); return id; }
+export async function GET(request: Request, context: { params: Promise<{ id: string }> }) { if (!(await admin())) return Response.json({ ok: false, error: "Admin authentication required." }, { status: 401 }); try { const draft = await getContentDraft(env.DB, (await context.params).id, tenant(new URL(request.url).searchParams.get("tenantId"))); return draft ? Response.json({ ok: true, draft }) : Response.json({ ok: false, error: "Draft not found." }, { status: 404 }); } catch (error) { return Response.json({ ok: false, error: error instanceof Error ? error.message : "Draft API failed." }, { status: 400 }); } }
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) { if (!(await admin())) return Response.json({ ok: false, error: "Admin authentication required." }, { status: 401 }); const body = await request.json().catch(() => null) as Record<string, unknown> | null; if (!body) return Response.json({ ok: false, error: "Invalid JSON body." }, { status: 400 }); try { const draft = await updateContentDraft(env.DB, (await context.params).id, body, tenant(body.tenantId ?? body.tenant_id)); return Response.json({ ok: true, draft }); } catch (error) { return Response.json({ ok: false, error: error instanceof Error ? error.message : "Draft update failed." }, { status: 400 }); } }
