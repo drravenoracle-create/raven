@@ -114,7 +114,7 @@ Date: 2026-08-26
 - Import verification: all imported tenant IDs are `luna-oracle`; duplicate ledger keys 47/47 distinct; Raven rows 0; Growth rows 0
 - Required secret names only: `ADMIN_SESSION_SECRET`, `GUILD_MEMBER_SERVICE_TOKEN`, `OPENAI_API_KEY`
 - Secret classification: `ADMIN_SESSION_SECRET` cutover-required when admin is exposed; `GUILD_MEMBER_SERVICE_TOKEN` feature-required for Member activation; `OPENAI_API_KEY` feature-required for AI reading and optional for Core/Blog-only cutover
-- DNS/custom-domain/cutover: NOT PERFORMED
+- DNS/custom-domain/cutover: COMPLETE; `luna.fortunestudios.jp` is attached to `luna-oracle`
 
 ## Safety evidence
 
@@ -122,7 +122,7 @@ Date: 2026-08-26
 - Raven `https://raven.fortunestudios.jp/`: HTTP 200
 - Existing Luna writes: NONE
 - Raven writes: NONE
-- DNS changes: NONE
+- DNS changes: legacy CNAME removed as part of handoff; Cloudflare-managed Worker Custom Domain is now active
 - Legacy data import: NONE
 - R2 workaround or alternate-account creation: NONE
 
@@ -137,10 +137,10 @@ Date: 2026-08-26
 - Phase 5 readiness: YES for a separately approved cutover run, conditional on final pre-cutover checks, secret readiness, and human approval
 - Legacy Cron: observed ACTIVE on 2026-08-26; `luna-starwind-cron` schedules `0 22 * * *`, `0 4 * * *`, and `0 8 * * *`. Use a cutover-time write freeze; do not run legacy and new schedulers concurrently
 - Scheduled article policy: preserve `scheduled` state through final sync unless a human explicitly approves legacy publication before freeze; enable the new scheduler only after acceptance
-- Cutover target: existing `luna.fortunestudios.jp` remains on legacy Pages until approved switch; new Worker remains workers.dev-only
+- Cutover target: `luna.fortunestudios.jp` is served by the StudioOS Worker; legacy Pages remains retained for rollback
 - R2: `BLOCKED_PENDING_ACTIVATION`; non-blocking for Core/Blog/non-media cutover while SNS/Reel/media remain OFF
 - Existing Luna remains KEEP LIVE
-- Next action: execute the separate cutover runbook after final secret/readiness approval; obtain R2 activation before enabling media/SNS/Reel
+- Next action: optional R2 activation before enabling media/SNS/Reel; no further cutover required
 
 ## Production handoff verification (2026-08-27)
 
@@ -160,9 +160,12 @@ Date: 2026-08-26
 - R2: `BLOCKED / OPTIONAL` (non-media production)
 - Legacy Pages/Worker, Legacy D1, and Legacy Cron: KEEP; Cron remains FROZEN
 - Rollback target: Legacy Luna
-- Actual production Worker version: `NOT_AVAILABLE` from the current readable session; do not infer from prior preview versions
-- Cutover timestamp: `NOT_AVAILABLE` from the current readable session
-- Domain/DNS changes in this finalization step: NONE
+- Actual production Worker version: `f6a6cac1-8601-4b41-bddf-7e695176c0fd` (latest active deployment reported by Wrangler)
+- Cutover timestamp: `NOT_AVAILABLE` from the readable session
+- Domain/DNS changes in this finalization step: legacy CNAME `luna -> luna-starwind.pages.dev` removed; `luna.fortunestudios.jp` attached to the StudioOS Worker Custom Domain
+- Current routing: `luna.fortunestudios.jp` -> `luna-oracle` Custom Domain
+- Current production Status API: HTTP 200; tenant `luna-oracle`; character `luna`; guild `raven-guild`; `externalWrites=false`; `ravenContamination=false`
+- Cutover result: SUCCESS; Luna StudioOS production reachability confirmed
 
 ### Feature state at handoff
 
