@@ -14,7 +14,7 @@ Character values are sourced only from `docs/provisioning/atlas-sol-character-so
 
 ## Atlas
 
-- D1: `atlas-oracle` / `3c08bd65-cc8d-462c-abe1-c83f67d90f28`
+- D1: `atlas-oracle` / `3c08bd65-cc8d-462c-abe1-c83f67d90f28` (logical role: `STUDIOOS_SHARED_CORE`)
 - Schema: Clean StudioOS schema applied; 17 tables verified; Raven/Luna/Sol rows 0
 - Worker: `atlas-oracle`
 - Preview: `https://atlas-oracle.fortune-kanri.workers.dev`
@@ -26,13 +26,21 @@ Character values are sourced only from `docs/provisioning/atlas-sol-character-so
 
 ## Sol
 
-- D1: blocked by account database capacity; no D1 was created
-- Worker: not deployed because the preview worker requires a real D1 binding and no fake/borrowed binding is permitted
+- D1: `atlas-oracle` / `3c08bd65-cc8d-462c-abe1-c83f67d90f28` (shared physical Core; no Sol-specific D1)
+- Worker: `sol-oracle`
+- Preview: `https://sol-oracle.fortune-kanri.workers.dev`
+- Preview version: `bc991914-632a-4b45-95e6-9d47dd9c7ae4`
 - Character Core, market persona, tenant config, host mapping, entitlements, and Growth safety are implemented locally
-- Status: `READY_EXCEPT_D1`
+- Status: `PREVIEW_READY` after shared-Core preview deployment
 - Domain: not connected; production DNS unchanged
 - R2: not configured
 - Analytics DB: `fortune-studio-analytics` / `6d60f0e0-8816-46c8-8e7b-fb05129d335d`
+
+## Shared Core decision
+
+The physical `atlas-oracle` database is the initial `STUDIOOS_SHARED_CORE`. Atlas and Sol are logical tenants isolated by `tenant_id`; Atlas/Sol do not receive separate Core D1s. Analytics remains in `fortune-studio-analytics`.
+
+Core tenant-scoped tables include `studioos_tenant_metadata`, `studioos_member_context`, `blog_engine_settings`, `blog_engine_articles`, and the Growth/SNS/Reel tables. `_cf_KV` is infrastructure-owned. Existing Atlas rows remain under `atlas-oracle`; Sol initialization adds only its tenant metadata and empty blog settings.
 
 ## D1 capacity decision
 
@@ -53,7 +61,7 @@ Classifications:
 - `luna-starwind`: `ROLLBACK_REQUIRED`
 - `scarlet-guardian`: `ROLLBACK_REQUIRED`
 
-Capacity increase: not available through the current authenticated operation; plan/account administrator action may be required. No upgrade or billing action was performed.
+Capacity increase: not required for Atlas/Sol Shared Core. No plan change or database deletion was performed.
 
 ## Shared Analytics additive extension
 
@@ -81,7 +89,7 @@ Atlas and Sol preview configs use `ANALYTICS_DB` pointing to this existing datab
 - Sol: `READY_EXCEPT_D1`
 - TURN 1 result: `CONDITIONAL GO`
 - TURN 2 readiness: `PARTIAL`
-- Blocking item: target account D1 capacity for `sol-oracle`
-- Required human decision: increase the target account's D1 capacity, or explicitly authorize a demonstrably unused TEST/DEV database for deletion after independent review.
+- Blocking item: none for Atlas/Sol Core D1 placement
+- Required human decision: none for this Shared Core step
 
 Version Center: Atlas preview entry is updated in the provisioning manifest; Sol remains planned until its tenant D1 exists. No production Version Center state was changed.

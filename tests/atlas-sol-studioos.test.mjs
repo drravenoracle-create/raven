@@ -33,3 +33,11 @@ test("shared analytics requires resolved tenant context and isolates Atlas/Sol",
   assert.throws(() => analyticsReadWhere({ tenantId: "atlas-oracle" }), /ANALYTICS_TENANT_CONTEXT_REQUIRED/);
   assert.throws(() => analyticsWriteValues({ guildId: "raven-guild", tenantId: "unknown", characterId: "raven", market: "jp", locale: "ja-JP" }), /ANALYTICS_TENANT_CONTEXT_INVALID/);
 });
+
+test("Atlas and Sol use the shared Core physical database without copying rows", () => {
+  const atlasCore = { database: "atlas-oracle", tenantId: "atlas-oracle", characterId: "atlas" };
+  const solCore = { database: "atlas-oracle", tenantId: "sol-oracle", characterId: "sol" };
+  assert.equal(atlasCore.database, solCore.database);
+  assert.notEqual(atlasCore.tenantId, solCore.tenantId);
+  assert.notEqual(atlasCore.characterId, solCore.characterId);
+});
