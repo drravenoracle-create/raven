@@ -16,6 +16,8 @@ const HOST_TO_TENANT = new Map([
   ["raven.fortunestudios.jp", "raven-oracle"],
   ["luna.fortunestudios.jp", "luna-oracle"],
   ["scarlet.fortunestudios.jp", "scarlet-donovan"],
+  ["atlas.fortunestudios.jp", "atlas-oracle"],
+  ["sol.fortunestudios.jp", "sol-oracle"],
 ]);
 
 export class UnknownRuntimeTenantError extends Error {

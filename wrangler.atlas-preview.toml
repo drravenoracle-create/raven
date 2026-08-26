@@ -1,0 +1,15 @@
+name = "atlas-oracle"
+main = "worker/member-preview.ts"
+compatibility_date = "2026-08-26"
+compatibility_flags = ["nodejs_compat"]
+account_id = "cfda786a82241adf6b21f772dbc87544"
+workers_dev = true
+[[d1_databases]]
+binding = "DB"
+database_name = "atlas-oracle"
+database_id = "3c08bd65-cc8d-462c-abe1-c83f67d90f28"
+[vars]
+STUDIOOS_TENANT_ID = "atlas-oracle"
+STUDIOOS_CHARACTER_ID = "atlas"
+STUDIOOS_GUILD_ID = "raven-guild"
+STUDIOOS_ENVIRONMENT = "preview"

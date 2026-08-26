@@ -4,6 +4,7 @@ import { LUNA_CHARACTER_CORE } from "./studioos-market.ts";
 import { ENGINE_VERSIONS, STUDIOOS_VERSION, type StudioOSMigrationState } from "./studioos-version.ts";
 import { RAVEN_STUDIOOS_TENANT_CONFIG, type CharacterCoreConfig, type TenantConfig } from "./studioos-tenant-config.ts";
 import { SCARLET_CHARACTER_CORE_CONFIG, SCARLET_TENANT_CONFIG } from "./studioos-scarlet.ts";
+import { ATLAS_CHARACTER_CORE_CONFIG, ATLAS_TENANT_CONFIG, SOL_CHARACTER_CORE_CONFIG, SOL_TENANT_CONFIG } from "./studioos-atlas-sol.ts";
 import { buildVersionCenterEntries, type RegistrySet, type TenantProvisioningRequest, type VersionCenterEntry } from "./studioos-registry.ts";
 
 export const LUNA_CHARACTER_CORE_CONFIG: CharacterCoreConfig = {
@@ -46,10 +47,12 @@ export const LUNA_TENANT_CONFIG: TenantConfig = {
 };
 
 export class PilotTenantConfigResolver extends TenantConfigResolver {
-  constructor() { super([RAVEN_STUDIOOS_TENANT_CONFIG, LUNA_TENANT_CONFIG, SCARLET_TENANT_CONFIG]); }
+  constructor() { super([RAVEN_STUDIOOS_TENANT_CONFIG, LUNA_TENANT_CONFIG, SCARLET_TENANT_CONFIG, ATLAS_TENANT_CONFIG, SOL_TENANT_CONFIG]); }
   override getCharacterConfig(characterId: string) {
     if (characterId === LUNA_CHARACTER_CORE_CONFIG.characterId) return LUNA_CHARACTER_CORE_CONFIG;
     if (characterId === SCARLET_CHARACTER_CORE_CONFIG.characterId) return SCARLET_CHARACTER_CORE_CONFIG;
+    if (characterId === ATLAS_CHARACTER_CORE_CONFIG.characterId) return ATLAS_CHARACTER_CORE_CONFIG;
+    if (characterId === SOL_CHARACTER_CORE_CONFIG.characterId) return SOL_CHARACTER_CORE_CONFIG;
     return super.getCharacterConfig(characterId);
   }
 }
