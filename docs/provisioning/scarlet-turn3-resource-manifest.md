@@ -53,3 +53,17 @@
 - Raven and Luna: unchanged
 - Cutover: not attempted
 - Rollback target: Legacy `scarlet-guardian` Worker/D1 and existing production routing
+
+## Turn 4 Production Handoff
+
+- Production state: LIVE (via existing `scarlet-parent-proxy`)
+- Production URL: `https://scarlet.fortunestudios.jp/`
+- Proxy origin before: `https://scarlet-guardian.fs-scarlet-g.workers.dev`
+- Proxy origin after: `https://scarlet-oracle.fortune-kanri.workers.dev`
+- Proxy deployment version: `7d2a5f2f-8281-4c0e-a000-9dd8b8dde6f3`
+- Target Worker version: `f7e350dc-8e6d-495e-9999-bf6fe9feab1d`
+- Cutover timestamp: `2026-08-26T18:36:48.8503540Z`
+- Production status/root: HTTP 200; tenant `scarlet-donovan`; character `scarlet`; posts 2; analytics 2
+- Legacy Worker/D1: KEEP; Legacy Cron: unchanged
+- R2/providers: optional/pending; SNS/Reel/Campaign/Trial remain OFF
+- Rollback: restore proxy origin to the Legacy Worker URL and verify Legacy HTTP 200
