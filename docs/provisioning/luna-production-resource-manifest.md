@@ -1,6 +1,6 @@
 # Luna Production Resource Manifest
 
-Status: Phase 4 selective import complete; R2 pending activation
+Status: Phase 5 final delta validation complete; cutover not executed; R2 pending activation
 Date: 2026-08-26
 
 ## Identity
@@ -27,6 +27,7 @@ Date: 2026-08-26
 
 - Legacy Luna import: SELECTIVE NON-MEDIA IMPORT COMPLETE; archive-only and excluded rows not imported
 - Latest legacy export: `C:\Users\user\Documents\LunaBackups\luna-starwind-d1-phase4-latest-20260826.sql` (269,173 bytes; SHA-256 `5FDAF82BDD1D85A3EC73B1A8A68E5498571D706B527B2336A574E277E64C7055`)
+- Phase 5 latest legacy snapshot: `C:\Users\user\Documents\LunaBackups\luna-starwind-d1-phase5-latest-20260826.sql` (269,173 bytes; SHA-256 `AADB4A99277E1BF07076CD6271DB3135627641F7FD44FDBCD1AB6DB8BB020188`)
 - Pre-import backup: `C:\Users\user\Documents\LunaBackups\luna-oracle-d1-pre-import-20260826.sql` (7,040 bytes; SHA-256 `06E7E4650D691D7F26748818A711A664BF99FB4285EAD2453435B73496784132`)
 - Selective import: SUCCESS; Analytics 20, reading feedback 1, Blog settings 1, Blog articles 25 (published 24, scheduled 1)
 - Import SQL: `C:\Users\user\Documents\LunaBackups\luna-oracle-selective-import-20260826.sql` (SHA-256 `2490DD99B4F833A21880814E3DF7AAD4EF50E889756A24FC084DC8BF6953021B`)
@@ -36,6 +37,19 @@ Date: 2026-08-26
 - Growth proposals/experiments/memory/precision: 0 rows
 - Campaign/Trial: runtime OFF; no campaign seed was installed
 - Raven contamination: 0 rows / not present in canonical tenant metadata
+
+## Phase 5 delta validation
+
+- Previous snapshot: Phase 4 legacy snapshot above; current snapshot: Phase 5 snapshot above
+- Delta report: `C:\Users\user\Documents\LunaBackups\luna-phase5-delta-report-20260826.json` (Git-excluded)
+- Delta SQL: `C:\Users\user\Documents\LunaBackups\luna-phase5-delta.sql` (739 bytes; SHA-256 `3D183D8C73007F0A163F4B53C28510E3E293ED2DD2B6CE816B175F6C1C8A0F00`)
+- Analytics: 20 unchanged; reading feedback: 1 unchanged; Blog settings: 1 metadata-only `updated_at` change; Blog articles: 25 unchanged
+- Archive-only: Blog events 76 unchanged; Blog social contents 88 unchanged; Growth event/guardrail/brief tables remain 0
+- New rows: 0; deleted rows: 0; data-bearing updates: 0; settings timestamp-only update requires no overwrite
+- Delta policy: `updated_at` watermark when present; otherwise stable source ID plus `created_at`; new rows only by default; update/delete requires human review
+- Delta application: executed against new D1 only; 0 rows read/written; idempotency rerun also 0 rows read/written
+- Pre-delta backup: `C:\Users\user\Documents\LunaBackups\luna-oracle-d1-pre-phase5-delta-20260826.sql` (107,722 bytes; SHA-256 `5ADE57F696576D22D6E7EBE58EAB6E6F16F8E5660A91ADDD55D6C330413A2B66`)
+- Post-delta verification: Analytics 20, feedback 1, Blog settings 1, Blog articles 25; article status published 24 / scheduled 1; import ledger 47; Raven rows 0; Growth rows 0
 
 ## Backup and restore
 
@@ -61,6 +75,7 @@ Date: 2026-08-26
 - Preview read validation: root 200, Analytics 20, Blog 25, feedback 1; article detail read-only succeeded
 - Import verification: all imported tenant IDs are `luna-oracle`; duplicate ledger keys 47/47 distinct; Raven rows 0; Growth rows 0
 - Required secret names only: `ADMIN_SESSION_SECRET`, `GUILD_MEMBER_SERVICE_TOKEN`, `OPENAI_API_KEY`
+- Secret classification: `ADMIN_SESSION_SECRET` cutover-required when admin is exposed; `GUILD_MEMBER_SERVICE_TOKEN` feature-required for Member activation; `OPENAI_API_KEY` feature-required for AI reading and optional for Core/Blog-only cutover
 - DNS/custom-domain/cutover: NOT PERFORMED
 
 ## Safety evidence
@@ -80,6 +95,11 @@ Date: 2026-08-26
 - Phase 2 overall: CONDITIONAL GO
 - Phase 3: CONDITIONAL GO; safe workers.dev preview is active without R2, while media-enabled preview remains blocked until account activation
 - Phase 4: GO for selective non-media import and Preview validation
-- Phase 5 readiness: NO; final delta sync, legacy freeze decision, and human-approved domain cutover remain outstanding
+- Phase 5: GO for final delta validation and cutover planning; no domain cutover performed
+- Phase 5 readiness: YES for a separately approved cutover run, conditional on final pre-cutover checks, secret readiness, and human approval
+- Legacy Cron: KEEP LIVE now; `luna-starwind-cron` schedules Blog today-fortune, draft generation, and publish flows. Use a cutover-time write freeze; do not run legacy and new schedulers concurrently
+- Scheduled article policy: preserve `scheduled` state through final sync unless a human explicitly approves legacy publication before freeze; enable the new scheduler only after acceptance
+- Cutover target: existing `luna.fortunestudios.jp` remains on legacy Pages until approved switch; new Worker remains workers.dev-only
+- R2: `BLOCKED_PENDING_ACTIVATION`; non-blocking for Core/Blog/non-media cutover while SNS/Reel/media remain OFF
 - Existing Luna remains KEEP LIVE
-- Next action: obtain R2 activation before enabling media/R2 binding. Domain cutover and further legacy delta sync remain separate, human-approved phases.
+- Next action: execute the separate cutover runbook after final secret/readiness approval; obtain R2 activation before enabling media/SNS/Reel
