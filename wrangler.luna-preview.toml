@@ -6,6 +6,10 @@ account_id = "cfda786a82241adf6b21f772dbc87544"
 workers_dev = true
 preview_urls = true
 
+[[services]]
+binding = "MEMBER_CORE"
+service = "guild-member-core"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "luna-oracle"

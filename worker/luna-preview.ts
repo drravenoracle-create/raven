@@ -2,6 +2,7 @@ import { resolveRuntimeContext } from "../app/lib/studioos-runtime-adapter.ts";
 
 interface Env {
   DB: D1Database;
+  MEMBER_CORE?: { fetch(request: Request): Promise<Response> };
   GUILD_MEMBER_API_BASE_URL?: string;
   STUDIOOS_TENANT_ID: string;
   STUDIOOS_CHARACTER_ID: string;
@@ -40,19 +41,21 @@ function memberHeaders(request: Request) {
   return headers;
 }
 
-export async function forwardMemberRead(request: Request, env: Pick<Env, "GUILD_MEMBER_API_BASE_URL">) {
+export async function forwardMemberRead(request: Request, env: Pick<Env, "GUILD_MEMBER_API_BASE_URL" | "MEMBER_CORE">) {
   const path = memberReadPath(new URL(request.url).pathname);
   const baseUrl = memberCoreBaseUrl(env);
   if (!path || request.method !== "GET") return json({ ok: false, error: "Member read-only endpoint required.", code: "member_read_only" }, { status: 403 });
-  if (!baseUrl) return json({ ok: false, error: "Member Core is temporarily unavailable.", code: "member_core_unavailable" }, { status: 503 });
+  if (!env.MEMBER_CORE && !baseUrl) return json({ ok: false, error: "Member Core is temporarily unavailable.", code: "member_core_unavailable" }, { status: 503 });
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    const response = await fetch(`${baseUrl}${path}${new URL(request.url).search}`, {
+    const upstreamRequest = new Request(`https://guild-member-core.internal${path}${new URL(request.url).search}`, {
       method: "GET",
       headers: memberHeaders(request),
-      signal: controller.signal,
     });
+    const response = await (env.MEMBER_CORE
+      ? env.MEMBER_CORE.fetch(upstreamRequest)
+      : fetch(`${baseUrl}${path}${new URL(request.url).search}`, { signal: controller.signal, headers: upstreamRequest.headers }));
     const body = await response.text();
     return new Response(body, {
       status: response.status,
