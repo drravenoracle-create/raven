@@ -1,0 +1,18 @@
+name = "luna-oracle"
+main = "worker/luna-preview.ts"
+compatibility_date = "2026-08-26"
+compatibility_flags = ["nodejs_compat"]
+account_id = "cfda786a82241adf6b21f772dbc87544"
+workers_dev = true
+preview_urls = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "luna-oracle"
+database_id = "721248ee-92a5-4fe8-b5af-08503ece8d40"
+
+[vars]
+STUDIOOS_TENANT_ID = "luna-oracle"
+STUDIOOS_CHARACTER_ID = "luna"
+STUDIOOS_GUILD_ID = "raven-guild"
+STUDIOOS_ENVIRONMENT = "production-preview"

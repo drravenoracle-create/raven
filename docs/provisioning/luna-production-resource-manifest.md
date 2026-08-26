@@ -1,6 +1,6 @@
 # Luna Production Resource Manifest
 
-Status: Phase 2 D1 provisioned; R2 pending activation
+Status: Phase 3 preview active; R2 pending activation
 Date: 2026-08-26
 
 ## Identity
@@ -44,8 +44,14 @@ Date: 2026-08-26
 - R2 account: `cfda786a82241adf6b21f772dbc87544`
 - R2 state: `BLOCKED_PENDING_ACTIVATION` (Cloudflare error 10042)
 - R2 bucket creation: NOT ATTEMPTED AGAIN
-- Worker: NOT_PROVISIONED
-- Worker deploy: NOT PERFORMED
+- Worker: `luna-oracle`
+- Worker account: `cfda786a82241adf6b21f772dbc87544`
+- Worker environment: `production-preview`
+- Worker preview URL: `https://luna-oracle.fortune-kanri.workers.dev`
+- Worker version: `5c2c6c8a-075c-4e68-9048-8ee6f252f334`
+- D1 binding: `DB` -> `luna-oracle` / `721248ee-92a5-4fe8-b5af-08503ece8d40`
+- R2 binding: NOT CONFIGURED; media write remains disabled
+- Preview activation: Core, Member boundary, internal Analytics, Blog ON; Blog scheduler, SNS, Reel, Campaign, Trial OFF; Growth READ-ONLY
 - Required secret names only: `ADMIN_SESSION_SECRET`, `GUILD_MEMBER_SERVICE_TOKEN`, `OPENAI_API_KEY`
 - DNS/custom-domain/cutover: NOT PERFORMED
 
@@ -64,6 +70,6 @@ Date: 2026-08-26
 - D1 Provisioning: GO
 - R2 Provisioning: BLOCKED
 - Phase 2 overall: CONDITIONAL GO
-- Phase 3 readiness: CONDITIONAL; Core/Blog/Analytics preview can be planned without media, but any Worker configuration requiring the R2 binding remains blocked until account activation
+- Phase 3: CONDITIONAL GO; safe workers.dev preview is active without R2, while media-enabled preview remains blocked until account activation
 - Existing Luna remains KEEP LIVE
-- Next action: obtain R2 activation for the standard origin account, then reassess media-enabled Worker Preview. Do not start Phase 3 automatically.
+- Next action: obtain R2 activation before enabling media/R2 binding. Domain cutover and legacy data import remain separate, human-approved phases.
