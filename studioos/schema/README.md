@@ -20,6 +20,6 @@ core metadata
 └── growth (read-only / human-controlled tables)
 ```
 
-`clean-luna.sql` is idempotent and is intended for a fresh local SQLite/D1
-validation only. Opening Campaign runtime tables are intentionally excluded;
-Luna launches with Campaign and Trial disabled.
+`clean-luna.sql` and `clean-scarlet.sql` are idempotent and are intended for a
+fresh local SQLite/D1 validation only. Opening Campaign runtime tables are
+intentionally excluded; both tenants launch with Campaign and Trial disabled.

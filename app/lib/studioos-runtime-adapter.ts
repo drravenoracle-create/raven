@@ -9,11 +9,13 @@ export type TenantAlias = {
 
 export const STUDIOOS_TENANT_ALIASES: readonly TenantAlias[] = [
   { alias: "luna-starwind", canonicalTenantId: "luna-oracle", source: "legacy" },
+  { alias: "scarlet-guardian", canonicalTenantId: "scarlet-donovan", source: "legacy" },
 ];
 
 const HOST_TO_TENANT = new Map([
   ["raven.fortunestudios.jp", "raven-oracle"],
   ["luna.fortunestudios.jp", "luna-oracle"],
+  ["scarlet.fortunestudios.jp", "scarlet-donovan"],
 ]);
 
 export class UnknownRuntimeTenantError extends Error {
