@@ -1,0 +1,9 @@
+name = "atlas-parent-proxy"
+main = "worker/atlas-parent-proxy.ts"
+compatibility_date = "2026-08-26"
+account_id = "cfda786a82241adf6b21f772dbc87544"
+workers_dev = true
+
+[[services]]
+binding = "ATLAS_ORIGIN"
+service = "atlas-oracle"

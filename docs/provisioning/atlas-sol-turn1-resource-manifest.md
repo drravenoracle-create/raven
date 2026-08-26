@@ -19,8 +19,10 @@ Character values are sourced only from `docs/provisioning/atlas-sol-character-so
 - Worker: `atlas-oracle`
 - Preview: `https://atlas-oracle.fortune-kanri.workers.dev`
 - Preview version: `cb64005c-e853-4d6d-bdc4-20b1d7325669`
-- Status: `PREVIEW_READY`
-- Domain: not connected; production DNS unchanged
+- Parent Proxy: `atlas-parent-proxy` / version `caac84c0-01e4-41e0-acce-0c06e6c8b4a5`
+- Production URL: `https://atlas.fortunestudios.jp`
+- Routing: `PARENT_PROXY_SERVICE_BINDING` (`ATLAS_ORIGIN` → `atlas-oracle`)
+- Status: `PRODUCTION_LIVE`
 - R2: not configured
 - Analytics DB: `fortune-studio-analytics` / `6d60f0e0-8816-46c8-8e7b-fb05129d335d`
 
@@ -32,7 +34,10 @@ Character values are sourced only from `docs/provisioning/atlas-sol-character-so
 - Preview version: `5df3f9bf-2d43-4e31-abbf-d2f40fcd0022`
 - Character Core, market persona, tenant config, host mapping, entitlements, and Growth safety are implemented locally
 - Status: `PREVIEW_READY` after Sol preview deployment `5df3f9bf-2d43-4e31-abbf-d2f40fcd0022`
-- Domain: not connected; production DNS unchanged
+- Parent Proxy: `sol-parent-proxy` / version `99a9ce53-497d-4942-a26a-8f3d0b461ca2`
+- Production URL: `https://sol.fortunestudios.jp`
+- Routing: `PARENT_PROXY_SERVICE_BINDING` (`SOL_ORIGIN` → `sol-oracle`)
+- Status: `PRODUCTION_LIVE`
 - R2: not configured
 - Analytics DB: `fortune-studio-analytics` / `6d60f0e0-8816-46c8-8e7b-fb05129d335d`
 
@@ -85,11 +90,11 @@ Atlas and Sol preview configs use `ANALYTICS_DB` pointing to this existing datab
 
 ## State
 
-- Atlas: `PREVIEW_READY`
-- Sol: `PREVIEW_READY`
+- Atlas: `PRODUCTION_LIVE`
+- Sol: `PRODUCTION_LIVE`
 - TURN 1 result: `GO`
-- TURN 2 readiness: `YES`
+- TURN 2 result: `GO`
 - Blocking item: none for Atlas/Sol Core D1 placement
 - Required human decision: none for this Shared Core step
 
-Version Center: Atlas preview entry is updated in the provisioning manifest; Sol remains planned until its tenant D1 exists. No production Version Center state was changed.
+Version Center: Atlas and Sol production/live entries are recorded in this manifest. Both use `SHARED_D1_TENANT_ISOLATED` with shared Analytics; R2 remains optional.

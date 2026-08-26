@@ -1,0 +1,9 @@
+name = "sol-parent-proxy"
+main = "worker/sol-parent-proxy.ts"
+compatibility_date = "2026-08-26"
+account_id = "cfda786a82241adf6b21f772dbc87544"
+workers_dev = true
+
+[[services]]
+binding = "SOL_ORIGIN"
+service = "sol-oracle"
