@@ -76,6 +76,19 @@ Date: 2026-08-26
 - Pre-delta backup: `C:\Users\user\Documents\LunaBackups\luna-oracle-d1-pre-phase5-delta-20260826.sql` (107,722 bytes; SHA-256 `5ADE57F696576D22D6E7EBE58EAB6E6F16F8E5660A91ADDD55D6C330413A2B66`)
 - Post-delta verification: Analytics 20, feedback 1, Blog settings 1, Blog articles 25; article status published 24 / scheduled 1; import ledger 47; Raven rows 0; Growth rows 0
 
+## Phase 6 final delta
+
+- Confirmed production source of truth: `luna-starwind-analytics` only; the Target-account D1 named `luna-starwind` is not a migration source.
+- Latest read-only source export: `C:\Users\user\OneDrive\Documents\AI占い5サイト管理プロジェクト\artifacts\luna-phase6-source-latest-20260826.sql` (281,958 bytes; SHA-256 `DECC5227773D3884715CFB24C4351D5135501950EA9CB6D08FD128EC2F80813A`).
+- Final delta dry-run against the Phase 5 snapshot: 19 new, 2 updated, 0 deleted, 209 unchanged.
+- Apply policy: 13 new `analytics_events` rows were applied to New Luna D1; Blog settings `updated_at`-only change was not overwritten; one approved Blog article transition was synchronized from `scheduled` to `published`.
+- Archive-only rows excluded from runtime import: 2 new Blog events and 4 new SNS contents; all existing archive-only history remains outside runtime tables.
+- Tenant remap: `luna-starwind` -> `luna-oracle`; character remap: -> `luna`; no Raven rows or cross-tenant rows detected.
+- Delta rerun: 0 new rows and 0 rows written; approved article status sync rerun: 0 rows written. Import ledger and status predicates provide idempotency.
+- Post-apply verification: Analytics 33, Blog articles 25 (published 25 / scheduled 0), Growth 0, Raven contamination false.
+- Status correction note: the existing ledger target key is a deterministic label, not a numeric article ID; the approved status transition was therefore applied with an explicit target tenant + slug + scheduled-state predicate. Re-running the status SQL is now a no-op.
+- Domain cutover was not attempted; Legacy Pages and Legacy Cron remain KEEP LIVE.
+
 ## Backup and restore
 
 - Initial schema export: `C:\Users\user\Documents\LunaBackups\luna-oracle-d1-initial-schema-20260826.sql`
@@ -93,11 +106,11 @@ Date: 2026-08-26
 - Worker account: `cfda786a82241adf6b21f772dbc87544`
 - Worker environment: `production-preview`
 - Worker preview URL: `https://luna-oracle.fortune-kanri.workers.dev`
-- Worker version: `4b089e07-812d-448b-90c9-be8822868e63`
+- Worker version: `75881850-a87e-490d-bf7e-bc7522fa157d`
 - D1 binding: `DB` -> `luna-oracle` / `721248ee-92a5-4fe8-b5af-08503ece8d40`
 - R2 binding: NOT CONFIGURED; media write remains disabled
 - Preview activation: Core, Member boundary, internal Analytics, Blog ON; Blog scheduler, SNS, Reel, Campaign, Trial OFF; Growth READ-ONLY
-- Preview read validation: root 200, Analytics 20, Blog 25, feedback 1; article detail read-only succeeded
+- Preview read validation: root 200, `/api/preview/status` 200, Analytics 33, Blog 25, Growth 0; article detail read-only previously succeeded
 - Import verification: all imported tenant IDs are `luna-oracle`; duplicate ledger keys 47/47 distinct; Raven rows 0; Growth rows 0
 - Required secret names only: `ADMIN_SESSION_SECRET`, `GUILD_MEMBER_SERVICE_TOKEN`, `OPENAI_API_KEY`
 - Secret classification: `ADMIN_SESSION_SECRET` cutover-required when admin is exposed; `GUILD_MEMBER_SERVICE_TOKEN` feature-required for Member activation; `OPENAI_API_KEY` feature-required for AI reading and optional for Core/Blog-only cutover
@@ -122,7 +135,7 @@ Date: 2026-08-26
 - Phase 4: GO for selective non-media import and Preview validation
 - Phase 5: GO for final delta validation and cutover planning; no domain cutover performed
 - Phase 5 readiness: YES for a separately approved cutover run, conditional on final pre-cutover checks, secret readiness, and human approval
-- Legacy Cron: KEEP LIVE now; `luna-starwind-cron` schedules Blog today-fortune, draft generation, and publish flows. Use a cutover-time write freeze; do not run legacy and new schedulers concurrently
+- Legacy Cron: observed ACTIVE on 2026-08-26; `luna-starwind-cron` schedules `0 22 * * *`, `0 4 * * *`, and `0 8 * * *`. Use a cutover-time write freeze; do not run legacy and new schedulers concurrently
 - Scheduled article policy: preserve `scheduled` state through final sync unless a human explicitly approves legacy publication before freeze; enable the new scheduler only after acceptance
 - Cutover target: existing `luna.fortunestudios.jp` remains on legacy Pages until approved switch; new Worker remains workers.dev-only
 - R2: `BLOCKED_PENDING_ACTIVATION`; non-blocking for Core/Blog/non-media cutover while SNS/Reel/media remain OFF

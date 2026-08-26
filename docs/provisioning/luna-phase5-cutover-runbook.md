@@ -15,6 +15,9 @@ Status: planning complete; execution requires separate human approval
 - No automatic experiment, campaign, trial, payment, external send, or Growth execution is allowed.
 - Production parity wording: do not show `公開記事はD1 Blog Engineから取得`, `下書き・承認・公開ステータス管理`, or `SNS派生コンテンツのキュー生成に対応` on public Luna pages. Show `毎朝の今日の占いをお届け`, `恋愛・相性・復縁を深く読み解く`, and `気になる記事から無料鑑定へ進めます`.
 - Latest approved Legacy source fingerprint for final delta: Blog articles 25, Blog events 78, SNS contents 92 from `luna-starwind-analytics` / `695b8e94-8bfb-416e-8c1b-53ef7f3fc8f2`.
+- Phase 6 source verification: read-only export SHA-256 `DECC5227773D3884715CFB24C4351D5135501950EA9CB6D08FD128EC2F80813A`; source snapshot contained Blog articles 25, Blog events 78, SNS contents 92 and Analytics 33.
+- Phase 6 final delta policy: apply only new Analytics rows and the explicitly approved article status transition; do not overwrite metadata-only settings changes; keep Blog events and SNS contents archive-only.
+- Phase 6 result: 13 Analytics rows applied, one article status synchronized to `published`, 0 deletions, and the rerun produced 0 new rows / 0 writes. Target preview verification remained healthy with Blog 25 (published 25 / scheduled 0), Growth 0, and no Raven contamination.
 
 ## Final sync and freeze
 
@@ -69,5 +72,6 @@ The existing legacy scheduler must either publish a scheduled article before the
 - Latest legacy snapshot: `C:\Users\user\Documents\LunaBackups\luna-starwind-d1-phase5-latest-20260826.sql` (Git-excluded).
 - Delta report: `C:\Users\user\Documents\LunaBackups\luna-phase5-delta-report-20260826.json` (Git-excluded).
 - New D1 pre-delta backup: `C:\Users\user\Documents\LunaBackups\luna-oracle-d1-pre-phase5-delta-20260826.sql` (Git-excluded).
-- Current new D1 verification: Analytics 20, feedback 1, Blog settings 1, Blog articles 25; article statuses published 24 / scheduled 1; Growth 0; Raven contamination 0.
+- Current new D1 verification: `/api/preview/status` reports Analytics 33, Blog articles 25, Growth 0; article statuses published 24 / scheduled 1 in the prior D1 verification; Raven contamination 0.
+- Current Legacy Cron state: observed ACTIVE on 2026-08-26 with `0 22 * * *`, `0 4 * * *`, and `0 8 * * *`; it was not restarted during this run.
 - Delta rerun produced no duplicate/new imports.
