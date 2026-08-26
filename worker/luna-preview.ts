@@ -15,7 +15,7 @@ const json = (body: unknown, init: ResponseInit = {}) => Response.json(body, {
 
 async function count(db: D1Database, table: string, tenantId: string) {
   const allowed = new Set([
-    "analytics_events", "blog_engine_settings", "blog_engine_articles", "sns_posts", "reel_assets",
+    "analytics_events", "studioos_reading_feedback", "blog_engine_settings", "blog_engine_articles", "sns_posts", "reel_assets",
     "growth_metric_points", "growth_evidence_sources", "growth_evidence_claims", "growth_hypotheses",
     "growth_proposals", "growth_experiments", "growth_knowledge_items", "growth_memory", "growth_precision_snapshots",
   ]);
@@ -54,7 +54,19 @@ export default {
         ravenContamination: false,
       });
     }
+    if (url.pathname === "/api/preview/analytics") {
+      return json({ tenantId, eventCount: await count(env.DB, "analytics_events", tenantId), readOnly: true });
+    }
+    if (url.pathname === "/api/preview/feedback") {
+      return json({ tenantId, feedbackCount: await count(env.DB, "studioos_reading_feedback", tenantId), readOnly: true });
+    }
     if (url.pathname === "/api/health") return json({ ok: true, tenantId, environment: env.STUDIOOS_ENVIRONMENT });
+    if (url.pathname.startsWith("/blog/")) {
+      const slug = decodeURIComponent(url.pathname.slice("/blog/".length));
+      const article = await env.DB.prepare("SELECT slug, title, locale, status, created_at, published_at FROM blog_engine_articles WHERE tenant_id = ? AND slug = ? LIMIT 1").bind(tenantId, slug).first();
+      if (!article) return json({ error: "article not found" }, { status: 404 });
+      return json({ tenantId, article, readOnly: true });
+    }
     if (url.pathname !== "/" && url.pathname !== "/blog") return json({ error: "not found" }, { status: 404 });
 
     const html = `<!doctype html><html lang="ja-JP"><head><meta charset="utf-8"><title>Luna Preview</title></head><body><main><p>StudioOS Luna Preview</p><h1>${context.character.displayName}</h1><p>${context.localization.locale} / ${env.STUDIOOS_ENVIRONMENT}</p><p>Blog preview is enabled. Scheduler, SNS, Reel, Campaign, Trial, and Growth actions are disabled.</p></main></body></html>`;

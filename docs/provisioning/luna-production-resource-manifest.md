@@ -1,6 +1,6 @@
 # Luna Production Resource Manifest
 
-Status: Phase 3 preview active; R2 pending activation
+Status: Phase 4 selective import complete; R2 pending activation
 Date: 2026-08-26
 
 ## Identity
@@ -25,8 +25,14 @@ Date: 2026-08-26
 
 ## Initial data safety
 
-- Legacy Luna import: NOT STARTED
-- Analytics, Blog, SNS, Reel, and Growth runtime data: 0 rows
+- Legacy Luna import: SELECTIVE NON-MEDIA IMPORT COMPLETE; archive-only and excluded rows not imported
+- Latest legacy export: `C:\Users\user\Documents\LunaBackups\luna-starwind-d1-phase4-latest-20260826.sql` (269,173 bytes; SHA-256 `5FDAF82BDD1D85A3EC73B1A8A68E5498571D706B527B2336A574E277E64C7055`)
+- Pre-import backup: `C:\Users\user\Documents\LunaBackups\luna-oracle-d1-pre-import-20260826.sql` (7,040 bytes; SHA-256 `06E7E4650D691D7F26748818A711A664BF99FB4285EAD2453435B73496784132`)
+- Selective import: SUCCESS; Analytics 20, reading feedback 1, Blog settings 1, Blog articles 25 (published 24, scheduled 1)
+- Import SQL: `C:\Users\user\Documents\LunaBackups\luna-oracle-selective-import-20260826.sql` (SHA-256 `2490DD99B4F833A21880814E3DF7AAD4EF50E889756A24FC084DC8BF6953021B`)
+- Dry-run report: `C:\Users\user\Documents\LunaBackups\luna-phase4-dryrun-20260826\luna-phase1-4-dryrun-report.json`
+- Archive-only: Blog events 76, Blog social contents 88, plus unrelated legacy operational rows retained outside the new D1
+- Imported runtime data: Analytics 20, Blog settings 1, Blog articles 25; SNS/Reel runtime data 0
 - Growth proposals/experiments/memory/precision: 0 rows
 - Campaign/Trial: runtime OFF; no campaign seed was installed
 - Raven contamination: 0 rows / not present in canonical tenant metadata
@@ -48,10 +54,12 @@ Date: 2026-08-26
 - Worker account: `cfda786a82241adf6b21f772dbc87544`
 - Worker environment: `production-preview`
 - Worker preview URL: `https://luna-oracle.fortune-kanri.workers.dev`
-- Worker version: `5c2c6c8a-075c-4e68-9048-8ee6f252f334`
+- Worker version: `4b089e07-812d-448b-90c9-be8822868e63`
 - D1 binding: `DB` -> `luna-oracle` / `721248ee-92a5-4fe8-b5af-08503ece8d40`
 - R2 binding: NOT CONFIGURED; media write remains disabled
 - Preview activation: Core, Member boundary, internal Analytics, Blog ON; Blog scheduler, SNS, Reel, Campaign, Trial OFF; Growth READ-ONLY
+- Preview read validation: root 200, Analytics 20, Blog 25, feedback 1; article detail read-only succeeded
+- Import verification: all imported tenant IDs are `luna-oracle`; duplicate ledger keys 47/47 distinct; Raven rows 0; Growth rows 0
 - Required secret names only: `ADMIN_SESSION_SECRET`, `GUILD_MEMBER_SERVICE_TOKEN`, `OPENAI_API_KEY`
 - DNS/custom-domain/cutover: NOT PERFORMED
 
@@ -71,5 +79,7 @@ Date: 2026-08-26
 - R2 Provisioning: BLOCKED
 - Phase 2 overall: CONDITIONAL GO
 - Phase 3: CONDITIONAL GO; safe workers.dev preview is active without R2, while media-enabled preview remains blocked until account activation
+- Phase 4: GO for selective non-media import and Preview validation
+- Phase 5 readiness: NO; final delta sync, legacy freeze decision, and human-approved domain cutover remain outstanding
 - Existing Luna remains KEEP LIVE
-- Next action: obtain R2 activation before enabling media/R2 binding. Domain cutover and legacy data import remain separate, human-approved phases.
+- Next action: obtain R2 activation before enabling media/R2 binding. Domain cutover and further legacy delta sync remain separate, human-approved phases.
