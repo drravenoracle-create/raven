@@ -1,0 +1,23 @@
+name = "scarlet-oracle"
+main = "worker/scarlet-preview.ts"
+compatibility_date = "2026-08-26"
+compatibility_flags = ["nodejs_compat"]
+account_id = "cfda786a82241adf6b21f772dbc87544"
+workers_dev = true
+preview_urls = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "scarlet-oracle"
+database_id = "3a003494-29c5-403f-8e36-450891968428"
+
+[[services]]
+binding = "MEMBER_CORE"
+service = "guild-member-core"
+
+[vars]
+GUILD_MEMBER_API_BASE_URL = "https://guild-member-core.fortune-kanri.workers.dev"
+STUDIOOS_TENANT_ID = "scarlet-donovan"
+STUDIOOS_CHARACTER_ID = "scarlet"
+STUDIOOS_GUILD_ID = "raven-guild"
+STUDIOOS_ENVIRONMENT = "production-preview"
