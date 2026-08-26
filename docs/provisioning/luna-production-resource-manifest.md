@@ -141,3 +141,37 @@ Date: 2026-08-26
 - R2: `BLOCKED_PENDING_ACTIVATION`; non-blocking for Core/Blog/non-media cutover while SNS/Reel/media remain OFF
 - Existing Luna remains KEEP LIVE
 - Next action: execute the separate cutover runbook after final secret/readiness approval; obtain R2 activation before enabling media/SNS/Reel
+
+## Production handoff verification (2026-08-27)
+
+- Production state: LIVE
+- Migration: COMPLETE
+- Production account role: `STUDIOOS_LUNA_TARGET`
+- Production account: `Fortune.kanri@gmail.com's Account` (`fortune.kanri@gmail.com`)
+- Production Worker: `luna-oracle`
+- Production URL: `https://luna.fortunestudios.jp/`
+- Tenant: `luna-oracle`
+- Character: `luna`
+- Guild: `raven-guild`
+- Custom Domain: `luna.fortunestudios.jp`
+- `/api/preview/status`: HTTP 200; tenant `luna-oracle`; character `luna`; locale `ja-JP`; Raven contamination `false`
+- Root: HTTP 200
+- Raven health: HTTP 200
+- R2: `BLOCKED / OPTIONAL` (non-media production)
+- Legacy Pages/Worker, Legacy D1, and Legacy Cron: KEEP; Cron remains FROZEN
+- Rollback target: Legacy Luna
+- Actual production Worker version: `NOT_AVAILABLE` from the current readable session; do not infer from prior preview versions
+- Cutover timestamp: `NOT_AVAILABLE` from the current readable session
+- Domain/DNS changes in this finalization step: NONE
+
+### Feature state at handoff
+
+- Core Site: ON
+- Member: ON after isolation validation
+- Internal Analytics: ON
+- Blog: ON; scheduler OFF
+- SNS: OFF
+- Reel: OFF
+- Growth: READ-ONLY / HUMAN-CONTROLLED
+- Opening Campaign: OFF
+- Trial: OFF
