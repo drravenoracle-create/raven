@@ -4,11 +4,17 @@ Status: planning complete; execution requires separate human approval
 
 ## Scope and invariants
 
+- Account boundary is fixed and must not be inferred from resource names:
+  - `LEGACY_LUNA_PRODUCTION`: `Pkdb2545@gmail.com's Account`, login `pkdb2545@gmail.com`, existing Luna `luna-starwind`, source D1 `luna-starwind-analytics` / `695b8e94-8bfb-416e-8c1b-53ef7f3fc8f2`, legacy Cron `luna-starwind-cron`.
+  - `STUDIOOS_LUNA_TARGET`: `Fortune.kanri@gmail.com's Account`, login `fortune.kanri@gmail.com`, account ID `cfda786a82241adf6b21f772dbc87544`, Worker `luna-oracle`, D1 `luna-oracle` / `721248ee-92a5-4fe8-b5af-08503ece8d40`, tenant `luna-oracle`, character `luna`, guild `raven-guild`.
+- Before every Cloudflare operation, state whether the operation targets `LEGACY_LUNA_PRODUCTION` or `STUDIOOS_LUNA_TARGET`, and verify D1 by database ID.
 - Canonical tenant: `luna-oracle`; legacy tenant: `luna-starwind`; character: `luna`; guild: `raven-guild`.
 - Existing Luna Pages, legacy D1, and legacy Cron remain KEEP LIVE until the approved cutover window.
 - Raven is out of scope and must remain unchanged.
 - R2 is `BLOCKED_PENDING_ACTIVATION`; SNS, Reel, and media writes remain OFF.
 - No automatic experiment, campaign, trial, payment, external send, or Growth execution is allowed.
+- Production parity wording: do not show `公開記事はD1 Blog Engineから取得`, `下書き・承認・公開ステータス管理`, or `SNS派生コンテンツのキュー生成に対応` on public Luna pages. Show `毎朝の今日の占いをお届け`, `恋愛・相性・復縁を深く読み解く`, and `気になる記事から無料鑑定へ進めます`.
+- Latest approved Legacy source fingerprint for final delta: Blog articles 25, Blog events 78, SNS contents 92 from `luna-starwind-analytics` / `695b8e94-8bfb-416e-8c1b-53ef7f3fc8f2`.
 
 ## Final sync and freeze
 

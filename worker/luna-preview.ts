@@ -136,7 +136,7 @@ export default {
     }
     if (url.pathname !== "/" && url.pathname !== "/blog") return json({ error: "not found" }, { status: 404 });
 
-    const html = `<!doctype html><html lang="ja-JP"><head><meta charset="utf-8"><title>Luna Preview</title></head><body><main><p>StudioOS Luna Preview</p><h1>${context.character.displayName}</h1><p>${context.localization.locale} / ${env.STUDIOOS_ENVIRONMENT}</p><p>Blog preview is enabled. Scheduler, SNS, Reel, Campaign, Trial, and Growth actions are disabled.</p></main></body></html>`;
+    const html = `<!doctype html><html lang="ja-JP"><head><meta charset="utf-8"><title>Luna Preview</title></head><body><main><p>StudioOS Luna Preview</p><h1>${context.character.displayName}</h1><p>${context.localization.locale} / ${env.STUDIOOS_ENVIRONMENT}</p><p>毎朝の今日の占いをお届け</p><p>恋愛・相性・復縁を深く読み解く</p><p>気になる記事から無料鑑定へ進めます</p></main></body></html>`;
     return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
   },
 };

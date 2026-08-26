@@ -1,6 +1,6 @@
 # Luna Production Resource Manifest
 
-Status: Phase 5 final delta validation complete; cutover not executed; R2 pending activation
+Status: Phase 6 continuation; account boundary fixed; cutover not executed; R2 pending activation
 Date: 2026-08-26
 
 ## Identity
@@ -12,8 +12,33 @@ Date: 2026-08-26
 - Existing Luna Pages and D1: KEEP LIVE; no legacy data imported
 - Cutover: NOT STARTED
 
+## Account boundary
+
+- `LEGACY_LUNA_PRODUCTION`: Cloudflare account `Pkdb2545@gmail.com's Account`; login `pkdb2545@gmail.com`; existing Luna `luna-starwind`; production URL `https://luna.fortunestudios.jp/`; source D1 `luna-starwind-analytics` / `695b8e94-8bfb-416e-8c1b-53ef7f3fc8f2`; legacy Cron `luna-starwind-cron`.
+- `STUDIOOS_LUNA_TARGET`: Cloudflare account `Fortune.kanri@gmail.com's Account`; login `fortune.kanri@gmail.com`; account ID `cfda786a82241adf6b21f772dbc87544`; Worker `luna-oracle`; target D1 `luna-oracle` / `721248ee-92a5-4fe8-b5af-08503ece8d40`; tenant `luna-oracle`; character `luna`; guild `raven-guild`.
+- Cloudflare operations must name either `LEGACY_LUNA_PRODUCTION` or `STUDIOOS_LUNA_TARGET` before execution. Resource names alone are not evidence of account ownership.
+- D1 operations must verify the database ID. Legacy source is only `695b8e94-8bfb-416e-8c1b-53ef7f3fc8f2`; new StudioOS Luna target is only `721248ee-92a5-4fe8-b5af-08503ece8d40`.
+- Similar resources in other accounts are not valid substitutes.
+
+## Production parity requirement
+
+- Legacy Production must not show these management-facing lines: `公開記事はD1 Blog Engineから取得`, `下書き・承認・公開ステータス管理`, `SNS派生コンテンツのキュー生成に対応`.
+- Legacy Production and StudioOS Luna Preview must show these reader-facing lines: `毎朝の今日の占いをお届け`, `恋愛・相性・復縁を深く読み解く`, `気になる記事から無料鑑定へ進めます`.
+
+## Current legacy source fingerprint
+
+- Source account role: `LEGACY_LUNA_PRODUCTION`
+- Source D1: `luna-starwind-analytics`
+- Source D1 ID: `695b8e94-8bfb-416e-8c1b-53ef7f3fc8f2`
+- Blog articles: 25
+- Blog events: 78
+- SNS contents: 92
+- Fingerprint date: 2026-08-26
+
 ## Origin resources
 
+- StudioOS target account role: `STUDIOOS_LUNA_TARGET`
+- StudioOS target account: `Fortune.kanri@gmail.com's Account`
 - Standard StudioOS origin account: `cfda786a82241adf6b21f772dbc87544`
 - New D1: `luna-oracle`
 - New D1 ID: `721248ee-92a5-4fe8-b5af-08503ece8d40`
