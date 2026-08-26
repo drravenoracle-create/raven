@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { resolveRuntimeContext, resolveTenantIdFromHost } from "../app/lib/studioos-runtime-adapter.ts";
+import { analyticsReadWhere, analyticsWriteValues } from "../app/lib/studioos-analytics.ts";
 
 test("Atlas and Sol resolve independently from host", () => {
   assert.equal(resolveTenantIdFromHost("atlas.fortunestudios.jp"), "atlas-oracle");
@@ -23,4 +24,12 @@ test("Atlas and Sol retain market, locale, and safe activation boundaries", () =
     assert.equal(context.sns.enabled, false);
     assert.equal(context.reel.enabled, false);
   }
+});
+
+test("shared analytics requires resolved tenant context and isolates Atlas/Sol", () => {
+  const atlas = analyticsWriteValues({ guildId: "raven-guild", tenantId: "atlas-oracle", characterId: "atlas", market: "jp", locale: "ja-JP" });
+  const sol = analyticsWriteValues({ guildId: "raven-guild", tenantId: "sol-oracle", characterId: "sol", market: "jp", locale: "ja-JP" });
+  assert.notDeepEqual(analyticsReadWhere(atlas).bindings, analyticsReadWhere(sol).bindings);
+  assert.throws(() => analyticsReadWhere({ tenantId: "atlas-oracle" }), /ANALYTICS_TENANT_CONTEXT_REQUIRED/);
+  assert.throws(() => analyticsWriteValues({ guildId: "raven-guild", tenantId: "unknown", characterId: "raven", market: "jp", locale: "ja-JP" }), /ANALYTICS_TENANT_CONTEXT_INVALID/);
 });

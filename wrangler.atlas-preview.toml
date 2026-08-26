@@ -8,6 +8,10 @@ workers_dev = true
 binding = "DB"
 database_name = "atlas-oracle"
 database_id = "3c08bd65-cc8d-462c-abe1-c83f67d90f28"
+[[d1_databases]]
+binding = "ANALYTICS_DB"
+database_name = "fortune-studio-analytics"
+database_id = "6d60f0e0-8816-46c8-8e7b-fb05129d335d"
 [vars]
 STUDIOOS_TENANT_ID = "atlas-oracle"
 STUDIOOS_CHARACTER_ID = "atlas"

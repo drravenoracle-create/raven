@@ -4,7 +4,11 @@ compatibility_date = "2026-08-26"
 compatibility_flags = ["nodejs_compat"]
 account_id = "cfda786a82241adf6b21f772dbc87544"
 workers_dev = true
-# D1 binding is intentionally omitted until Cloudflare account capacity is increased.
+[[d1_databases]]
+binding = "ANALYTICS_DB"
+database_name = "fortune-studio-analytics"
+database_id = "6d60f0e0-8816-46c8-8e7b-fb05129d335d"
+# Tenant DB binding remains omitted until Cloudflare account capacity is increased.
 [vars]
 STUDIOOS_TENANT_ID = "sol-oracle"
 STUDIOOS_CHARACTER_ID = "sol"

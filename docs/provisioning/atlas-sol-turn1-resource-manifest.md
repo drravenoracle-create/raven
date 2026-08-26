@@ -18,10 +18,11 @@ Character values are sourced only from `docs/provisioning/atlas-sol-character-so
 - Schema: Clean StudioOS schema applied; 17 tables verified; Raven/Luna/Sol rows 0
 - Worker: `atlas-oracle`
 - Preview: `https://atlas-oracle.fortune-kanri.workers.dev`
-- Preview version: `b54143d4-5047-4036-9b01-f70848dfac31`
+- Preview version: `cb64005c-e853-4d6d-bdc4-20b1d7325669`
 - Status: `PREVIEW_READY`
 - Domain: not connected; production DNS unchanged
 - R2: not configured
+- Analytics DB: `fortune-studio-analytics` / `6d60f0e0-8816-46c8-8e7b-fb05129d335d`
 
 ## Sol
 
@@ -31,6 +32,7 @@ Character values are sourced only from `docs/provisioning/atlas-sol-character-so
 - Status: `READY_EXCEPT_D1`
 - Domain: not connected; production DNS unchanged
 - R2: not configured
+- Analytics DB: `fortune-studio-analytics` / `6d60f0e0-8816-46c8-8e7b-fb05129d335d`
 
 ## D1 capacity decision
 
@@ -53,6 +55,16 @@ Classifications:
 
 Capacity increase: not available through the current authenticated operation; plan/account administrator action may be required. No upgrade or billing action was performed.
 
+## Shared Analytics additive extension
+
+Backup: `C:\Users\user\Documents\LunaBackups\fortune-studio-analytics-pre-studioos-additive-20260827.sql`
+
+Backup SHA-256: `4B79AAEA7A95DBCBB411A279C0E2D21C2F9AC3A04ACAA1D9D9448E68CF35622B`
+
+The existing `daily_site_analytics`, `analytics_collection_runs`, and `_cf_KV` tables were preserved. StudioOS `analytics_events`, `studioos_analytics_tenants`, and tenant-scope indexes were added additively. No production data rows were written or changed.
+
+Atlas and Sol preview configs use `ANALYTICS_DB` pointing to this existing database. Sol's tenant DB binding remains pending capacity.
+
 ## Runtime safety
 
 - Atlas and Sol host mappings are tenant-aware.
@@ -71,3 +83,5 @@ Capacity increase: not available through the current authenticated operation; pl
 - TURN 2 readiness: `PARTIAL`
 - Blocking item: target account D1 capacity for `sol-oracle`
 - Required human decision: increase the target account's D1 capacity, or explicitly authorize a demonstrably unused TEST/DEV database for deletion after independent review.
+
+Version Center: Atlas preview entry is updated in the provisioning manifest; Sol remains planned until its tenant D1 exists. No production Version Center state was changed.
