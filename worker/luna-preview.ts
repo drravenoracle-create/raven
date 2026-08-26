@@ -2,10 +2,71 @@ import { resolveRuntimeContext } from "../app/lib/studioos-runtime-adapter.ts";
 
 interface Env {
   DB: D1Database;
+  GUILD_MEMBER_API_BASE_URL?: string;
   STUDIOOS_TENANT_ID: string;
   STUDIOOS_CHARACTER_ID: string;
   STUDIOOS_GUILD_ID: string;
   STUDIOOS_ENVIRONMENT: string;
+}
+
+const LUNA_TENANT_ID = "luna-oracle";
+const LUNA_CHARACTER_ID = "luna";
+const LUNA_GUILD_ID = "raven-guild";
+
+export function memberReadPath(pathname: string) {
+  return pathname === "/api/member/session" || pathname === "/api/member/readings" || pathname.startsWith("/api/member/readings/") ? pathname : null;
+}
+
+function memberCoreBaseUrl(env: Pick<Env, "GUILD_MEMBER_API_BASE_URL">) {
+  if (!env.GUILD_MEMBER_API_BASE_URL) return null;
+  try {
+    const url = new URL(env.GUILD_MEMBER_API_BASE_URL);
+    if (url.protocol !== "https:" || url.hostname !== "guild-member-core.fortune-kanri.workers.dev" || url.pathname !== "/") return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+function memberHeaders(request: Request) {
+  const headers = new Headers({
+    accept: "application/json",
+    "x-tenant-id": LUNA_TENANT_ID,
+    "x-guild-id": LUNA_GUILD_ID,
+    "x-character-id": LUNA_CHARACTER_ID,
+  });
+  const cookie = request.headers.get("cookie");
+  if (cookie) headers.set("cookie", cookie);
+  return headers;
+}
+
+export async function forwardMemberRead(request: Request, env: Pick<Env, "GUILD_MEMBER_API_BASE_URL">) {
+  const path = memberReadPath(new URL(request.url).pathname);
+  const baseUrl = memberCoreBaseUrl(env);
+  if (!path || request.method !== "GET") return json({ ok: false, error: "Member read-only endpoint required.", code: "member_read_only" }, { status: 403 });
+  if (!baseUrl) return json({ ok: false, error: "Member Core is temporarily unavailable.", code: "member_core_unavailable" }, { status: 503 });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch(`${baseUrl}${path}${new URL(request.url).search}`, {
+      method: "GET",
+      headers: memberHeaders(request),
+      signal: controller.signal,
+    });
+    const body = await response.text();
+    return new Response(body, {
+      status: response.status,
+      headers: { "content-type": response.headers.get("content-type") || "application/json; charset=utf-8", "cache-control": "no-store" },
+    });
+  } catch {
+    return json({ ok: false, error: "Member Core is temporarily unavailable.", code: "member_core_unavailable" }, { status: 503 });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function trialDisabledResponse() {
+  return json({ ok: false, error: "Trial is disabled in Preview.", code: "trial_disabled" }, { status: 403 });
 }
 
 const json = (body: unknown, init: ResponseInit = {}) => Response.json(body, {
@@ -33,6 +94,8 @@ export default {
     }
 
     const url = new URL(request.url);
+    if (memberReadPath(url.pathname)) return forwardMemberRead(request, env);
+    if (url.pathname.startsWith("/api/member/trials/") || url.pathname === "/api/member/events" || url.pathname.startsWith("/api/member/auth/")) return trialDisabledResponse();
     if (url.pathname === "/api/preview/status") {
       const [analyticsRows, blogRows, growthRows] = await Promise.all([
         count(env.DB, "analytics_events", tenantId),
@@ -46,7 +109,8 @@ export default {
         locale: context.localization.locale,
         environment: env.STUDIOOS_ENVIRONMENT,
         schemaVersion: context.config.schemaVersion,
-        activation: { coreSite: true, member: true, analyticsInternal: true, blog: true, blogScheduler: false, sns: false, reel: false, growth: "read-only", openingCampaign: false, trial: false },
+        activation: { coreSite: true, member: env.GUILD_MEMBER_API_BASE_URL ? "read-only" : "unavailable", analyticsInternal: true, blog: true, blogScheduler: false, sns: false, reel: false, growth: "read-only", openingCampaign: false, trial: false },
+        member: { mode: env.GUILD_MEMBER_API_BASE_URL ? "read_only" : "unavailable", trial: "disabled" },
         growthSafety: { executionAllowed: false, requiresStartApproval: true, autoStart: false },
         runtime: { tenantResolver: true, characterCore: true, marketPersona: true, engineSlices: true },
         data: { analyticsRows, blogRows, growthRows },

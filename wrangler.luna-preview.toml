@@ -12,6 +12,7 @@ database_name = "luna-oracle"
 database_id = "721248ee-92a5-4fe8-b5af-08503ece8d40"
 
 [vars]
+GUILD_MEMBER_API_BASE_URL = "https://guild-member-core.fortune-kanri.workers.dev"
 STUDIOOS_TENANT_ID = "luna-oracle"
 STUDIOOS_CHARACTER_ID = "luna"
 STUDIOOS_GUILD_ID = "raven-guild"
