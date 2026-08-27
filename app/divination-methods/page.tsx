@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { methodDetails } from "./data";
+import { PublicSiteFooter, PublicSiteHeader } from "../components/public-site-header";
 
 const methods = methodDetails.map((method) => ({
   ...method,
@@ -33,6 +34,7 @@ export const metadata = {
 export default function DivinationMethodsPage() {
   return (
     <main className="raven-page min-h-screen bg-[#f5f0e8] text-[#20241f]">
+      <PublicSiteHeader />
       <section className="raven-content-shell mx-auto max-w-6xl px-5 py-8">
         <header className="raven-card p-5 sm:p-6">
           <nav className="mb-5 flex flex-wrap gap-3 text-sm font-semibold text-[#596d51]">
@@ -284,6 +286,7 @@ export default function DivinationMethodsPage() {
           </div>
         </section>
       </section>
+      <PublicSiteFooter />
     </main>
   );
 }

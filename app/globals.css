@@ -44,6 +44,139 @@ a {
   text-decoration: none;
 }
 
+.raven-site-header {
+  position: relative;
+  z-index: 5;
+  border-bottom: 1px solid rgba(89, 109, 81, 0.16);
+  background: rgba(255, 250, 242, 0.92);
+  box-shadow: 0 8px 26px rgba(44, 37, 28, 0.05);
+  backdrop-filter: blur(14px);
+}
+
+.raven-site-header-inner {
+  display: flex;
+  max-width: 72rem;
+  min-height: 4.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  margin-inline: auto;
+  padding: 0.75rem 1.25rem;
+}
+
+.raven-brand {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.7rem;
+  color: #20241f;
+}
+
+.raven-brand > span:last-child {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.raven-brand strong {
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+}
+
+.raven-brand small {
+  color: #7a725f;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+}
+
+.raven-brand-mark {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border: 1px solid #b58b3c;
+  border-radius: 50%;
+  background: #1c271d;
+  color: #e3bf73;
+  font-family: Georgia, serif;
+  font-size: 1.2rem;
+}
+
+.raven-site-header nav,
+.raven-site-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.raven-site-header nav a,
+.raven-site-footer nav a {
+  color: #53684d;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.raven-site-header nav a:hover,
+.raven-site-footer nav a:hover {
+  color: #8d6a2f;
+}
+
+.raven-header-cta {
+  border-radius: 999px;
+  background: #273a28;
+  padding: 0.65rem 0.9rem;
+  color: #fff8e7 !important;
+  box-shadow: 0 8px 18px rgba(39, 58, 40, 0.16);
+}
+
+.raven-site-footer {
+  display: flex;
+  max-width: 72rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 2rem;
+  margin: 2rem auto 0;
+  padding: 2rem 1.25rem;
+  border-top: 1px solid #d7cabc;
+  color: #697065;
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+
+.raven-site-footer p {
+  margin: 0;
+}
+
+.raven-site-footer-title {
+  color: #273a28;
+  font-weight: 800;
+}
+
+@media (max-width: 700px) {
+  .raven-site-header-inner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .raven-site-header nav {
+    width: 100%;
+    gap: 0.7rem;
+  }
+
+  .raven-site-header nav a {
+    font-size: 0.78rem;
+  }
+
+  .raven-header-cta {
+    margin-left: auto;
+  }
+
+  .raven-site-footer {
+    flex-direction: column;
+    gap: 1rem;
+  }
+}
+
 .admin-field {
   width: 100%;
   border: 1px solid #cbbfac;

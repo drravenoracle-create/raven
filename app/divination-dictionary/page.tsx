@@ -1,5 +1,6 @@
 ﻿import Link from "next/link";
 import { dictionaryArticles } from "./data";
+import { PublicSiteFooter, PublicSiteHeader } from "../components/public-site-header";
 
 export const metadata = {
   title: "古典占術辞典 | レイヴン・ブラックウッド",
@@ -10,6 +11,7 @@ export const metadata = {
 export default function DivinationDictionaryPage() {
   return (
     <main className="raven-page raven-dictionary min-h-screen text-[#20241f]">
+      <PublicSiteHeader />
       <section className="raven-content-shell mx-auto max-w-6xl px-5 py-8 sm:py-12">
         <header className="raven-dictionary-hero">
           <nav className="relative z-10 mb-6 flex flex-wrap gap-3 text-sm font-semibold text-[#e7d7b6]">
@@ -44,6 +46,7 @@ export default function DivinationDictionaryPage() {
           ))}
         </section>
       </section>
+      <PublicSiteFooter />
     </main>
   );
 }

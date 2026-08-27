@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PublicSiteFooter, PublicSiteHeader } from "../components/public-site-header";
 
 type Theme = "today" | "love" | "work" | "money" | "yijing";
 
@@ -163,6 +164,7 @@ export default function FreeFortuneClient() {
 
   return (
     <main className="raven-page min-h-screen bg-[#f5f0e8] text-[#20241f]">
+      <PublicSiteHeader />
       <section className="mx-auto grid w-full max-w-6xl gap-5 px-4 py-4 sm:px-5 sm:py-6 lg:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex min-w-0 flex-col gap-4">
           <a className="text-sm font-semibold text-[#596d51] underline underline-offset-4" href="/">トップへ戻る</a>
@@ -295,6 +297,7 @@ export default function FreeFortuneClient() {
           )}
         </aside>
       </section>
+      <PublicSiteFooter />
     </main>
   );
 }

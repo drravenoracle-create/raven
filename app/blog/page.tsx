@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { getSortedBlogPosts } from "../lib/blog";
 import { resolveBlogConfig } from "../lib/tenant-config-resolver";
+import { PublicSiteFooter, PublicSiteHeader } from "../components/public-site-header";
 
 type DbPost = {
   slug: string;
@@ -50,6 +51,7 @@ export default async function BlogIndex() {
 
   return (
     <main className="raven-page min-h-screen bg-[#f5f0e8] px-5 py-8 text-[#20241f]">
+      <PublicSiteHeader />
       <div className="mx-auto max-w-5xl">
         <Link className="text-sm font-semibold text-[#596d51]" href="/">レイヴン・ブラックウッド</Link>
         <header className="raven-card mt-5 p-5 sm:p-6">
@@ -72,6 +74,7 @@ export default async function BlogIndex() {
           ))}
         </section>
       </div>
+      <PublicSiteFooter />
     </main>
   );
 }

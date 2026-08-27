@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PublicSiteFooter, PublicSiteHeader } from "../components/public-site-header";
 
 const items = [
   ["何を鑑定できますか", "送信前の文章、相談文、日記、メモをもとに、感情の温度、意図、伝わり方、次に取る行動を整理します。"],
@@ -16,6 +17,7 @@ export const metadata = {
 export default function FAQPage() {
   return (
     <main className="raven-page min-h-screen">
+      <PublicSiteHeader />
       <section className="raven-content-shell mx-auto max-w-4xl px-5 py-8">
         <header className="raven-card p-5 sm:p-6">
           <nav className="mb-5 flex flex-wrap gap-3 text-sm font-semibold text-[#596d51]">
@@ -38,6 +40,7 @@ export default function FAQPage() {
           ))}
         </div>
       </section>
+      <PublicSiteFooter />
     </main>
   );
 }

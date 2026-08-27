@@ -1,5 +1,7 @@
 ﻿import Link from "next/link";
 
+import { PublicSiteFooter, PublicSiteHeader } from "../components/public-site-header";
+
 const lunaUrl = "https://luna.fortunestudios.jp";
 const scarletUrl = "https://scarlet.fortunestudios.jp";
 
@@ -52,6 +54,7 @@ export const metadata = {
 export default function GuildPage() {
   return (
     <main className="raven-page min-h-screen bg-[#f6f2ea] text-[#1d2320]">
+      <PublicSiteHeader />
       <section className="raven-content-shell mx-auto max-w-7xl px-5 py-8">
         <header className="raven-card p-5 sm:p-6">
           <nav className="mb-5 flex flex-wrap gap-3 text-sm font-semibold text-[#596d51]">
@@ -101,6 +104,7 @@ export default function GuildPage() {
           ))}
         </section>
       </section>
+      <PublicSiteFooter />
     </main>
   );
 }
