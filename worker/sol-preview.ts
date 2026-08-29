@@ -1,4 +1,5 @@
 import { resolveRuntimeContext } from "../app/lib/studioos-runtime-adapter.ts";
+import { renderStudioosAdmin, requireBasicAdmin } from "./studioos-admin.ts";
 
 interface Env {
   DB: D1Database;
@@ -7,6 +8,7 @@ interface Env {
   STUDIOOS_CHARACTER_ID: string;
   STUDIOOS_GUILD_ID: string;
   STUDIOOS_ENVIRONMENT: string;
+  ADMIN_BASIC_AUTH?: string;
 }
 
 const json = (body: unknown, init: ResponseInit = {}) => Response.json(body, {
@@ -90,6 +92,23 @@ export default {
         scarletContamination: false,
         atlasContamination: false,
         data: { analyticsRows, blogRows },
+      });
+    }
+    if (url.pathname === "/admin" || url.pathname === "/admin/") {
+      const authenticationFailure = requireBasicAdmin(request, env.ADMIN_BASIC_AUTH);
+      if (authenticationFailure) return authenticationFailure;
+      const [analyticsRows, blogRows] = await Promise.all([
+        env.ANALYTICS_DB ? count(env.ANALYTICS_DB, "analytics_events", tenantId) : count(env.DB, "analytics_events", tenantId),
+        count(env.DB, "blog_engine_articles", tenantId),
+      ]);
+      return new Response(renderStudioosAdmin({
+        tenantId: context.tenantId,
+        characterId: context.character.characterId,
+        displayName: context.character.displayName,
+        guildId: context.config.guildId,
+        locale: context.localization.locale,
+      }, env.STUDIOOS_ENVIRONMENT, blogRows, analyticsRows), {
+        headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
       });
     }
     if (url.pathname === "/") {
