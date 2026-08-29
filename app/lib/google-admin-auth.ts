@@ -7,9 +7,11 @@ export type AdminSession = {
 };
 
 export const ADMIN_SESSION_COOKIE = "raven_admin_session";
+export const OFFICIAL_ADMIN_SESSION_COOKIE = "official_admin_session";
 export const GOOGLE_STATE_COOKIE = "raven_google_oauth_state";
 
-const DEFAULT_ADMIN_EMAIL = "fortune.kanri@gmail.com";
+const DEFAULT_ADMIN_EMAIL = "dr.ravenoracle@gmail.com";
+const DEFAULT_OFFICIAL_ADMIN_EMAIL = "fortune.kanri@gmail.com";
 const SESSION_TTL_SECONDS = 60 * 60 * 8;
 
 export function adminEmail() {
@@ -23,6 +25,14 @@ export function adminEmails() {
 
 export function isAllowedAdminEmail(email: string) {
   return adminEmails().includes(email.trim().toLowerCase());
+}
+
+export function officialAdminEmail() {
+  return (process.env.OFFICIAL_ADMIN_EMAIL || DEFAULT_OFFICIAL_ADMIN_EMAIL).trim().toLowerCase();
+}
+
+export function isAllowedOfficialAdminEmail(email: string) {
+  return officialAdminEmail() === email.trim().toLowerCase();
 }
 
 export function googleRedirectUri(origin: string) {
@@ -41,7 +51,7 @@ export function adminSessionMaxAge() {
 }
 
 export async function requireGoogleAdmin(returnTo: string): Promise<AdminSession> {
-  const session = await getAdminSession();
+  const session = await getAdminSession(ADMIN_SESSION_COOKIE);
   if (session && isAllowedAdminEmail(session.email)) {
     return session;
   }
@@ -49,9 +59,15 @@ export async function requireGoogleAdmin(returnTo: string): Promise<AdminSession
   redirect(`/api/admin/auth/google/start?return_to=${encodeURIComponent(safeRelativeReturnPath(returnTo))}`);
 }
 
-export async function getAdminSession(): Promise<AdminSession | null> {
+export async function requireOfficialAdmin(returnTo: string): Promise<AdminSession> {
+  const session = await getAdminSession(OFFICIAL_ADMIN_SESSION_COOKIE);
+  if (session && isAllowedOfficialAdminEmail(session.email)) return session;
+  redirect(`/api/admin/auth/google/start?audience=official&return_to=${encodeURIComponent(safeRelativeReturnPath(returnTo))}`);
+}
+
+export async function getAdminSession(cookieName = ADMIN_SESSION_COOKIE): Promise<AdminSession | null> {
   const cookieStore = await cookies();
-  const value = cookieStore.get(ADMIN_SESSION_COOKIE)?.value;
+  const value = cookieStore.get(cookieName)?.value;
   if (!value) return null;
 
   const session = await verifySession(value);

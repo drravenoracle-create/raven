@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import {
   ADMIN_SESSION_COOKIE,
+  OFFICIAL_ADMIN_SESSION_COOKIE,
   GOOGLE_STATE_COOKIE,
   isAllowedAdminEmail,
+  isAllowedOfficialAdminEmail,
   adminSessionMaxAge,
   createSessionCookie,
   googleRedirectUri,
@@ -38,7 +40,10 @@ export async function GET(request: Request) {
   }
 
   const isDriveConnection = state.startsWith("drive.");
-  const returnTo = isDriveConnection ? "/admin/sns" : decodeURIComponent(state.split(".").slice(1).join(".")) || "/admin/";
+  const isOfficialAdmin = state.startsWith("official.");
+  const returnTo = isDriveConnection
+    ? "/admin/sns"
+    : decodeURIComponent(state.split(".").slice(isOfficialAdmin ? 2 : 1).join(".")) || (isOfficialAdmin ? "/official-admin/sites/" : "/admin/");
   const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -62,8 +67,8 @@ export async function GET(request: Request) {
   if (!userResponse.ok || !user.email || !user.email_verified) {
     return new Response("Google account email could not be verified.", { status: 403 });
   }
-  if (!isAllowedAdminEmail(user.email)) {
-    return new Response("This Google account is not allowed to access Raven admin.", { status: 403 });
+  if (isOfficialAdmin ? !isAllowedOfficialAdminEmail(user.email) : !isAllowedAdminEmail(user.email)) {
+    return new Response(isOfficialAdmin ? "This Google account is not allowed to access the official site directory." : "This Google account is not allowed to access Raven admin.", { status: 403 });
   }
 
   if (isDriveConnection) {
@@ -74,7 +79,7 @@ export async function GET(request: Request) {
 
   const response = NextResponse.redirect(new URL(returnTo, origin));
   response.cookies.delete(GOOGLE_STATE_COOKIE);
-  response.cookies.set(ADMIN_SESSION_COOKIE, await createSessionCookie(user.email), {
+  response.cookies.set(isOfficialAdmin ? OFFICIAL_ADMIN_SESSION_COOKIE : ADMIN_SESSION_COOKIE, await createSessionCookie(user.email), {
     httpOnly: true,
     maxAge: adminSessionMaxAge(),
     path: "/",
