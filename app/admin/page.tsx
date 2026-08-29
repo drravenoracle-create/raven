@@ -4,6 +4,7 @@ import Link from "next/link";
 const TENANT_ID = "raven-oracle";
 
 const items = [
+  { href: "/admin/sites/", title: "Site Directory", label: "サイト一覧", description: "ギルドメンバーの公開サイトと主要管理画面への導線を確認します。" },
   { href: "/admin/growth/", title: "Growth Engine", label: "成長管理", description: "検索、SNS、CTA、予約、購入までの計測と改善アクションを確認します。" },
   { href: "/admin/blog/", title: "Blog Engine", label: "ブログ運用", description: "記事案、下書き、SEO、SNS派生、品質レビューを管理します。" },
   { href: "/admin/reels/", title: "Reel Engine", label: "リール制作", description: "縦型ショート動画の企画、台本、素材、Render、SNS下書き連携を管理します。" },
