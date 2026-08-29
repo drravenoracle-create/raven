@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import {
   ADMIN_SESSION_COOKIE,
   GOOGLE_STATE_COOKIE,
-  adminEmail,
+  isAllowedAdminEmail,
   adminSessionMaxAge,
   createSessionCookie,
   googleRedirectUri,
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
   if (!userResponse.ok || !user.email || !user.email_verified) {
     return new Response("Google account email could not be verified.", { status: 403 });
   }
-  if (user.email.toLowerCase() !== adminEmail().toLowerCase()) {
+  if (!isAllowedAdminEmail(user.email)) {
     return new Response("This Google account is not allowed to access Raven admin.", { status: 403 });
   }
 
