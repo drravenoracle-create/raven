@@ -24,6 +24,19 @@ const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (
   "'": "&#39;",
 }[character] || character));
 
+const guildMembers = [
+  ["Raven Blackwood", "レイヴン・ブラックウッド", "ギルド創設者・総合鑑定", "冷静な戦略眼と古典占術で、相談者が恐れではなく判断軸から次の一歩を選べるよう導きます。", "https://raven.fortunestudios.jp/guild/"],
+  ["Luna Starwind", "ルナ・スターウィンド", "月と花の相談役", "恋愛や人間関係で揺れる気持ちを、ホロスコープからやさしく整理します。言えない本音を急がせず、相談者の心へ戻す案内役です。", "https://luna.fortunestudios.jp/"],
+  ["Scarlet Donovan", "スカーレット・ドノバン", "境界線と守りの相談役", "距離感、決断、守る力を扱います。人間関係で自分をすり減らしている人に、守るべき線を思い出させます。", "https://scarlet.fortunestudios.jp/guild-members/"],
+  ["Atlas Smith", "アトラス・スミス", "現実整理と修理の相談役", "仕事、生活、計画整理に強いメンバーです。抽象的な不安を分解し、今日できる作業と整える順番へ落とし込みます。", "https://atlas-oracle.fortune-kanri.workers.dev/guild"],
+  ["Sol Aurora", "ソル・オーロラ", "希望と再出発の相談役", "自己肯定感、新しい始まり、気持ちの切り替えを扱います。不安の中でも小さな希望を見つけ、次の一歩につなげます。", "/guild"],
+];
+
+function renderGuild() {
+  const cards = guildMembers.map(([name, nameJa, role, body, href]) => `<article class="card"><p class="eyebrow">${escapeHtml(role)}</p><h3><a href="${escapeHtml(href)}">${escapeHtml(name)}</a></h3><p><strong>${escapeHtml(nameJa)}</strong></p><p>${escapeHtml(body)}</p></article>`).join("");
+  return shell("ギルドメンバー紹介", `<main><section><div class="wrap"><div class="section-title"><p class="eyebrow">Raven Guild</p><h1>ギルドメンバー紹介</h1><p class="lead muted">Raven Guildは、相談内容に合わせて異なる得意分野を持つ案内役が支える占いギルドです。ソルは希望と再出発の視点から、今の気持ちを無理なく次の一歩へつなげます。</p></div><div class="card-grid">${cards}</div><div class="note-band"><strong>メンバー構成</strong><p>現在のギルドメンバーは5名です。Raven Blackwood、Luna Starwind、Scarlet Donovan、Atlas Smith、Sol Auroraで構成しています。</p></div></div></section></main>`);
+}
+
 async function count(db: D1Database, table: string, tenantId: string) {
   if (!["analytics_events", "blog_engine_articles"].includes(table)) return 0;
   const row = await db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE tenant_id = ?`)
@@ -52,7 +65,7 @@ function page(context: ReturnType<typeof resolveRuntimeContext>, environment: st
   </style>
 </head>
 <body>
-  <header><a class="brand" href="#top"><span class="mark">S</span><span>ソル・オーロラ<br><small class="muted">Raven Guild｜希望の案内役</small></span></a><nav aria-label="メインナビゲーション"><a href="#about">ソルについて</a><a href="#reading">相談の入口</a><a href="#steps">読み方</a><a href="/divination">カード解説</a><a href="#notes">ご案内</a></nav></header>
+  <header><a class="brand" href="#top"><span class="mark">S</span><span>ソル・オーロラ<br><small class="muted">Raven Guild｜希望の案内役</small></span></a><nav aria-label="メインナビゲーション"><a href="#about">ソルについて</a><a href="/guild">ギルド</a><a href="#reading">相談の入口</a><a href="#steps">読み方</a><a href="/divination">カード解説</a><a href="#notes">ご案内</a></nav></header>
   <main id="top">
     <section class="hero"><div class="hero-inner"><p class="eyebrow">Sunrise message · Raven Guild</p><h1>今日を越える、<br>小さな一歩を。</h1><p class="lead">ソル・オーロラは、自己肯定感や再出発のきっかけを探す人のための案内役。気持ちを無理に明るくせず、今の自分にできる一歩を一緒に見つけます。</p><div class="chips"><span>自己肯定感</span><span>新しい始まり</span><span>気持ちの切り替え</span></div><a class="button primary" href="#reading">${cta}</a><a class="button secondary" href="#about">ソルの役割を見る</a></div></section>
     <section id="about"><div class="wrap split"><div class="quote"><p class="eyebrow">Sol Aurora</p><strong>希望は、遠くにある答えではなく、今日できることの中に。</strong><p class="muted">押しつけない励ましと、明日へ続く現実的な言葉を届けます。</p></div><div><div class="section-title"><p class="eyebrow">Character Core</p><h2>ソル・オーロラの担当領域</h2></div><p>ソルはRaven Guildで希望を届ける活動、広報、イベントを担当するムードメーカーです。落ち込んだ気持ちを急いで変えるのではなく、安心できる場所から少しずつ前を向くための整理を得意とします。</p><ul class="list"><li><b>役割：</b>希望・広報・イベント担当</li><li><b>得意：</b>自己肯定感、再出発、小さな一歩</li><li><b>好きなこと：</b>朝のあいさつ、歌の練習、お菓子作り</li></ul></div></div></section>
@@ -182,11 +195,265 @@ function historySources() {
 
 function shell(title: string, content: string) {
   return `<!doctype html><html lang="ja-JP"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="ソル・オーロラのカード占い解説。タロット、ルノルマン、オラクルカードの読み方を紹介します。"><title>${escapeHtml(title)}｜ソル・オーロラ</title><style>
-  :root{--ink:#26352d;--muted:#65736a;--line:#d9e3d4;--deep:#233f31;--paper:#fffdf8;--gold:#c99832;--shadow:0 12px 32px rgba(44,72,52,.09)}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:linear-gradient(180deg,#fffdf8,#f4f8ee 55%,#fffaf0);color:var(--ink);font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;line-height:1.8}a{color:inherit}header{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:20px;padding:14px clamp(20px,5vw,72px);border-bottom:1px solid rgba(217,227,212,.9);background:rgba(255,253,248,.92);backdrop-filter:blur(14px)}.brand{font-weight:800;text-decoration:none}.brand small{font-weight:500;color:var(--muted)}nav{display:flex;flex-wrap:wrap;gap:16px;color:var(--muted);font-size:14px;font-weight:700}nav a{text-decoration:none}.wrap{width:min(1160px,100%);margin:0 auto}section{padding:70px clamp(20px,6vw,88px)}.section-title{max-width:760px;margin-bottom:26px}.section-title h2{margin:6px 0 0;font-family:Georgia,"Noto Serif JP",serif;font-size:clamp(29px,4vw,46px);line-height:1.25}.eyebrow{margin:0;color:var(--gold);font-size:12px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}.lead{max-width:760px;font-size:18px}.muted{color:var(--muted)}.card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:16px}.card{padding:22px;border:1px solid var(--line);border-radius:12px;background:rgba(255,253,248,.9);box-shadow:var(--shadow)}.card h3{margin:0 0 7px;font-size:18px;line-height:1.45}.card p{margin:0;color:var(--muted)}.kicker{display:block;margin-top:4px;color:#9b7426;font-size:12px;font-weight:800}.note-band,.history-note{margin-top:24px;padding:22px 24px;border:1px solid #e7d9a8;border-radius:12px;background:linear-gradient(135deg,#fff8dc,#f1f7e9)}.note-band p,.history-note p{margin:.45em 0}.visual-guide{padding-top:8px}.spread-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}.footer{padding:32px clamp(20px,6vw,88px);background:var(--deep);color:#edf5e8}.footer a{color:#fff1c9}@media(max-width:760px){header{align-items:flex-start;flex-direction:column}header nav{gap:10px;font-size:13px}section{padding-block:52px}}</style></head><body><header><a class="brand" href="/">ソル・オーロラ<br><small>Raven Guild｜希望の案内役</small></a><nav aria-label="メインナビゲーション"><a href="/">ホーム</a><a href="/divination">カード解説</a></nav></header>${content}<footer class="footer"><strong>ソル・オーロラ｜Raven Guild</strong></footer></body></html>`;
+  :root{--ink:#26352d;--muted:#65736a;--line:#d9e3d4;--deep:#233f31;--paper:#fffdf8;--gold:#c99832;--shadow:0 12px 32px rgba(44,72,52,.09)}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:linear-gradient(180deg,#fffdf8,#f4f8ee 55%,#fffaf0);color:var(--ink);font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;line-height:1.8}a{color:inherit}header{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:20px;padding:14px clamp(20px,5vw,72px);border-bottom:1px solid rgba(217,227,212,.9);background:rgba(255,253,248,.92);backdrop-filter:blur(14px)}.brand{font-weight:800;text-decoration:none}.brand small{font-weight:500;color:var(--muted)}nav{display:flex;flex-wrap:wrap;gap:16px;color:var(--muted);font-size:14px;font-weight:700}nav a{text-decoration:none}.wrap{width:min(1160px,100%);margin:0 auto}section{padding:70px clamp(20px,6vw,88px)}.section-title{max-width:760px;margin-bottom:26px}.section-title h2{margin:6px 0 0;font-family:Georgia,"Noto Serif JP",serif;font-size:clamp(29px,4vw,46px);line-height:1.25}.eyebrow{margin:0;color:var(--gold);font-size:12px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}.lead{max-width:760px;font-size:18px}.muted{color:var(--muted)}.card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:16px}.card{padding:22px;border:1px solid var(--line);border-radius:12px;background:rgba(255,253,248,.9);box-shadow:var(--shadow)}.card h3{margin:0 0 7px;font-size:18px;line-height:1.45}.card p{margin:0;color:var(--muted)}.kicker{display:block;margin-top:4px;color:#9b7426;font-size:12px;font-weight:800}.note-band,.history-note{margin-top:24px;padding:22px 24px;border:1px solid #e7d9a8;border-radius:12px;background:linear-gradient(135deg,#fff8dc,#f1f7e9)}.note-band p,.history-note p{margin:.45em 0}.visual-guide{padding-top:8px}.spread-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}.spread-map{display:grid;gap:7px;margin:0 0 16px;padding:14px;border:1px solid #eadfb9;border-radius:10px;background:linear-gradient(180deg,#fffdf8,#f7f8ea)}.spread-row{display:flex;justify-content:center;gap:7px;min-height:34px}.spread-slot{display:grid;place-items:center;width:34px;height:42px;border:1px solid #d5c385;border-radius:6px;background:#fffaf0;color:#6e541a;font-size:12px;font-weight:900;box-shadow:0 4px 10px rgba(76,90,51,.08)}.spread-slot.empty{visibility:hidden}.detail-grid{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}.footer{padding:32px clamp(20px,6vw,88px);background:var(--deep);color:#edf5e8}.footer a{color:#fff1c9}@media(max-width:760px){header{align-items:flex-start;flex-direction:column}header nav{gap:10px;font-size:13px}section{padding-block:52px}.spread-slot{width:30px;height:38px}}</style></head><body><header><a class="brand" href="/">ソル・オーロラ<br><small>Raven Guild｜希望の案内役</small></a><nav aria-label="メインナビゲーション"><a href="/">ホーム</a><a href="/guild">ギルド</a><a href="/divination">概要</a><a href="/divination/tarot">タロット</a><a href="/divination/lenormand">ルノルマン</a><a href="/divination/spreads">展開法</a></nav></header>${content}<footer class="footer"><strong>ソル・オーロラ｜Raven Guild</strong></footer></body></html>`;
 }
 
 function renderDivination() {
   return shell("ソルのカード占い解説", `<main><section><div class="wrap"><div class="section-title"><p class="eyebrow">Card Reading Guide</p><h2>カードから、今日の一歩へ。</h2></div><p class="lead muted">ソルはカードを未来の断定に使わず、いまの気持ちや状況を言葉にするための鏡として扱います。オラクルカードはデッキごとに枚数と名称が異なるため、ここでは共通して使えるテーマを紹介し、ルノルマンは標準36枚、タロットは標準78枚を一枚ずつ解説します。</p><div class="note-band"><strong>カードの歴史</strong><p>タロットは15世紀の北イタリアで、切り札を加えたカードゲームとして発展した記録が残っています。18世紀末以降に占いとの結びつきが強まり、現代の多様なデッキへ広がりました。ルノルマンは19世紀に広まった36枚のカード占いで、マリー・アンヌ・アデライード・ルノルマンの名を冠した後世のデッキとして定着しています。どちらも起源には諸説があるため、伝説を史実として断定しません。</p><p>オラクルカードは特定の一つの標準デッキではなく、作者やデッキごとに枚数・名称・ガイドが異なる形式です。公式ガイドがある場合は、そのデッキの説明を最優先します。</p>${historySources()}<div class="note-band"><strong>占う前の準備</strong><p>質問を「どうなりますか」だけで終わらせず、「いま確認したいこと」「自分で選べること」へ言い換えます。深呼吸をして、結果を急いで決めない時間を確保しましょう。</p></div></div></section><section><div class="wrap"><div class="section-title"><p class="eyebrow">Oracle Cards</p><h2>オラクルカードの基本テーマ</h2><p class="muted">デッキ固有の公式ガイドブックがある場合はそちらを優先し、以下はカードの印象を相談へつなげるための汎用的な読み方です。</p></div>${cardGrid(oracleThemes)}<div class="note-band"><strong>オラクルカードの読み方</strong><p>絵、色、最初に浮かんだ言葉、身体の反応をメモし、テーマを一つに絞ります。正位置・逆位置を固定せず、カードの助言を「今日できる行動」と「休む選択肢」に翻訳します。</p></div></div></section><section><div class="wrap"><div class="section-title"><p class="eyebrow">Tarot 78</p><h2>タロットカード全78枚</h2><p class="muted">大アルカナ22枚は人生の大きなテーマ、小アルカナ56枚はワンド・カップ・ソード・ペンタクルの4スートとして、状況の具体的な動きを読みます。</p></div>${cardGrid(tarotCards, "card-grid tarot-grid")}${tarotVisualGuide()}</div></section><section><div class="wrap"><div class="section-title"><p class="eyebrow">Combinations</p><h2>カードの並びと組み合わせ</h2><p class="muted">カードは単体の吉凶で決めず、質問・位置・隣接カードを合わせます。複数枚では左から右へ流れを追い、中央のカードを主題にするなど、最初に決めた配置ルールを途中で変えません。</p></div>${cardGrid(cardCombinations, "card-grid combination-grid")}</div></section><section><div class="wrap"><div class="section-title"><p class="eyebrow">Lenormand 36</p><h2>ルノルマンカード全36枚</h2><p class="muted">ルノルマンはカード単体の意味だけでなく、隣り合うカードの組み合わせと質問の文脈を重視します。</p></div>${cardGrid(lenormandCards, "card-grid lenormand-grid")}</div></section><section><div class="wrap"><div class="section-title"><p class="eyebrow">Lenormand Houses</p><h2>ルノルマンの36ハウス</h2><p class="muted">グランタブローでは36枚を並べた各位置に、1番の騎士から36番の十字架まで対応する「家」を置きます。実際にその場所へ出たカードと、家のテーマを重ねて読みます。</p></div>${cardGrid(lenormandHouses, "card-grid house-grid")}<div class="note-band"><strong>ハウスの読み方</strong><p>たとえば鍵がハートの家に出たら、関係の中の解決策や確信として読みます。家の意味だけで結論を出さず、周囲のカード、質問、人物カードとの距離を確認します。36ハウスはグランタブローの技法であり、3枚引きなどへ機械的に持ち込まないようにします。</p></div></div></section><section><div class="wrap"><div class="section-title"><p class="eyebrow">Spreads</p><h2>占い方とスプレッド</h2></div><div class="spread-grid"><article class="card"><h3>1枚引き｜今日の一歩</h3><p>質問を一つに絞り、カードのキーワードを一つの行動へ変換します。迷いが強い日は「今日守ること」を尋ねます。</p></article><article class="card"><h3>3枚引き｜状況・支え・一歩</h3><p>1枚目を現在地、2枚目を使える支え、3枚目を次の行動として読みます。過去・現在・未来に固定しないため、主体性を保ちやすい形です。</p></article><article class="card"><h3>5枚引き｜関係・選択</h3><p>中央をテーマ、上下を自分と相手、左右を障害と助けとして配置します。相手の気持ちを断定せず、確認できる行動に戻します。</p></article><article class="card"><h3>グランタブロー｜全体像</h3><p>ルノルマン36枚を使う大きな展開です。経験が必要なため、最初は全体を断定せず、質問に関係するカードの近接関係から読みます。</p></article></div><div class="note-band"><strong>読み終わったら</strong><p>カードの言葉をそのまま決定にせず、「確認すること」「試すこと」「保留すること」に分けます。医療・法律・投資など専門家の判断が必要な内容は、カードだけで決めないでください。</p></div></div></section></main>`);
+}
+
+function renderTarot() {
+  return shell("タロットカード全78枚", `<main><section><div class="wrap"><div class="section-title"><p class="eyebrow">Tarot 78</p><h1>タロットカード全78枚</h1><p class="lead muted">一枚ずつ、カード名・中心テーマ・相談での読み方をまとめています。大アルカナ22枚と小アルカナ56枚を、スートと数字の流れとともに読みます。</p></div>${historySources()}${cardGrid(tarotCards, "card-grid tarot-grid")}${tarotVisualGuide()}<div class="note-band"><strong>組み合わせの基本</strong><p>左から右へ状況の流れを追い、中央のカードを主題にします。数字は単独で吉凶を決めず、スート・位置・絵柄・質問を重ねて読みます。</p><p><a href="/divination/lenormand">ルノルマンカードの解説へ →</a></p></div></div></section></main>`);
+}
+
+function renderLenormand() {
+  return shell("ルノルマンカード全36枚", `<main><section><div class="wrap"><div class="section-title"><p class="eyebrow">Lenormand 36</p><h1>ルノルマンカード全36枚</h1><p class="lead muted">カード名・中心テーマ・相談での読み方を一枚ずつ整理しました。単体の意味だけでなく、隣り合うカード、人物カードとの距離、質問の文脈を重ねます。</p></div>${cardGrid(lenormandCards, "card-grid lenormand-grid")}<div class="section-title"><p class="eyebrow">Lenormand Houses</p><h2>36ハウス</h2><p class="muted">グランタブローの各位置に対応する家のテーマです。出たカードと家の意味を重ね、家だけで結論を出さないようにします。</p></div>${cardGrid(lenormandHouses, "card-grid house-grid")}<div class="note-band"><strong>並びと組み合わせ</strong><p>隣り合う2枚を短い句として読み、3枚以上では左から右の流れと中央の主題を確認します。グランタブローでは近接、対角線、人物カードとの距離を補助にします。</p><p><a href="/divination/tarot">タロットカードの解説へ →</a></p></div></div></section></main>`);
+}
+
+type SpreadPosition = { label: string; detail: string };
+type SpreadPage = {
+  title: string;
+  subtitle: string;
+  bestFor: string[];
+  positions: SpreadPosition[];
+  flow: string[];
+  reading: string;
+  example: string;
+  caution: string;
+};
+
+const tarotSpreadMethods = [
+  {
+    title: "ワンオラクル｜1枚引き",
+    bestFor: "今日のテーマ、短い助言、YES/NOに近い軽い確認、朝のセルフリーディング。",
+    positions: "1枚だけを中央に置きます。位置の意味は「いま見るべき主題」または「今日の助言」に固定します。",
+    reading: "一枚だからこそ、質問を狭くするほど読みやすくなります。「恋愛はどうなる？」より「今日、相手との距離感で意識することは？」のように、行動へ戻せる問いにします。カードの絵柄、人物の向き、明るさ、最初に目が止まった象徴を拾い、カード名の暗記だけで終わらせないのがコツです。",
+    tarotPoint: "大アルカナなら一日の大きなテーマ、小アルカナなら具体的な行動や感情の扱いを見ます。逆位置は失敗の暗示ではなく、遅れ、内向き、過剰、未消化として読み分けます。",
+  },
+  {
+    title: "ツーオラクル｜2枚引き",
+    bestFor: "結果と対策、気持ちと行動、現状と助言を分けたい時。",
+    positions: "1枚目を結果・現状・問いへの反応、2枚目を対策・助言・整えるポイントとして読みます。",
+    reading: "1枚目で起きていることを見て、2枚目でどう扱うかを見ます。1枚目が厳しくても、2枚目に支えや具体策が出ていれば、読みはそこで現実的になります。ソルの読みでは、結果を怖がらせるより「何を変えれば流れが変わるか」を重視します。",
+    tarotPoint: "同じスートが2枚出たら、そのテーマが濃い状態です。カップなら感情、ソードなら言葉と判断、ワンドなら勢い、ペンタクルなら条件や時間を中心に読みます。",
+  },
+  {
+    title: "ツーマインド｜2枚引き",
+    bestFor: "自分の本音、相手の表向きと奥の気持ち、言葉と本心のズレを見たい相談。",
+    positions: "上のカードを顕在意識、下のカードを潜在意識として置きます。上は自覚している考え、下はまだ言葉になっていない感情や怖れです。",
+    reading: "上と下が同じ方向を向くなら、気持ちと言葉が比較的一致しています。違うスートや逆位置で割れるなら、頭では分かっていても気持ちが追いつかない、または感情はあるのに表現が固い、という読みになります。相手を読む場合も断定せず、見えている態度との整合性を確認します。",
+    tarotPoint: "月、女教皇、カップ系は内面の反応を拾いやすく、ソード系は理屈や防衛が強く出ます。潜在意識側のカードを重く扱いすぎず、表面の行動と合わせて判断します。",
+  },
+  {
+    title: "シンプルクロス｜2枚引き",
+    bestFor: "問題の正体、妨げ、今つまずいている理由を短く知りたい時。",
+    positions: "縦のカードを現在の状況、横に重ねるカードを妨害・課題・乗り越えるべき要素として読みます。",
+    reading: "1枚目だけなら単なる現状把握ですが、2枚目を重ねることで「なぜ進みにくいのか」が見えます。横のカードが人物カード的に読める場合は、誰かの言葉や環境の影響として、数札なら具体的な負担やタイミングとして扱います。",
+    tarotPoint: "障害カードが大アルカナなら根深いテーマ、小アルカナなら調整可能な現実課題として読みます。障害を敵と見なすのではなく、解決前に見ておくべき注意点に変換します。",
+  },
+  {
+    title: "スリーカード｜3枚引き",
+    bestFor: "過去・現在・未来、今日・明日・明後日、A/B/Cの比較など、流れや三択を見たい時。",
+    positions: "左から過去、現在、未来として置くのが基本です。目的に応じて、原因・状態・助言、または選択肢A・B・Cとして使うこともできます。",
+    reading: "左から右へ時間の流れを作り、中央の現在カードを読みの軸にします。過去は原因探しで自分を責める位置ではなく、いまの状況がどこから来たかを見る場所です。未来は確定ではなく、現在の姿勢のまま進んだ場合に出やすい傾向として扱います。",
+    tarotPoint: "未来位置に厳しいカードが出た時ほど、現在位置と助言を見直します。未来は変えられる前提で読み、行動の修正点を探します。",
+  },
+  {
+    title: "ゴールデントリン・スプレッド｜3枚引き",
+    bestFor: "結果・現状・対策を短時間で立体的に見たい相談。恋愛、仕事、金運、健康、近未来の確認に向きます。",
+    positions: "上に総合結果や近い未来、左下に具体的な現状、右下に対策や周囲から得られる助けを置きます。",
+    reading: "三角形で読むため、上のカードだけを結果として切り離さず、下の2枚が上へどう影響するかを見ます。左下が現状の重さ、右下が使える手段です。相手がいる相談では、左下を相手との現在の状態として読むこともあります。",
+    tarotPoint: "上に大アルカナが出ると、相談全体のテーマが強くなります。下2枚が小アルカナなら、現実の行動で上のカードの出方を調整できる余地があります。",
+  },
+  {
+    title: "フォーカード｜4枚引き",
+    bestFor: "過去から未来への流れ、障害と対策、関係性の現状整理。",
+    positions: "左から過去、現在、障害・対策、未来として並べます。相談により、自分、相手、障害、結果として読むこともできます。",
+    reading: "3枚引きに対策の位置を足した形です。未来を見る前に、3枚目で何が流れを止めているか、または何を使えば流れが変わるかを確認します。未来カードは、対策を取らない場合と取った場合の差を考えるための材料にします。",
+    tarotPoint: "3枚目が鍵です。ソードなら言葉の整理、ワンドなら行動量、カップなら感情の扱い、ペンタクルなら現実条件の調整が対策になります。",
+  },
+  {
+    title: "ギリシャ十字｜5枚引き",
+    bestFor: "大まかな展開、問題の原因、対策と結果をバランスよく見たい時。",
+    positions: "現在、障害や原因、現状維持で進んだ場合の傾向、問題解決の対策、最終結果の5点で読みます。",
+    reading: "十字の中心に近い現在と障害を先に読み、次に流れのまま進んだ場合と、対策を取った場合の違いを見ます。未来を深く掘りすぎるより、現状からどう向きが変わるかを把握する展開です。",
+    tarotPoint: "対策位置と結果位置の相性を見ます。対策が小アルカナで結果が大アルカナなら、小さな行動が大きなテーマへつながる読みになります。",
+  },
+  {
+    title: "ピラミッド｜6枚引き",
+    bestFor: "複雑な現状を整理し、複数の解決策から方向を作りたい相談。",
+    positions: "下段3枚を現在の状態、中段2枚を解決方法、上段1枚を最終結果として読みます。",
+    reading: "下段の3枚で、問題を一つにまとめず複数の要因として見ます。中段では、どの要因を先に扱うと上段の結果へ進みやすいかを読みます。ピラミッドは下から積み上げる展開なので、結果だけを見ず、土台のカードを丁寧に扱います。",
+    tarotPoint: "下段に同じスートが固まると、現状の偏りが見えます。中段に出たカードは、解決策そのものだけでなく、相談者が使うべき姿勢として読みます。",
+  },
+  {
+    title: "ヘキサグラムスプレッド｜7枚引き",
+    bestFor: "一つの悩みを多角的に見たい時。恋愛、仕事、人生相談、自己分析にも使いやすい展開です。",
+    positions: "過去の状態、現在の状況、未来の傾向、具体的な対策、周辺環境、自分を取り巻く環境、最終結果・問題の核心を読みます。",
+    reading: "過去・現在・未来の時間軸に、対策と環境を重ねて読む展開です。4枚目の対策は、未来を変えるための介入点として重要です。5枚目と6枚目で外側の状況と自分側の環境を分け、最後のカードで問題の核心へ戻します。",
+    tarotPoint: "7枚目は単なる結果ではなく、全体を貫く核心として読みます。大アルカナならテーマ性が強く、小アルカナなら現実的な調整点が核心になります。",
+  },
+  {
+    title: "二者択一｜7枚引き",
+    bestFor: "AかBかで迷う時。告白するか待つか、続けるか離れるか、転職するか残るかなど。",
+    positions: "現在、選択肢Aの現在、選択肢Bの現在、Aの未来、Bの未来、Aの最終傾向、Bの最終傾向を読みます。",
+    reading: "どちらが正解かをカードに丸投げする展開ではありません。Aを選んだ場合とBを選んだ場合、それぞれ何が起きやすく、何を引き受ける必要があるかを比べます。最初にAとBの内容をはっきり決めてから引くと、読みがぶれません。",
+    tarotPoint: "AとBに出るスートの違いを見ると、選択の質が分かります。カップが多い側は気持ち、ペンタクルが多い側は安定、ソードが多い側は判断、ワンドが多い側は挑戦が主題になります。",
+  },
+  {
+    title: "ケルト十字スプレッド｜10枚引き",
+    bestFor: "恋愛、仕事、人生の転機など、背景・障害・本人の意識・周囲の影響が絡む相談。",
+    positions: "現在、障害、顕在意識、潜在意識、過去、近未来、自分の立場、相手や周囲の状況、希望と不安、最終結果の10点で読みます。",
+    reading: "最初に現在と障害を一文でまとめ、次に顕在意識と潜在意識のズレを見ます。過去と近未来は決定論ではなく、今の流れがどこから来てどこへ向きやすいかを確認する位置です。最後の総合結果は固定された未来ではなく、前の9枚を踏まえた到達しやすい方向として読みます。",
+    tarotPoint: "大アルカナが多い時は人生テーマや価値観の転換、小アルカナが多い時は日常の行動調整を重視します。ソードが多ければ言葉と判断、カップが多ければ感情、ワンドが多ければ熱量、ペンタクルが多ければ現実条件を重点的に見ます。",
+  },
+  {
+    title: "生命の樹スプレッド｜10枚引き",
+    bestFor: "人生の方向性、魂の課題、才能の使い方、仕事と使命感の接点を深く見たい時。",
+    positions: "10枚を生命の樹の10セフィラに対応させます。1は意志や始まり、2は直感、3は理解、4は広がり、5は制限、6は調和、7は感情や魅力、8は思考や技術、9は無意識の土台、10は現実化として読みます。",
+    reading: "生命の樹は、出来事の結果だけを見る展開ではなく、上から下へ意識が形になっていく流れを読む展開です。上部のカードで理想や魂の方向、中段で心と判断の葛藤、下部で現実に表れる行動や環境を見ます。ソルの読みでは、壮大な言葉で終わらせず、「いまの自分がどの段階で止まりやすいか」「どこを整えると現実が動きやすいか」へ落とし込みます。",
+    tarotPoint: "1から3に大アルカナが多い場合は、人生観や使命感のテーマが強く出ます。7から9にカップや月のような内面カードが集まる時は、感情や無意識の整理が先です。10の現実化位置にペンタクルやワンドが出ると、具体的な行動や生活の形に移せる兆しとして読みます。",
+  },
+  {
+    title: "ホロスコープ・スプレッド｜13枚引き",
+    bestFor: "一年の運勢、生活全体の流れ、恋愛・仕事・金運・人間関係をまとめて見たい時。",
+    positions: "1から12を各ハウスまたは各月に対応させ、13枚目を全体の核心として中央に置きます。1は自分、2は金銭、3は会話、4は家庭、5は恋愛、6は健康や日常、7は対人、8は深い関係、9は理想や学び、10は仕事や成功、11は友人、12は無意識を見ます。",
+    reading: "占星術のハウスのように、人生の領域ごとにカードを置く大きな展開です。まず13枚目で全体テーマを確認し、次に相談者が特に知りたい領域を優先して読みます。すべてのカードを同じ重さで読むと散らかるため、中央カードと関係の強い領域から深掘りします。",
+    tarotPoint: "12領域の中で大アルカナが出た場所は、その年や期間で意識が向きやすいテーマです。スートの偏りも重要で、カップが多い年は感情と関係、ペンタクルが多い年は生活基盤、ソードが多い年は判断、ワンドが多い年は挑戦が中心になります。",
+  },
+];
+
+const tarotSpreadSlugs = [
+  "one-oracle",
+  "two-oracle",
+  "two-mind",
+  "simple-cross",
+  "three-card",
+  "golden-trine",
+  "four-card",
+  "greek-cross",
+  "pyramid",
+  "hexagram",
+  "two-choices",
+  "celtic-cross",
+  "tree-of-life",
+  "horoscope",
+];
+
+const tarotSpreadLayouts: Record<string, string[][]> = {
+  "ワンオラクル｜1枚引き": [["1"]],
+  "ツーオラクル｜2枚引き": [["1", "2"]],
+  "ツーマインド｜2枚引き": [["1"], ["2"]],
+  "シンプルクロス｜2枚引き": [["", "2", ""], ["", "1", ""]],
+  "スリーカード｜3枚引き": [["1", "2", "3"]],
+  "ゴールデントリン・スプレッド｜3枚引き": [["", "1", ""], ["2", "", "3"]],
+  "フォーカード｜4枚引き": [["1", "2", "3", "4"]],
+  "ギリシャ十字｜5枚引き": [["", "3", ""], ["2", "1", "4"], ["", "5", ""]],
+  "ピラミッド｜6枚引き": [["", "", "6", "", ""], ["", "4", "", "5", ""], ["1", "", "2", "", "3"]],
+  "ヘキサグラムスプレッド｜7枚引き": [["", "1", ""], ["6", "", "2"], ["", "7", ""], ["5", "", "3"], ["", "4", ""]],
+  "二者択一｜7枚引き": [["", "1", ""], ["2", "", "3"], ["4", "", "5"], ["6", "", "7"]],
+  "ケルト十字スプレッド｜10枚引き": [["", "3", "", "", "10"], ["5", "1", "6", "", "9"], ["", "2", "", "", "8"], ["", "4", "", "", "7"]],
+  "生命の樹スプレッド｜10枚引き": [["", "1", ""], ["2", "", "3"], ["", "4", ""], ["5", "", "6"], ["", "7", ""], ["8", "", "9"], ["", "10", ""]],
+  "ホロスコープ・スプレッド｜13枚引き": [["", "11", "12", "1", ""], ["10", "", "13", "", "2"], ["9", "", "", "", "3"], ["", "8", "7", "6", "5"], ["", "", "4", "", ""]],
+};
+
+function tarotSpreadSlug(item: (typeof tarotSpreadMethods)[number], index: number) {
+  return `tarot-${tarotSpreadSlugs[index] || String(index + 1)}`;
+}
+
+function tarotSpreadDiagram(item: (typeof tarotSpreadMethods)[number]) {
+  const rows = tarotSpreadLayouts[item.title] || [["1"]];
+  return `<div class="spread-map" aria-label="${escapeHtml(item.title)}の配置図">${rows.map((row) => `<div class="spread-row">${row.map((cell) => `<span class="spread-slot${cell ? "" : " empty"}">${escapeHtml(cell || "-")}</span>`).join("")}</div>`).join("")}</div>`;
+}
+
+function tarotSpreadCard(item: (typeof tarotSpreadMethods)[number], index: number) {
+  const slug = tarotSpreadSlug(item, index);
+  return `<article class="card">${tarotSpreadDiagram(item)}<h3><a href="/divination/spreads/${slug}">${escapeHtml(item.title)}</a></h3><p><span class="kicker">向いている相談</span>${escapeHtml(item.bestFor)}</p><p><span class="kicker">配置</span>${escapeHtml(item.positions)}</p><p><span class="kicker">読み方</span>${escapeHtml(item.reading)}</p><p><span class="kicker">タロットで見るポイント</span>${escapeHtml(item.tarotPoint)}</p></article>`;
+}
+
+function renderTarotSpread(slug: string) {
+  const index = tarotSpreadSlugs.findIndex((item) => `tarot-${item}` === slug);
+  const item = index >= 0 ? tarotSpreadMethods[index] : undefined;
+  if (!item) return null;
+  return shell(item.title, `<main><section><div class="wrap"><div class="section-title"><p class="eyebrow">Tarot Spread Detail</p><h1>${escapeHtml(item.title)}</h1><p class="lead muted">${escapeHtml(item.bestFor)}</p></div>${tarotSpreadDiagram(item)}<div class="card-grid detail-grid"><article class="card"><h3>配置</h3><p>${escapeHtml(item.positions)}</p></article><article class="card"><h3>読み方</h3><p>${escapeHtml(item.reading)}</p></article><article class="card"><h3>タロットで見るポイント</h3><p>${escapeHtml(item.tarotPoint)}</p></article></div><div class="note-band"><strong>読む順番</strong><p>質問を一文に整え、配置の役割を確認し、まず全体の印象を見ます。次に大アルカナの有無、スートの偏り、逆位置、隣り合うカードの補足関係を順に読み、最後は相談者が今日確認できる行動へまとめます。</p><p>ソルの読みでは、結果を固定せず「どこを整えると流れが変わるか」を大切にします。迷った時は、強いカード一枚に引っ張られすぎず、配置全体の流れへ戻します。</p></div><p><a href="/divination/spreads">展開法一覧へ戻る</a></p></div></section></main>`);
+}
+
+const spreadPages: Record<string, SpreadPage> = {
+  "one-card": {
+    title: "1枚引き｜今日の一歩",
+    subtitle: "迷いを一つに絞り、今日確認できる行動へ戻す展開法。",
+    bestFor: ["朝のメッセージ", "気持ちの確認", "選択前の軸づくり", "疲れていて多くを考えたくない時"],
+    positions: [
+      { label: "カード1｜今日のテーマ・助言", detail: "カード全体の印象、目に入った色や人物の向き、最初に浮かんだ言葉を拾います。意味を広げすぎず、今日一日で意識できる小さな指針へ落とし込みます。" },
+    ],
+    flow: ["質問を一文にする", "カードを見て第一印象を一語でメモする", "一般的なカード意味と質問を重ねる", "今日できる行動、休むこと、確認することに分ける"],
+    reading: "1枚引きは簡単に見えて、質問の精度がそのまま結果の深さになります。「どうなる？」ではなく「今日は何を大切にする？」「いま見落としている支えは？」のように、自分が扱える問いへ整えると読みが安定します。カードは結論ではなく、注意を向ける場所を示す目印として扱います。",
+    example: "「今日は何を大切にするとよい？」と尋ねて太陽が出たなら、成功の断定ではなく、明るく見える場所へ一歩出る、できたことを記録する、隠さず伝える、という行動に翻訳します。",
+    caution: "未来の出来事や相手の気持ちを一枚だけで断定しません。迷いが大きい時ほど、追加で何枚も引き直すより、最初の一枚から行動を一つ決める方が読みが濁りません。",
+  },
+  "three-card": {
+    title: "3枚引き｜状況・支え・一歩",
+    subtitle: "現在地、使える支え、次の行動を順番に見る基本展開。",
+    bestFor: ["恋愛や人間関係の整理", "仕事・生活の小さな判断", "気持ちと現実を分けたい時", "初心者が流れを読む練習"],
+    positions: [
+      { label: "1枚目｜現在地・起きていること", detail: "問題そのものではなく、いま自分がどこに立っているかを見ます。カードが重くても、ここでは責める材料にせず、状況の名前をつける位置として扱います。" },
+      { label: "2枚目｜支え・使える資源", detail: "人、時間、情報、経験、休息など、すでに使えるものを探します。良いカードなら頼れる支え、厳しいカードなら先に整える条件として読みます。" },
+      { label: "3枚目｜次の一歩・試すこと", detail: "最終結果ではなく、次に試す小さな行動です。連絡する、待つ、調べる、断る、休むなど、24時間から数日で確認できるサイズへ変換します。" },
+    ],
+    flow: ["1枚目で現状を短く要約する", "2枚目で助けになるものを探す", "3枚目で行動サイズへ落とす", "3枚を一文にして読み筋を確認する"],
+    reading: "3枚引きは「過去・現在・未来」だけに固定しない方が、ソルのサイトでは使いやすいです。現在地、支え、一歩にすると、結果待ちの占いではなく、相談者が選び直せる読みになります。左から右へ時間の流れを作りつつ、中央の支えが弱い場合は先に環境調整を提案します。",
+    example: "仕事の迷いなら、1枚目で負担の正体、2枚目で相談できる相手や手元の資料、3枚目で今日送る確認メールのように具体化します。恋愛なら、今の距離感、安心して使える言葉、次に確認する会話へ分けます。",
+    caution: "3枚のうち一枚だけを吉凶で判断しません。悪く見えるカードも、位置によっては「注意点を教えてくれているカード」になります。隣接するカードが補足し合うか、質問に対してどの位置で出たかを優先します。",
+  },
+  "five-card": {
+    title: "5枚引き｜関係・選択",
+    subtitle: "テーマの中心と、自分・相手・障害・助けを立体的に見る展開法。",
+    bestFor: ["恋愛相性", "復縁や距離感", "人間関係のすれ違い", "選択肢が複数ある相談"],
+    positions: [
+      { label: "中央｜相談の主題", detail: "この展開全体の焦点です。まず中央だけで一文のテーマを作り、ほかの4枚は中央を説明する補助として読みます。" },
+      { label: "上｜自分の状態・選べること", detail: "自分の気持ち、態度、使える選択肢を見ます。相手の反応を待つ前に、自分が守る線や伝える言葉を整える位置です。" },
+      { label: "下｜相手・環境から見える事実", detail: "相手の内心を決めつける位置ではありません。実際の行動、連絡頻度、状況、周囲の条件など、観察できる材料として読みます。" },
+      { label: "左｜障害・見落とし", detail: "読みのブレーキです。誤解、焦り、古い癖、情報不足など、先に確認すべきものを示します。" },
+      { label: "右｜助け・次に使えるもの", detail: "関係を整えるための支援です。言葉、タイミング、第三者、休息、距離の取り方など、現実に使える助けへ変換します。" },
+    ],
+    flow: ["中央でテーマを固定する", "上と下で自分と相手・環境を分ける", "左と右で障害と助けを比べる", "最後に中央へ戻って総括する"],
+    reading: "5枚引きは、関係性の相談で特に力を出します。大切なのは、自分の気持ちと相手の事情を混ぜないことです。中央を主題にして、上は自分、下は観察できる相手や環境、左は詰まり、右は助けとして読むと、感情の渦から一段離れて整理できます。",
+    example: "関係の相談では、中央を「いま整えたい距離感」にして、上を自分の境界線、下を確認できる相手の行動として読みます。左に剣のカードが出たら言葉の刺さり方、右に杯のカードが出たら安心して話せる雰囲気づくりを提案します。",
+    caution: "相手の気持ち・第三者の秘密・結果の確定をカードで代用しません。本人との対話と同意を大切にし、確認不能な内面の断定ではなく、相談者が選べる言葉と距離へ戻します。",
+  },
+  "grand-tableau": {
+    title: "グランタブロー｜全体像",
+    subtitle: "ルノルマン36枚を並べ、近接関係とハウスから大きな流れを読む展開法。",
+    bestFor: ["数か月単位の流れ", "生活全体の整理", "複数テーマが絡む相談", "ルノルマンに慣れた人の深掘り"],
+    positions: [
+      { label: "36枚｜1番から36番までの全体配置", detail: "全カードを並べ、相談者を取り巻く地図として見ます。全体を一気に読むのではなく、質問に関係するカードから読み始めます。" },
+      { label: "人物カード｜相談者・関係者の位置", detail: "紳士・淑女など人物カードの周囲を見ます。近くのカードは影響が強く、遠いカードは背景や時間差として扱います。" },
+      { label: "ハウス｜各位置のテーマ", detail: "カードが置かれた場所そのものにも意味を持たせます。たとえば鍵がハートの家に出るなら、関係の中の解決策や確信として読みます。" },
+      { label: "近接カード｜短い句としての組み合わせ", detail: "隣り合う2枚から短い言葉を作ります。鳥と手紙なら連絡の不安、犬と錨なら長く頼れる支え、というように具体化します。" },
+    ],
+    flow: ["質問範囲を決める", "人物カードとテーマカードを探す", "近接・列・対角線を順に読む", "ハウスの意味を重ねる", "確認できる現実の行動に戻す"],
+    reading: "グランタブローは、カード一枚の意味よりも距離、方向、密集、孤立を読む展開です。人物カードの周囲に何が集まるか、テーマカードが近いか遠いか、障害カードがどの列にあるかを見て、相談者の生活全体の地図を作ります。大きな展開なので、最初に『恋愛だけ』『仕事と生活だけ』のように範囲を決めると読みが締まります。",
+    example: "再出発の相談なら、人物カードの周囲から現在の支えと障害を読み、遠い位置のカードは背景情報として扱います。道が近く、錨が遠いなら、選択は近いが安定には少し時間が必要、という読み筋になります。",
+    caution: "経験の必要な大きな展開です。家の意味だけで結論を出さず、複数の読み筋を比較し、現実に確認できる事項へ戻します。重いカードが出ても、恐怖をあおる表現にはしません。",
+  },
+};
+
+function spreadCard(slug: string, item: (typeof spreadPages)[string]) {
+  return `<article class="card"><h3><a href="/divination/spreads/${slug}">${escapeHtml(item.title)}</a></h3><p>${escapeHtml(item.subtitle)}</p><p><span class="kicker">向いている相談</span>${item.bestFor.map(escapeHtml).join("・")}</p></article>`;
+}
+
+function tarotSpreadSection() {
+  return `<section><div class="wrap"><div class="section-title"><p class="eyebrow">Tarot Spreads</p><h2>タロットの展開法</h2><p class="muted">タロットでは、カードの意味だけでなく「どの位置に出たか」が読みの骨格になります。ソルは、カードを未来の判決文のようには扱いません。問いを整え、配置を決め、出たカード同士の響き合いを見て、最後は相談者が今日選べる一歩へ戻します。</p></div><div class="note-band"><strong>タロットのやり方とカードの並べ方</strong><p>最初にすることは、カードを混ぜることではなく、質問を一文にすることです。「恋愛はどうなる？」よりも「今の距離感で、私が大切にした方がいいことは？」のように、心の向け先が分かる問いに整えます。問いが曖昧なまま枚数を増やすと、カードはたくさん出ても読み筋が散ります。</p><p>シャッフルとカットは、集中を切り替えるための所作として行います。カードを並べたら、先に決めた位置の意味を途中で変えません。結果がほしい時ほど、まず現在・障害・助言を分け、相手がいる相談では「自分側で確認できること」と「相手側に見えている反応」を混同しないように読みます。</p><p>読む順番は、全体の印象、強いカード、大アルカナの数、スートの偏り、各位置の意味、隣り合うカードの補足関係、最後の行動提案です。怖いカードが出ても、そこで止めずに「何を見落とさないためのカードか」へ言葉を戻すのが、ソルの読み方です。</p></div><div class="note-band"><strong>枚数の選び方</strong><p>1枚引きは心の焦点を合わせる読み、2枚引きは原因と対策を分ける読み、3枚引きは流れを見る読みです。4枚から7枚になると、障害・環境・選択肢の比較まで扱えます。10枚のケルト十字は背景と深層、生命の樹は意志から現実化までの内的な流れを掘る読みです。13枚のホロスコープ・スプレッドは生活全体や一年の流れを見る大きな読みになります。</p></div><div class="card-grid">${tarotSpreadMethods.map((item, index) => tarotSpreadCard(item, index)).join("")}</div><div class="note-band"><strong>逆位置の扱い</strong><p>逆位置は「悪い意味」だけに固定しません。力が内側に向く、遅れる、過剰になる、表に出にくい、というように読み分けます。たとえばカップの逆位置は愛情がないと断定せず、感情を出しにくい、受け取り方が不安定、期待が大きくなりすぎている可能性として確認します。</p><p>ソルの読みでは、怖がらせる断定よりも、相談者が次に確認できることへ戻します。カードの配置、スートの偏り、大アルカナの枚数、隣り合うカードの補足関係を合わせて、最後は「今日できる一歩」にまとめます。</p></div></div></section>`;
+}
+
+function renderSpreads() {
+  return shell("スプレッド（展開法）", `<main><section><div class="wrap"><div class="section-title"><p class="eyebrow">Spreads</p><h1>スプレッド（展開法）</h1><p class="lead muted">スプレッドは、カードを何枚置くかではなく「どの位置に、どんな役割を持たせるか」を決める読みの設計図です。同じカードでも、現在地に出るのか、助けに出るのか、障害に出るのかで意味は変わります。だからソルは、カードをめくる前に質問・配置・読む順番を先に固定します。</p></div><div class="note-band"><strong>スプレッド選びの基準</strong><p>短い気づきが欲しい時は1枚引き、状況を整理したい時は3枚引き、相手や環境との関係を見たい時は5枚引き、生活全体の流れを読みたい時はグランタブローを使います。枚数が多いほど当たるのではなく、問いに合う広さを選ぶことが大切です。</p></div><div class="card-grid">${Object.entries(spreadPages).map(([slug, item]) => spreadCard(slug, item)).join("")}</div><div class="note-band"><strong>共通の読み方</strong><p>質問を一つに絞る → 配置を決める → 第一印象を記録する → 位置の役割を読む → 隣接関係を確認する → 今日確認できる行動へ戻す、の順で進めます。迷った時は、最後に「この読みから、いま自分が選べることは何か」へ戻します。</p><p><a href="/divination/tarot">タロットカード解説</a>｜<a href="/divination/lenormand">ルノルマンカード解説</a></p></div></div></section>${tarotSpreadSection()}</main>`);
+}
+
+function renderSpread(slug: string) {
+  const item = spreadPages[slug];
+  if (!item) return null;
+  return shell(item.title, `<main><section><div class="wrap"><div class="section-title"><p class="eyebrow">Spread Guide</p><h1>${escapeHtml(item.title)}</h1><p class="lead muted">${escapeHtml(item.subtitle)}</p></div><div class="note-band"><strong>向いている相談</strong><p>${item.bestFor.map(escapeHtml).join("・")}</p></div><div class="section-title"><h2>配置</h2></div><div class="card-grid">${item.positions.map((position) => `<article class="card"><h3>${escapeHtml(position.label)}</h3><p>${escapeHtml(position.detail)}</p></article>`).join("")}</div><div class="section-title"><h2>読む順番</h2></div><div class="card-grid">${item.flow.map((step, index) => `<article class="card"><span class="kicker">Step ${index + 1}</span><h3>${escapeHtml(step)}</h3><p>この段階で読みを広げすぎず、次の位置へ渡すための要点を一つに絞ります。</p></article>`).join("")}</div><div class="section-title"><h2>読み方</h2></div><div class="note-band"><p>${escapeHtml(item.reading)}</p><p><strong>読み終わったら：</strong>${escapeHtml(item.example)}</p></div><div class="note-band"><strong>注意点</strong><p>${escapeHtml(item.caution)}</p></div><p><a href="/divination/spreads">展開法一覧へ戻る</a></p></div></section></main>`);
 }
 
 export default {
@@ -220,6 +487,15 @@ export default {
       });
     }
     if (url.pathname === "/divination") return new Response(renderDivination(), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+    if (url.pathname === "/guild" || url.pathname === "/guild/") return new Response(renderGuild(), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+    if (url.pathname === "/divination/tarot") return new Response(renderTarot(), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+    if (url.pathname === "/divination/lenormand") return new Response(renderLenormand(), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+    if (url.pathname === "/divination/spreads") return new Response(renderSpreads(), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+    if (url.pathname.startsWith("/divination/spreads/")) {
+      const spreadSlug = url.pathname.slice("/divination/spreads/".length);
+      const rendered = renderSpread(spreadSlug) || renderTarotSpread(spreadSlug);
+      if (rendered) return new Response(rendered, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+    }
     if (url.pathname === "/admin" || url.pathname === "/admin/") {
       const authenticationFailure = requireBasicAdmin(request, env.ADMIN_BASIC_AUTH);
       if (authenticationFailure) return authenticationFailure;
