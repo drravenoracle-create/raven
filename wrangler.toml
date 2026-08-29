@@ -28,7 +28,6 @@ bucket_name = "raven-oracle-media"
 crons = ["*/5 * * * *"]
 
 [vars]
-OFFICIAL_ADMIN_EMAIL = "fortune.kanri@gmail.com"
 GA4_PROPERTY_ID = "546077100"
 GOOGLE_SERVICE_ACCOUNT_EMAIL = "fortune-studio-analytics@raven-502815.iam.gserviceaccount.com"
 GOOGLE_DRIVE_VIDEO_FOLDER_ID = "12yUFIEWZL3FQQi9B0gU9LRPS1jAXJ_sT"

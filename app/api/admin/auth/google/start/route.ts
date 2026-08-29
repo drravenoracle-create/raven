@@ -10,10 +10,7 @@ export function GET(request: Request) {
   const url = new URL(request.url);
   const origin = publicOrigin(request);
   const returnTo = safeRelativeReturnPath(url.searchParams.get("return_to"));
-  const audience = url.searchParams.get("audience") === "official" ? "official" : "raven";
-  const state = audience === "official"
-    ? `official.${randomState()}.${encodeURIComponent(returnTo)}`
-    : `${randomState()}.${encodeURIComponent(returnTo)}`;
+  const state = `${randomState()}.${encodeURIComponent(returnTo)}`;
   const authUrl = new URL(GOOGLE_AUTH_URL);
   authUrl.searchParams.set("client_id", clientId);
   authUrl.searchParams.set("redirect_uri", googleRedirectUri(origin));
