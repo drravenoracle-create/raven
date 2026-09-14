@@ -2,7 +2,7 @@
 main = "dist/server/index.js"
 compatibility_date = "2026-07-28"
 compatibility_flags = ["nodejs_compat"]
-account_id = "c7ce2613bf30affed8d2caae0068beb5"
+account_id = "cfda786a82241adf6b21f772dbc87544"
 workers_dev = true
 preview_urls = false
 
@@ -18,11 +18,7 @@ run_worker_first = false
 [[d1_databases]]
 binding = "DB"
 database_name = "raven-oracle"
-database_id = "b5d2b96a-c574-47fa-b582-1063b05595bd"
-
-[[r2_buckets]]
-binding = "MEDIA_BUCKET"
-bucket_name = "raven-oracle-media"
+database_id = "a8a69ddd-2d8b-4e76-81f1-29abbb619a38"
 
 [triggers]
 crons = ["*/5 * * * *"]
@@ -33,6 +29,7 @@ GOOGLE_SERVICE_ACCOUNT_EMAIL = "fortune-studio-analytics@raven-502815.iam.gservi
 GOOGLE_DRIVE_VIDEO_FOLDER_ID = "12yUFIEWZL3FQQi9B0gU9LRPS1jAXJ_sT"
 SEARCH_CONSOLE_SITE_URL = "https://raven.fortunestudios.jp/"
 MEMBER_SYSTEM_ENABLED = "true"
+RAVEN_ADMIN_EMAILS = "dr.ravenoracle@gmail.com,fortune.kanri@gmail.com"
 TRIAL_ENABLED = "true"
 READING_HISTORY_ENABLED = "true"
 CROSS_CHARACTER_ACCESS_ENABLED = "true"

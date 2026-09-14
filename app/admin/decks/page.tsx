@@ -153,7 +153,7 @@ export default function DeckManagerPage() {
       const deckPayload = await readJson(deckResponse);
       const cardPayload = await readJson(cardResponse);
       const usagePayload = await readJson(usageResponse);
-      if ([deckResponse, cardResponse, usageResponse].some((response) => response.status === 401)) {
+      if ([deckResponse, cardResponse, usageResponse].some((response) => response.status === 401 || response.status === 403)) {
         window.location.href = `/api/admin/auth/start?return_to=${encodeURIComponent("/admin/decks")}`;
         return;
       }
@@ -182,6 +182,12 @@ export default function DeckManagerPage() {
     loadDriveJobs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!selectedDeckId) return;
+    loadAll(selectedDeckId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDeckId]);
 
   async function post(action: string, body: Record<string, unknown>) {
     setBusy(true);
@@ -628,10 +634,13 @@ function formatBytes(value: number) {
 
 function CardBox({ card, onDelete, deleting = false }: { card: Card; onDelete?: (card: Card) => void; deleting?: boolean }) {
   const imageRef = card.image_url || "";
+  const driveImageRef = card.storage_key?.startsWith("google-drive:")
+    ? `/api/card-library/drive-image/${encodeURIComponent(card.storage_key.slice("google-drive:".length))}`
+    : "";
   const detail = card.sns_summary || card.upright_meaning || card.love_meaning || card.work_meaning || card.money_meaning || "説明文は未登録です。";
   return (
     <article className={`rounded border bg-white p-3 ${card.enabled && card.sns_use_allowed ? "border-[#d7cabc]" : "border-[#c99b83]"}`}>
-      {imageRef ? <img className="mb-3 aspect-[2/3] w-full rounded border border-[#d7cabc] object-cover" src={imageRef} alt={card.name_ja || card.name} /> : <div className="mb-3 grid aspect-[2/3] place-items-center rounded border border-dashed border-[#d7cabc] bg-[#f8f3ea] p-3 text-center text-xs leading-5 text-[#5e625c]">画像URL未登録<br />テキストプレビューを表示</div>}
+      {imageRef ? <img className="mb-3 aspect-[2/3] w-full rounded border border-[#d7cabc] object-cover" src={imageRef} alt={card.name_ja || card.name} onError={(event) => { if (driveImageRef && event.currentTarget.src !== new URL(driveImageRef, window.location.origin).href) event.currentTarget.src = driveImageRef; }} /> : <div className="mb-3 grid aspect-[2/3] w-full rounded border border-dashed border-[#d7cabc] bg-[#f8f3ea] p-3 text-center text-xs leading-5 text-[#5e625c]">画像URL未登録<br />テキストプレビューを表示</div>}
       <p className="text-xs font-semibold text-[#6c5f3d]">No.{card.card_number} / 使用 {card.usage_count || 0}</p>
       <h3 className="mt-1 text-lg font-semibold">{card.name_ja || card.name || "名称未登録"}</h3>
       {card.name_ja && card.name ? <p className="mt-1 text-sm text-[#5e625c]">{card.name}</p> : null}

@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { getAdminSession, adminEmail } from "@/app/lib/google-admin-auth";
+import { getAdminSession, isAdminEmail } from "@/app/lib/google-admin-auth";
 import { GROWTH_ENGINE_TENANT_ID } from "@/app/lib/growth-engine";
 import {
   approveExperiment,
@@ -26,7 +26,7 @@ function tenant(value: unknown) {
 
 async function requireApiAdmin() {
   const session = await getAdminSession();
-  if (!session || session.email.toLowerCase() !== adminEmail().toLowerCase()) {
+  if (!session || !isAdminEmail(session.email)) {
     return { denied: Response.json({ ok: false, error: "Admin authentication required." }, { status: 401 }), actor: "" };
   }
   return { denied: null, actor: session.email };

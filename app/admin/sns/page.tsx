@@ -37,6 +37,7 @@ type GrowthLoopState = {
   winningPatterns: Array<{ pattern_id: string; character_id: string; topic_category: string; hook_style: string; confidence: number; performance_summary?: string }>;
 };
 type DriveVideo = { id: string; name: string; mimeType: string; size: number; modifiedTime?: string | null };
+type SnsIdea = { idea_id: string; title: string; concept: string; category: string; content_type: string; hook: string; hook_style: string; platform: string; recommended_duration?: number; reason: string; evidence_summary: string; novelty_score?: number; expected_potential: string; confidence?: number; status: string };
 
 const ideas = [
   "返信前の文章を整える3つの視点",
@@ -91,6 +92,11 @@ export default function SnsAdminPage() {
   const [videoJobs, setVideoJobs] = useState<VideoJob[]>([]);
   const [growthLoop, setGrowthLoop] = useState<GrowthLoopState>({ topics: [], backgrounds: [], bgm: [], variants: [], metrics: [], winningPatterns: [] });
   const [driveVideos, setDriveVideos] = useState<DriveVideo[]>([]);
+  const [snsIdeas, setSnsIdeas] = useState<SnsIdea[]>([]);
+  const [ideaMode, setIdeaMode] = useState("BALANCED");
+  const [ideaPlatform, setIdeaPlatform] = useState("auto");
+  const [ideaCategory, setIdeaCategory] = useState("auto");
+  const [ideaBusy, setIdeaBusy] = useState(false);
   const postCounts = {
     draft: posts.filter((post) => post.status === "draft").length,
     scheduled: posts.filter((post) => post.status === "scheduled").length,
@@ -187,6 +193,44 @@ export default function SnsAdminPage() {
     if (response.ok) await loadGrowthLoop();
   }
 
+  async function loadSnsIdeas() {
+    const response = await fetch("/api/admin/sns/ideas?tenantId=raven-oracle", { cache: "no-store" });
+    const payload = await response.json().catch(() => ({}));
+    if (response.ok) setSnsIdeas(payload.ideas || []);
+  }
+
+  async function generateSnsIdeas() {
+    setIdeaBusy(true);
+    setStatus("投稿アイデアを実績データから提案しています。");
+    try {
+      const response = await fetch("/api/admin/sns/ideas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generate", tenantId: "raven-oracle", mode: ideaMode, platform: ideaPlatform, category: ideaCategory, locale: "ja", count: 10 }) });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "投稿アイデアの生成に失敗しました。");
+      setSnsIdeas(payload.ideas || []);
+      setStatus("投稿アイデアを10件提案しました。自動投稿は行っていません。");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "投稿アイデアの生成に失敗しました。");
+    } finally {
+      setIdeaBusy(false);
+    }
+  }
+
+  async function updateSnsIdea(ideaId: string, action: "save" | "adopt" | "reject") {
+    setIdeaBusy(true);
+    try {
+      const response = await fetch("/api/admin/sns/ideas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, tenantId: "raven-oracle", ideaId }) });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "投稿アイデアの更新に失敗しました。");
+      await loadSnsIdeas();
+      if (action === "adopt") await loadPosts();
+      setStatus(action === "adopt" ? "既存SNS EngineへDraftとして引き渡しました。" : "投稿アイデアを更新しました。");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "投稿アイデアの更新に失敗しました。");
+    } finally {
+      setIdeaBusy(false);
+    }
+  }
+
   function suggestTheme() {
     const nextTopic = ideas[Math.floor(Math.random() * ideas.length)];
     setTopic(nextTopic);
@@ -216,6 +260,7 @@ export default function SnsAdminPage() {
     loadDriveVideos().catch(() => {});
     loadVideoJobs();
     loadGrowthLoop();
+    loadSnsIdeas().catch(() => {});
     loadSnsPing();
     loadPlatformSettings();
     return () => {
@@ -651,6 +696,21 @@ export default function SnsAdminPage() {
           <p className="mt-3 max-w-3xl leading-7 text-[#5e625c]">Instagram向けスライド案、PNG、キャプション、Reels台本、予約、投稿履歴を管理します。Instagram API未設定時は公開を止め、失敗ログを保存します。</p>
           <p className="mt-3 rounded border border-[#b9c9b5] bg-[#edf3e8] px-3 py-2 text-sm font-semibold text-[#3f573c]" aria-live="polite">{status}</p>
         </header>
+        <section className="mt-6 rounded border border-[#d7cabc] bg-[#fffaf2] p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div><p className="text-sm font-semibold uppercase text-[#6c5f3d]">SNS Idea Planner</p><h2 className="mt-1 text-2xl font-semibold">投稿アイデア</h2><p className="mt-2 text-sm leading-7 text-[#5e625c]">過去の投稿と利用可能な実績を参照して、次の企画候補を提案します。提案だけでは投稿されません。</p></div>
+            <button className="rounded bg-[#222820] px-4 py-2 text-sm font-semibold text-[#fff8ed] disabled:opacity-60" type="button" onClick={generateSnsIdeas} disabled={ideaBusy}>{ideaBusy ? "処理中" : "アイデアを提案"}</button>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <label className="grid gap-2 text-sm font-semibold">提案モード<select className="admin-field" value={ideaMode} onChange={(event) => setIdeaMode(event.target.value)}><option value="BALANCED">BALANCED</option><option value="VIRAL">VIRAL</option><option value="CONVERSION">CONVERSION</option><option value="EXPERIMENTAL">EXPERIMENTAL</option><option value="BRAND">BRAND</option></select></label>
+            <label className="grid gap-2 text-sm font-semibold">対象SNS<select className="admin-field" value={ideaPlatform} onChange={(event) => setIdeaPlatform(event.target.value)}><option value="auto">AUTO</option><option value="instagram">Instagram Reels</option><option value="tiktok">TikTok</option><option value="youtube">YouTube Shorts</option></select></label>
+            <label className="grid gap-2 text-sm font-semibold">カテゴリ<select className="admin-field" value={ideaCategory} onChange={(event) => setIdeaCategory(event.target.value)}><option value="auto">AUTO</option><option value="恋愛">恋愛</option><option value="仕事">仕事</option><option value="金運">金運</option><option value="近未来">近未来</option><option value="自己成長">自己成長</option><option value="ギルド">ギルド</option></select></label>
+          </div>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {snsIdeas.map((idea) => <article key={idea.idea_id} className="rounded border border-[#d7cabc] bg-white p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold text-[#6c5f3d]">{idea.status} / {idea.category} / {idea.content_type}</p><h3 className="mt-1 text-lg font-semibold">{idea.title}</h3></div><span className="text-xs font-semibold text-[#596d51]">新鮮度 {idea.novelty_score ?? "-"}</span></div><p className="mt-3 text-sm leading-6"><strong>Hook:</strong> {idea.hook}</p><p className="mt-2 text-sm leading-6 text-[#5e625c]">{idea.concept}</p><p className="mt-3 text-sm leading-6"><strong>提案理由:</strong> {idea.reason}</p><p className="mt-2 text-xs leading-5 text-[#5e625c]">Evidence: {idea.evidence_summary || "実績データ不足"} / Potential: {idea.expected_potential} / Confidence: {idea.confidence ?? "-"}</p><div className="mt-3 flex flex-wrap gap-2"><button className="rounded border border-[#d7cabc] px-3 py-2 text-xs font-semibold disabled:opacity-60" type="button" onClick={() => updateSnsIdea(idea.idea_id, "save")} disabled={ideaBusy}>保存</button><button className="rounded bg-[#596d51] px-3 py-2 text-xs font-semibold text-white disabled:opacity-60" type="button" onClick={() => updateSnsIdea(idea.idea_id, "adopt")} disabled={ideaBusy}>この企画を採用</button><button className="rounded border border-red-300 px-3 py-2 text-xs font-semibold text-red-700 disabled:opacity-60" type="button" onClick={() => updateSnsIdea(idea.idea_id, "reject")} disabled={ideaBusy}>却下</button></div></article>)}
+            {!snsIdeas.length ? <p className="rounded border border-dashed border-[#d7cabc] bg-white p-4 text-sm leading-6 text-[#5e625c] lg:col-span-2">まだ提案はありません。「アイデアを提案」から作成してください。</p> : null}
+          </div>
+        </section>
         <section className="mt-5 rounded border border-[#d7cabc] bg-white p-4"><p className="text-sm font-semibold text-[#6c5f3d]">基本の流れ</p><div className="mt-2 grid gap-2 text-sm leading-6 text-[#5e625c] md:grid-cols-4"><p><strong>1.</strong> テーマ・目的を入力</p><p><strong>2.</strong> カードやMP4を必要に応じて選択</p><p><strong>3.</strong> 「生成」で内容を確認</p><p><strong>4.</strong> 下書き保存または予約保存</p></div><p className="mt-2 text-xs text-[#7b817a]">ボタンを押すと上のステータス欄に処理状況が表示されます。処理中の操作だけ一時的に無効になります。</p></section>
         <section className="mt-8 grid gap-3 md:grid-cols-4">
           <Metric label="下書き" value={postCounts.draft} />

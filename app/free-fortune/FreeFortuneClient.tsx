@@ -82,6 +82,7 @@ export default function FreeFortuneClient() {
   const [busy, setBusy] = useState(false);
   const [birthDate, setBirthDate] = useState("");
   const [memberAuthenticated, setMemberAuthenticated] = useState(false);
+  const [trialLimitReached, setTrialLimitReached] = useState(false);
 
   const selectedTheme = themes.find((item) => item.id === theme) || themes[0];
 
@@ -124,6 +125,7 @@ export default function FreeFortuneClient() {
     setStatus("レイヴンがカードを開き、今の流れを整理しています。");
     setReading(null);
     setModel("");
+    setTrialLimitReached(false);
 
     try {
       if (memberAuthenticated && birthDate) {
@@ -142,6 +144,17 @@ export default function FreeFortuneClient() {
       if (!response.ok || !payload.reading) {
         if (payload.auth_url || payload.register_url) setAuthLinks({ login_url: payload.auth_url, register_url: payload.register_url });
         trackFortuneEvent("reading_api_failed", { statusCode: response.status, errorMessage: String(payload.error || "").slice(0, 120) });
+        const trialLimit = /trial limit reached|trial_limit|試行回数|無料.*上限/i.test(String(payload.error || ""));
+        if (trialLimit) {
+          setTrialLimitReached(true);
+          setMemberNotice("無料回数制限を超過しました。無料会員登録をして、鑑定を続けてください。");
+          setStatus("無料回数制限を超過しました。無料会員登録へ進んでください。");
+          setAuthLinks((current) => ({
+            ...current,
+            register_url: current.register_url || "/api/member/auth/start?mode=register&return_to=%2Ffree-fortune%2F&menu_id=raven-free-today",
+          }));
+          return;
+        }
         throw new Error(payload.error || "鑑定結果を取得できませんでした。");
       }
       setReading(payload.reading);
@@ -155,7 +168,8 @@ export default function FreeFortuneClient() {
       }
       trackFortuneEvent("reading_completed", { inputLength: concern.trim().length });
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "鑑定中にエラーが発生しました。");
+      const message = error instanceof Error ? error.message : "";
+      setStatus(/[A-Za-z]{3,}/.test(message) ? "鑑定中にエラーが発生しました。時間をおいて、もう一度お試しください。" : (message || "鑑定中にエラーが発生しました。"));
     } finally {
       setBusy(false);
     }
@@ -192,7 +206,7 @@ export default function FreeFortuneClient() {
 
           <form className="raven-card raven-fortune-form p-4 sm:p-5" onSubmit={submit}>
             {memberNotice ? (
-              <div className="mb-4 rounded border border-[#d7cabc] bg-white/70 p-3 text-sm leading-6 text-[#5e625c]">
+              <div className={`mb-4 rounded border p-3 text-sm leading-6 text-[#5e625c] ${trialLimitReached ? "border-[#c2b28f] bg-[#fff8e8]" : "border-[#d7cabc] bg-white/70"}`}>
                 <p>{memberNotice}</p>
                 <div className="mt-2 flex flex-wrap gap-3 font-semibold text-[#596d51]">
                   {authLinks.register_url ? <a className="underline underline-offset-4" href={authLinks.register_url}>結果を保存する</a> : null}

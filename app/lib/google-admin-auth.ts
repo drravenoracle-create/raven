@@ -9,11 +9,23 @@ export type AdminSession = {
 export const ADMIN_SESSION_COOKIE = "raven_admin_session";
 export const GOOGLE_STATE_COOKIE = "raven_google_oauth_state";
 
-const DEFAULT_ADMIN_EMAIL = "dr.ravenoracle@gmail.com";
+const DEFAULT_ADMIN_EMAILS = ["dr.ravenoracle@gmail.com", "fortune.kanri@gmail.com"];
 const SESSION_TTL_SECONDS = 60 * 60 * 8;
 
 export function adminEmail() {
-  return process.env.RAVEN_ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL;
+  return adminEmails()[0];
+}
+
+export function adminEmails() {
+  const configured = String(process.env.RAVEN_ADMIN_EMAILS || "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+  return configured.length ? configured : DEFAULT_ADMIN_EMAILS;
+}
+
+export function isAdminEmail(email: string) {
+  return adminEmails().includes(email.trim().toLowerCase());
 }
 
 export function googleRedirectUri(origin: string) {
@@ -33,7 +45,7 @@ export function adminSessionMaxAge() {
 
 export async function requireGoogleAdmin(returnTo: string): Promise<AdminSession> {
   const session = await getAdminSession();
-  if (session && session.email.toLowerCase() === adminEmail().toLowerCase()) {
+  if (session && isAdminEmail(session.email)) {
     return session;
   }
 

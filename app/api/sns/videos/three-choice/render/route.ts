@@ -62,14 +62,29 @@ async function submitRenderer(jobId: string, payload: ThreeChoiceVideoJobPayload
     .run();
   await logJob(jobId, "render.submit", "rendering", { renderer: url.replace(/\/+$/, "") });
 
-  const response = await fetch(`${url.replace(/\/+$/, "")}/jobs`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(clean((env as any).VIDEO_RENDERER_TOKEN, 500) ? { Authorization: `Bearer ${clean((env as any).VIDEO_RENDERER_TOKEN, 500)}` } : {}),
-    },
-    body: JSON.stringify({ jobId, payload }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  let response: Response;
+  try {
+    response = await fetch(`${url.replace(/\/+$/, "")}/jobs`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(clean((env as any).VIDEO_RENDERER_TOKEN, 500) ? { Authorization: `Bearer ${clean((env as any).VIDEO_RENDERER_TOKEN, 500)}` } : {}),
+      },
+      body: JSON.stringify({ jobId, payload }),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    clearTimeout(timeout);
+    const timedOut = error instanceof DOMException && error.name === "AbortError";
+    const message = timedOut ? "Rendererへの接続が30秒でタイムアウトしました。" : "Rendererへ接続できませんでした。";
+    await env.DB.prepare("UPDATE three_choice_video_jobs SET status = 'failed', error_code = ?, error_message = ?, retry_count = retry_count + 1, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
+      .bind(timedOut ? "renderer_timeout" : "renderer_network_error", message, THREE_CHOICE_TENANT_ID, jobId).run();
+    await logJob(jobId, timedOut ? "render.timeout" : "render.network_error", "failed", { message }, Date.now() - started);
+    return { status: "failed", error: message };
+  }
+  clearTimeout(timeout);
   const data = (await response.json().catch(() => ({}))) as { rendererJobId?: string; status?: string; outputUrl?: string; thumbnailUrl?: string; error?: string };
   const elapsed = Date.now() - started;
   if (!response.ok) {
@@ -84,7 +99,13 @@ async function submitRenderer(jobId: string, payload: ThreeChoiceVideoJobPayload
 
   const normalizedOutputUrl = normalizeRendererOutputUrl(data.outputUrl);
   const normalizedThumbnailUrl = normalizeRendererOutputUrl(data.thumbnailUrl);
-  const completed = normalizedOutputUrl ? "completed" : "rendering";
+  const completed = normalizedOutputUrl || data.rendererJobId ? (normalizedOutputUrl ? "completed" : "rendering") : "failed";
+  if (completed === "failed") {
+    await env.DB.prepare("UPDATE three_choice_video_jobs SET status = 'failed', error_code = 'renderer_invalid_response', error_message = ?, retry_count = retry_count + 1, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
+      .bind("Rendererの応答にジョブIDまたは出力動画URLがありません。", THREE_CHOICE_TENANT_ID, jobId).run();
+    await logJob(jobId, "render.invalid_response", "failed", { status: response.status, data }, elapsed);
+    return { status: "failed", error: "Rendererの応答が不正です。" };
+  }
   await env.DB.prepare(
     "UPDATE three_choice_video_jobs SET status = ?, renderer_job_id = ?, output_url = ?, thumbnail_url = ?, completed_at = CASE WHEN ? = 'completed' THEN CURRENT_TIMESTAMP ELSE completed_at END, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?",
   )

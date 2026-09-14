@@ -2,6 +2,8 @@
 
 const lunaUrl = "https://luna.fortunestudios.jp";
 const scarletUrl = "https://scarlet.fortunestudios.jp";
+const atlasUrl = "https://atlas-oracle.fortune-kanri.workers.dev/";
+const solUrl = "https://sol-oracle.fortune-kanri.workers.dev/";
 
 const members = [
   {
@@ -26,12 +28,13 @@ const members = [
   },
   {
     id: "atlas",
-    name: "アトラススミス",
+    name: "アトラス・スミス",
     role: "現実整理と修理の相談役",
     relation: "レイヴンの仲間",
     summary: "仕事、生活、計画整理に強いギルドメンバー。抽象的な不安を分解し、今日できる作業と整える順番に落とし込みます。",
     tone: "実務的で、職人気質。具体的に助言する。",
     accent: "#6f5a42",
+    href: atlasUrl,
   },
   {
     id: "sol",
@@ -41,12 +44,13 @@ const members = [
     summary: "自己肯定感、新しい始まり、気持ちの切り替えを扱うギルドメンバー。不安の中でも小さな希望を見つけ、次の一歩につなげます。",
     tone: "明るく前向き。ただし痛みを軽く扱わない。",
     accent: "#d39a2e",
+    href: solUrl,
   },
 ];
 
 export const metadata = {
   title: "レイヴン・ブラックウッドのギルド紹介",
-  description: "レイヴン・ブラックウッド、ルナ・スターウィンド、スカーレット・ドノバンたちのギルドメンバー紹介ページです。",
+  description: "レイヴン・ブラックウッド、ルナ・スターウィンド、スカーレット・ドノバン、アトラス・スミス、ソル・オーロラのギルドメンバー紹介ページです。",
 };
 
 export default function GuildPage() {
@@ -83,6 +87,8 @@ export default function GuildPage() {
               <li className="rounded bg-white/70 p-3">ギルド創設者<br /><strong>レイヴン・ブラックウッド</strong></li>
               <li className="rounded bg-white/70 p-3">月と花の相談役<br /><a className="font-semibold text-[#315f70] underline" href={lunaUrl}>ルナ・スターウィンド</a></li>
               <li className="rounded bg-white/70 p-3">境界線と守りの相談役<br /><a className="font-semibold text-[#8c2637] underline" href={scarletUrl}>スカーレット・ドノバン</a></li>
+              <li className="rounded bg-white/70 p-3">現実整理と修理の相談役<br /><a className="font-semibold text-[#6f5a42] underline" href={atlasUrl}>アトラス・スミス</a></li>
+              <li className="rounded bg-white/70 p-3">希望と再出発の相談役<br /><a className="font-semibold text-[#9a6b1d] underline" href={solUrl}>ソル・オーロラ</a></li>
             </ul>
           </div>
         </section>

@@ -71,7 +71,7 @@ export function buildCalendarBlog(almanac: DailyAlmanacData) {
 
 export function buildCalendarSocial(almanac: DailyAlmanacData, format: "short_video" | "carousel") {
   const day = almanac.sexagenary;
-  const caption = [`今日の暦｜${day.name}（${day.reading}）の日`, `六曜：${almanac.rokuyo.name}（${almanac.rokuyo.reading}）`, `テーマ：${almanac.theme}`, `おすすめ：${almanac.recommendedAction}`, `注意：${almanac.caution}`, almanac.message, "#レイヴンブラックウッド #今日の暦 #六曜 #干支 #占い"].join("\n\n");
+  const caption = [`今日の暦｜${day.name}（${day.reading}）の日`, `五行：${day.polarity}の${day.element}`, `六曜：${almanac.rokuyo.name}（${almanac.rokuyo.reading}）`, `テーマ：${almanac.theme}`, `おすすめ：${almanac.recommendedAction}`, `注意：${almanac.caution}`, almanac.message, "#レイヴンブラックウッド #今日の暦 #六曜 #干支 #五行 #占い"].join("\n\n");
   if (format === "short_video") return { postType: "reel", mediaType: "video", script: [`0-3秒：今日の暦｜${almanac.localDate}`, `3-7秒：${day.name}の日`, `7-12秒：テーマ ${almanac.theme}`, `12-17秒：${almanac.recommendedAction} / ${almanac.caution}`, `17-20秒：${almanac.message}`].join("\n"), caption };
   return { postType: "carousel", mediaType: "image", script: [`1枚目：${almanac.localDate} 今日の暦｜${day.name}（${day.reading}）の日`, `2枚目：六曜 ${almanac.rokuyo.name}（${almanac.rokuyo.reading}）`, `3枚目：${almanac.theme} / ${day.basicTheme}`, `4枚目：仕事 ${almanac.work} / 金運 ${almanac.money}`, `5枚目：恋愛 ${almanac.love} / 注意 ${almanac.caution}`, `6枚目：${almanac.message} / レイヴン・ブラックウッド`].join("\n"), caption };
 }

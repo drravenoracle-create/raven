@@ -228,7 +228,7 @@ export function composeThreeChoicePayload(input: {
     character: cleanVideoText(input.character, 80) || "raven",
     deckId: input.deckId,
     cards,
-    background: rendererMediaUrl(input.background || "", `${RAVEN_PUBLIC_ORIGIN}/api/reel-engine/assets?assetId=65ed49d2-7509-467b-b469-f990929ea440`),
+    background: rendererMediaUrl(input.background || "", `${RAVEN_PUBLIC_ORIGIN}/raven-blackwood-cover.png`),
     music: cleanVideoText(input.music, 1000) || "media://raven/default-bgm",
     cta: cleanVideoText(input.cta, 160) || RAVEN_CHARACTER_CONFIG.threeChoiceCta,
     experimentId: cleanVideoText(input.experimentId, 120) || undefined,

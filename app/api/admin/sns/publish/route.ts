@@ -159,12 +159,11 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: "Instagram media container creation failed", details: createBody }, { status: 502 });
   }
 
-  if (isReel) {
-    const ready = await waitForInstagramContainer(createBody.id);
-    if (!ready.ok) {
-      await logFailure({ tenantId, id, platform, code: 502, message: "Instagram Reel container was not ready.", body: ready.body });
-      return Response.json({ ok: false, error: "Instagram Reel container was not ready.", details: ready.body }, { status: 502 });
-    }
+  const ready = await waitForInstagramContainer(createBody.id);
+  if (!ready.ok) {
+    const mediaKind = isReel ? "Reel" : "image";
+    await logFailure({ tenantId, id, platform, code: 502, message: `Instagram ${mediaKind} container was not ready.`, body: ready.body });
+    return Response.json({ ok: false, error: `Instagram ${mediaKind} container was not ready.`, details: ready.body }, { status: 502 });
   }
 
   const publishResponse = await fetch(`https://graph.facebook.com/v26.0/${env.INSTAGRAM_ACCOUNT_ID}/media_publish`, {

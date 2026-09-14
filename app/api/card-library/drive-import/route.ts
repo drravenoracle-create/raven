@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { adminEmail, getAdminSession } from "@/app/lib/google-admin-auth";
+import { getAdminSession, isAdminEmail } from "@/app/lib/google-admin-auth";
 import { CARD_LIBRARY_TENANT_ID } from "@/app/lib/card-library";
 import {
   bulkImportDriveImages,
@@ -17,7 +17,7 @@ function clean(value: unknown, maxLength: number) {
 
 async function requireApiAdmin() {
   const session = await getAdminSession();
-  if (!session || session.email.toLowerCase() !== adminEmail().toLowerCase()) {
+  if (!session || !isAdminEmail(session.email)) {
     return Response.json({ ok: false, error: "Admin authentication required." }, { status: 401 });
   }
   return null;

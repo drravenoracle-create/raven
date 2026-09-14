@@ -405,6 +405,19 @@ async function waitForInstagramContainer(env: Env, containerId: string) {
   return { ok: false, body: { status_code: "TIMEOUT" } };
 }
 
+function isRetryableInstagramPublishFailure(body: unknown) {
+  const code = Number((body as { error?: { code?: unknown } })?.error?.code);
+  return code === 4 || code === 9007;
+}
+
+async function deferSnsPostRetry(env: Env, tenantId: string, id: string, delayMinutes = 15) {
+  await env.DB.prepare(
+    "UPDATE sns_posts SET status = 'scheduled', retry_count = retry_count + 1, scheduled_at = datetime('now', ?), updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ? AND retry_count < 3",
+  )
+    .bind(`+${delayMinutes} minutes`, tenantId, id)
+    .run();
+}
+
 async function publishInstagramContainer(env: Env, post: Record<string, unknown>, creationId: string, providerMode: string) {
   const tenantId = String(post.tenant_id || TENANT_ID);
   const id = String(post.id || "");
@@ -428,9 +441,8 @@ async function publishInstagramContainer(env: Env, post: Record<string, unknown>
     )
       .bind(crypto.randomUUID(), tenantId, id, platform, publishResponse.status, JSON.stringify(publishBody), "Instagram media publish failed")
       .run();
-    await env.DB.prepare("UPDATE sns_posts SET status = 'failed', retry_count = retry_count + 1, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
-      .bind(tenantId, id)
-      .run();
+    if (isRetryableInstagramPublishFailure(publishBody)) await deferSnsPostRetry(env, tenantId, id);
+    else await env.DB.prepare("UPDATE sns_posts SET status = 'failed', retry_count = retry_count + 1, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?").bind(tenantId, id).run();
     return { ok: false, error: "Instagram media publish failed", details: publishBody };
   }
   const externalId = publishBody.id;
@@ -567,6 +579,16 @@ async function publishSnsPost(env: Env, post: Record<string, unknown>) {
           .run();
         return { ok: false, error: "Instagram carousel child creation failed", details: childBody };
       }
+      const childReady = await waitForInstagramContainer(env, childBody.id);
+      if (!childReady.ok) {
+        await env.DB.prepare(
+          "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?, ?)",
+        )
+          .bind(crypto.randomUUID(), tenantId, id, platform, 502, JSON.stringify(childReady.body), "Instagram carousel child container was not ready")
+          .run();
+        await deferSnsPostRetry(env, tenantId, id);
+        return { ok: false, error: "Instagram carousel child container was not ready", details: childReady.body };
+      }
       childIds.push(childBody.id);
     }
     const carouselResponse = await fetch(`https://graph.facebook.com/v26.0/${env.INSTAGRAM_ACCOUNT_ID}/media`, {
@@ -589,6 +611,18 @@ async function publishSnsPost(env: Env, post: Record<string, unknown>) {
         .bind(tenantId, id)
         .run();
       return { ok: false, error: "Instagram carousel container creation failed", details: carouselBody };
+    }
+    const ready = await waitForInstagramContainer(env, carouselBody.id);
+    if (!ready.ok) {
+      await env.DB.prepare(
+        "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?, ?)",
+      )
+        .bind(crypto.randomUUID(), tenantId, id, platform, 502, JSON.stringify(ready.body), "Instagram carousel container was not ready.")
+        .run();
+      await env.DB.prepare("UPDATE sns_posts SET status = 'failed', retry_count = retry_count + 1, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
+        .bind(tenantId, id)
+        .run();
+      return { ok: false, error: "Instagram carousel container was not ready.", details: ready.body };
     }
     return publishInstagramContainer(env, post, carouselBody.id, providerMode || "instagram_carousel");
   }
@@ -616,19 +650,18 @@ async function publishSnsPost(env: Env, post: Record<string, unknown>) {
       .run();
     return { ok: false, error: "Instagram media container creation failed", details: createBody };
   }
-  if (isReel) {
-    const ready = await waitForInstagramContainer(env, createBody.id);
-    if (!ready.ok) {
-      await env.DB.prepare(
-        "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?, ?)",
-      )
-        .bind(crypto.randomUUID(), tenantId, id, platform, 502, JSON.stringify(ready.body), "Instagram Reel container was not ready.")
-        .run();
-      await env.DB.prepare("UPDATE sns_posts SET status = 'failed', retry_count = retry_count + 1, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
-        .bind(tenantId, id)
-        .run();
-      return { ok: false, error: "Instagram Reel container was not ready.", details: ready.body };
-    }
+  const ready = await waitForInstagramContainer(env, createBody.id);
+  if (!ready.ok) {
+    const mediaKind = isReel ? "Reel" : "image";
+    await env.DB.prepare(
+      "INSERT INTO sns_publish_logs (id, tenant_id, sns_post_id, platform, action, status, response_code, response_body, error_message) VALUES (?, ?, ?, ?, 'publish', 'failed', ?, ?, ?)",
+    )
+      .bind(crypto.randomUUID(), tenantId, id, platform, 502, JSON.stringify(ready.body), `Instagram ${mediaKind} container was not ready.`)
+      .run();
+    await env.DB.prepare("UPDATE sns_posts SET status = 'failed', retry_count = retry_count + 1, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ? AND id = ?")
+      .bind(tenantId, id)
+      .run();
+    return { ok: false, error: `Instagram ${mediaKind} container was not ready.`, details: ready.body };
   }
   return publishInstagramContainer(env, post, createBody.id, providerMode || "instagram");
 }

@@ -188,7 +188,8 @@ export default function TextReadingPage() {
       trackReadingEvent("raven_text_reading", { inputLength: text.length });
       trackReadingEvent("reading_completed", { inputLength: text.length });
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "AI鑑定に失敗しました。");
+      const message = error instanceof Error ? error.message : "";
+      setStatus(/[A-Za-z]{3,}/.test(message) ? "AI鑑定に失敗しました。時間をおいて、もう一度お試しください。" : (message || "AI鑑定に失敗しました。"));
       if (!(error instanceof Error) || !error.message) trackReadingEvent("reading_api_failed", { errorMessage: "unknown_error" });
     } finally {
       setBusy(false);
