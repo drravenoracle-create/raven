@@ -1,0 +1,197 @@
+From ee705386b901da87ee162e5416edd04f4cbe0f1d Mon Sep 17 00:00:00 2001
+From: Raven Oracle <dr.ravenoracle@gmail.com>
+Date: Thu, 20 Aug 2026 21:16:31 +0900
+Subject: [PATCH] refactor: complete Raven SNS character config
+
+---
+ app/api/admin/sns/posts/route.ts              |  9 +++--
+ app/api/sns/videos/[id]/route.ts              |  5 ++-
+ .../sns/videos/three-choice/render/route.ts   |  5 ++-
+ app/lib/character-config.ts                   |  6 +++
+ app/lib/three-choice-video.ts                 |  5 ++-
+ tests/phase3-1-character-config.test.mjs      | 38 +++++++++++++++++++
+ 6 files changed, 58 insertions(+), 10 deletions(-)
+ create mode 100644 tests/phase3-1-character-config.test.mjs
+
+diff --git a/app/api/admin/sns/posts/route.ts b/app/api/admin/sns/posts/route.ts
+index f87df3a..083543c 100644
+--- a/app/api/admin/sns/posts/route.ts
++++ b/app/api/admin/sns/posts/route.ts
+@@ -1,6 +1,7 @@
+ import { env } from "cloudflare:workers";
+ import { findSnsDuplicate, fingerprintSnsContent, type SnsDuplicateCandidate } from "@/app/lib/sns-dedupe";
+ import { recordCardUsage, selectCards } from "@/app/lib/card-library";
++import { RAVEN_CHARACTER_CONFIG } from "@/app/lib/character-config";
+ 
+ const TENANT_ID = "raven-oracle";
+ const DUPLICATE_LOOKBACK_DAYS = 45;
+@@ -114,8 +115,8 @@ export async function POST(request: Request) {
+   }
+ 
+   const theme = clean(body.theme, 180) || "返信前の文章を整える3つの視点";
+-  const cta = clean(body.cta, 240) || "必要なら、レイヴン・ブラックウッドのテキスト鑑定で一緒に整理します。";
+-  const captionBase = clean(body.caption, 2200) || `${theme}\n\n送る前に、気持ち・目的・相手に伝えたいことを分けて見直します。\n\n${cta}\n\n#レイヴンブラックウッド #文章鑑定 #相談整理`;
++  const cta = clean(body.cta, 240) || RAVEN_CHARACTER_CONFIG.defaultCta;
++  const captionBase = clean(body.caption, 2200) || `${theme}\n\n送る前に、気持ち・目的・相手に伝えたいことを分けて見直します。\n\n${cta}\n\n${RAVEN_CHARACTER_CONFIG.sns.hashtags.join(" ")}`;
+   const caption = selectedCardPayload ? clean(`${captionBase}\n\n今日のカード\n${selectedCardPayload}`, 2200) : captionBase;
+   const title = clean(body.title, 180) || theme;
+   const scriptBase = clean(body.script, 4000);
+@@ -165,11 +166,11 @@ export async function POST(request: Request) {
+       title,
+       theme,
+       clean(body.category, 120) || "SNS投稿",
+-      clean(body.character, 120) || "レイヴン・ブラックウッド",
++      clean(body.character, 120) || RAVEN_CHARACTER_CONFIG.displayName,
+       clean(body.purpose, 180) || "テキスト鑑定への案内",
+       cta,
+       caption,
+-      clean(body.hashtags, 500) || "#レイヴンブラックウッド #文章鑑定 #相談整理",
++      clean(body.hashtags, 500) || RAVEN_CHARACTER_CONFIG.sns.hashtags.join(" "),
+       script,
+       clean(body.media_type ?? body.mediaType, 40),
+       clean(body.media_url ?? body.mediaUrl, 1000),
+diff --git a/app/api/sns/videos/[id]/route.ts b/app/api/sns/videos/[id]/route.ts
+index ced35b0..160425d 100644
+--- a/app/api/sns/videos/[id]/route.ts
++++ b/app/api/sns/videos/[id]/route.ts
+@@ -1,5 +1,6 @@
+ import { env } from "cloudflare:workers";
+ import { THREE_CHOICE_TENANT_ID, captionFromThreeChoice, type ThreeChoiceVideoJobPayload } from "@/app/lib/three-choice-video";
++import { RAVEN_CHARACTER_CONFIG } from "@/app/lib/character-config";
+ 
+ type Params = Promise<{ id: string }>;
+ 
+@@ -40,9 +41,9 @@ export async function POST(_request: Request, { params }: { params: Params }) {
+   await env.DB.prepare(
+     `INSERT INTO sns_posts
+       (id, tenant_id, platform, post_type, title, theme, category, character, purpose, cta, caption, hashtags, script, media_type, media_url, thumbnail_url, status, ai_generated, duplicate_warning)
+-      VALUES (?, ?, 'instagram', 'reel', ?, ?, ?, 'レイヴン・ブラックウッド', '3択動画から鑑定導線を作る', ?, ?, ?, ?, 'video', ?, ?, 'draft', 1, ?)`,
++      VALUES (?, ?, 'instagram', 'reel', ?, ?, ?, ?, '3択動画から鑑定導線を作る', ?, ?, ?, ?, 'video', ?, ?, 'draft', 1, ?)`,
+   )
+-    .bind(snsPostId, THREE_CHOICE_TENANT_ID, payload.theme, payload.theme, "3択動画", payload.cta, captionFromThreeChoice(payload), "#レイヴンブラックウッド #3択占い #占い #オラクルカード", JSON.stringify(payload.timeline), job.output_url, job.thumbnail_url || "", `three-choice-video:${jobId}`)
++    .bind(snsPostId, THREE_CHOICE_TENANT_ID, payload.theme, payload.theme, "3択動画", RAVEN_CHARACTER_CONFIG.displayName, payload.cta, captionFromThreeChoice(payload), RAVEN_CHARACTER_CONFIG.threeChoicePostHashtags.join(" "), JSON.stringify(payload.timeline), job.output_url, job.thumbnail_url || "", `three-choice-video:${jobId}`)
+     .run();
+   await env.DB.prepare("INSERT INTO three_choice_video_job_logs (id, tenant_id, job_id, action, status, detail_json) VALUES (?, ?, ?, 'sns.queued', 'draft', ?)")
+     .bind(crypto.randomUUID(), THREE_CHOICE_TENANT_ID, jobId, JSON.stringify({ snsPostId }))
+diff --git a/app/api/sns/videos/three-choice/render/route.ts b/app/api/sns/videos/three-choice/render/route.ts
+index eaa6820..f0f4d2e 100644
+--- a/app/api/sns/videos/three-choice/render/route.ts
++++ b/app/api/sns/videos/three-choice/render/route.ts
+@@ -7,6 +7,7 @@ import {
+   validateVideoJobPayload,
+   type ThreeChoiceVideoJobPayload,
+ } from "@/app/lib/three-choice-video";
++import { RAVEN_CHARACTER_CONFIG } from "@/app/lib/character-config";
+ 
+ function clean(value: unknown, maxLength: number) {
+   return String(value ?? "").trim().slice(0, maxLength);
+@@ -119,9 +120,9 @@ export async function POST(request: Request) {
+       await env.DB.prepare(
+         `INSERT INTO sns_posts
+           (id, tenant_id, platform, post_type, title, theme, category, character, purpose, cta, caption, hashtags, script, media_type, media_url, thumbnail_url, status, ai_generated, duplicate_warning)
+-          VALUES (?, ?, 'instagram', 'reel', ?, ?, ?, 'レイヴン・ブラックウッド', '3択動画から鑑定導線を作る', ?, ?, ?, ?, 'video', ?, ?, 'draft', 1, ?)`,
++          VALUES (?, ?, 'instagram', 'reel', ?, ?, ?, ?, '3択動画から鑑定導線を作る', ?, ?, ?, ?, 'video', ?, ?, 'draft', 1, ?)`,
+       )
+-        .bind(snsPostId, THREE_CHOICE_TENANT_ID, typedPayload.theme, typedPayload.theme, "3択動画", typedPayload.cta, captionFromThreeChoice(typedPayload), "#レイヴンブラックウッド #3択占い #占い #オラクルカード", JSON.stringify(typedPayload.timeline), outputUrl, "", `three-choice-video:${jobId}`)
++        .bind(snsPostId, THREE_CHOICE_TENANT_ID, typedPayload.theme, typedPayload.theme, "3択動画", RAVEN_CHARACTER_CONFIG.displayName, typedPayload.cta, captionFromThreeChoice(typedPayload), RAVEN_CHARACTER_CONFIG.threeChoicePostHashtags.join(" "), JSON.stringify(typedPayload.timeline), outputUrl, "", `three-choice-video:${jobId}`)
+         .run();
+       await logJob(jobId, "sns.queued", "draft", { snsPostId });
+     }
+diff --git a/app/lib/character-config.ts b/app/lib/character-config.ts
+index 810d1e7..a91bfb2 100644
+--- a/app/lib/character-config.ts
++++ b/app/lib/character-config.ts
+@@ -4,6 +4,9 @@ export type CharacterConfig = {
+   tenantId: string;
+   defaultCta: string;
+   reelCta: string;
++  threeChoiceCta: string;
++  threeChoiceHashtags: string[];
++  threeChoicePostHashtags: string[];
+   sns: { hashtags: string[]; defaultPurpose: string; brandStyle: string };
+   brand: { tone: string; style: string };
+ };
+@@ -14,6 +17,9 @@ export const RAVEN_CHARACTER_CONFIG: CharacterConfig = {
+   tenantId: "raven-oracle",
+   defaultCta: "必要なら、レイヴン・ブラックウッドのテキスト鑑定で一緒に整理します。",
+   reelCta: "続きはレイヴン・ブラックウッドのブログで確認してください。",
++  threeChoiceCta: "詳しい鑑定はプロフィールへ",
++  threeChoiceHashtags: ["#レイヴンブラックウッド", "#3択占い", "#オラクルカード", "#今日のメッセージ"],
++  threeChoicePostHashtags: ["#レイヴンブラックウッド", "#3択占い", "#占い", "#オラクルカード"],
+   sns: { hashtags: ["#レイヴンブラックウッド", "#文章鑑定", "#相談整理"], defaultPurpose: "テキスト鑑定への案内", brandStyle: "Raven Oracle, refined, readable, calm" },
+   brand: { tone: "落ち着いて、断定を避け、現実的な次の一手を示す", style: "短く明確に、観察と助言を分ける" },
+ };
+diff --git a/app/lib/three-choice-video.ts b/app/lib/three-choice-video.ts
+index 1efef61..c61e687 100644
+--- a/app/lib/three-choice-video.ts
++++ b/app/lib/three-choice-video.ts
+@@ -1,4 +1,5 @@
+ import { recordCardUsage, selectCards, type SelectedCard } from "@/app/lib/card-library";
++import { RAVEN_CHARACTER_CONFIG } from "@/app/lib/character-config";
+ 
+ export const THREE_CHOICE_TENANT_ID = "raven-oracle";
+ export const THREE_CHOICE_TEMPLATE_ID = "raven_three_choice_v1";
+@@ -184,7 +185,7 @@ export function composeThreeChoicePayload(input: {
+     cards,
+     background: cleanVideoText(input.background, 1000) || "media://raven/default-background",
+     music: cleanVideoText(input.music, 1000) || "media://raven/default-bgm",
+-    cta: cleanVideoText(input.cta, 160) || "詳しい鑑定はプロフィールへ",
++    cta: cleanVideoText(input.cta, 160) || RAVEN_CHARACTER_CONFIG.threeChoiceCta,
+     experimentId: cleanVideoText(input.experimentId, 120) || undefined,
+     variantId: cleanVideoText(input.variantId, 120) || undefined,
+     backgroundId: cleanVideoText(input.backgroundId, 120) || undefined,
+@@ -246,6 +247,6 @@ export function captionFromThreeChoice(payload: ThreeChoiceVideoJobPayload) {
+     "",
+     payload.cta,
+     "",
+-    "#レイヴンブラックウッド #3択占い #オラクルカード #今日のメッセージ",
++    RAVEN_CHARACTER_CONFIG.threeChoiceHashtags.join(" "),
+   ].join("\n");
+ }
+diff --git a/tests/phase3-1-character-config.test.mjs b/tests/phase3-1-character-config.test.mjs
+new file mode 100644
+index 0000000..42db5f4
+--- /dev/null
++++ b/tests/phase3-1-character-config.test.mjs
+@@ -0,0 +1,38 @@
++import assert from "node:assert/strict";
++import { readFile } from "node:fs/promises";
++import test from "node:test";
++
++const root = new URL("../", import.meta.url);
++
++async function source(path) {
++  return readFile(new URL(path, root), "utf8");
++}
++
++test("Phase 3.1 keeps Raven SNS and three-choice values equivalent", async () => {
++  const config = await source("app/lib/character-config.ts");
++  const threeChoice = await source("app/lib/three-choice-video.ts");
++  const videoRoute = await source("app/api/sns/videos/[id]/route.ts");
++  const renderRoute = await source("app/api/sns/videos/three-choice/render/route.ts");
++  const postsRoute = await source("app/api/admin/sns/posts/route.ts");
++
++  assert.match(config, /displayName: "レイヴン・ブラックウッド"/);
++  assert.match(config, /threeChoiceCta: "詳しい鑑定はプロフィールへ"/);
++  assert.match(config, /threeChoiceHashtags: \["#レイヴンブラックウッド", "#3択占い", "#オラクルカード", "#今日のメッセージ"\]/);
++  assert.match(config, /threeChoicePostHashtags: \["#レイヴンブラックウッド", "#3択占い", "#占い", "#オラクルカード"\]/);
++  assert.match(config, /hashtags: \["#レイヴンブラックウッド", "#文章鑑定", "#相談整理"\]/);
++
++  assert.match(threeChoice, /RAVEN_CHARACTER_CONFIG\.threeChoiceCta/);
++  assert.match(threeChoice, /RAVEN_CHARACTER_CONFIG\.threeChoiceHashtags\.join\(" "\)/);
++  for (const route of [videoRoute, renderRoute]) {
++    assert.match(route, /RAVEN_CHARACTER_CONFIG\.displayName/);
++    assert.match(route, /RAVEN_CHARACTER_CONFIG\.threeChoicePostHashtags\.join\(" "\)/);
++  }
++  assert.match(postsRoute, /RAVEN_CHARACTER_CONFIG\.displayName/);
++  assert.match(postsRoute, /RAVEN_CHARACTER_CONFIG\.defaultCta/);
++  assert.match(postsRoute, /RAVEN_CHARACTER_CONFIG\.sns\.hashtags\.join\(" "\)/);
++
++  assert.doesNotMatch(threeChoice, /\|\| "詳しい鑑定はプロフィールへ"/);
++  assert.doesNotMatch(videoRoute, /'レイヴン・ブラックウッド'/);
++  assert.doesNotMatch(renderRoute, /'レイヴン・ブラックウッド'/);
++  assert.doesNotMatch(postsRoute, /\|\| "レイヴン・ブラックウッド"/);
++});
+-- 
+2.54.0.windows.1
+
