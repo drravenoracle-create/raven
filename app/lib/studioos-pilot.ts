@@ -21,7 +21,7 @@ export const LUNA_CHARACTER_CORE_CONFIG: CharacterCoreConfig = {
   visualIdentity: { palette: "silver-blue", atmosphere: "soft night light" },
 };
 
-const LUNA_PREVIEW_URL = "https://preview.invalid/luna";
+const LUNA_PUBLIC_URL = "https://luna.fortunestudios.jp";
 
 export const LUNA_TENANT_CONFIG: TenantConfig = {
   schemaVersion: 1,
@@ -30,18 +30,18 @@ export const LUNA_TENANT_CONFIG: TenantConfig = {
   guildId: "raven-guild",
   identity: { tenantId: "luna-oracle", tenantKey: "luna-oracle", guildId: "raven-guild", primaryCharacterId: "luna", displayName: "Luna" },
   branding: { displayName: "Luna", brandTone: "warm, gentle", brandStyle: "silver-blue" },
-  urls: { publicUrl: LUNA_PREVIEW_URL, profileUrl: `${LUNA_PREVIEW_URL}/profile` },
+  urls: { publicUrl: LUNA_PUBLIC_URL, profileUrl: `${LUNA_PUBLIC_URL}/profile` },
   plan: { planId: "PREMIUM", planVersion: "1" },
   entitlements: { planDefaults: {}, featureFlags: { analytics: true, blog: true, sns: true, reel: true, growth: true }, tenantOverrides: {}, limits: {} },
   localization: { locale: "ja-JP", language: "ja", country: "JP", timezone: "Asia/Tokyo", currency: "JPY", dateFormat: "yyyy-MM-dd", cta: { default: "Lunaと静かに振り返る" }, hashtags: ["#Luna", "#月の便り"] },
   market: { marketId: "jp", country: "JP", marketPersonaId: "luna-jp", toneOverride: "warm, gentle", formality: "neutral", humorStyle: "light", relationshipDistance: "friendly", ctaStyle: "community-oriented" },
   characterRef: "luna",
-  analytics: { enabled: true, tenantId: "luna-oracle", provider: "pilot-fixture", referenceIds: { property: "luna-fixture" }, eventNamespace: "luna-oracle", publicUrl: LUNA_PREVIEW_URL, sources: ["pilot-fixture"] },
-  blog: { enabled: true, tenantId: "luna-oracle", defaultAuthor: "Luna", defaultCta: "Lunaと静かに振り返る", defaultTags: ["luna", "moon"], publicBaseUrl: LUNA_PREVIEW_URL, defaultCategories: ["reflection"], defaultTargetReader: "pilot reader", defaultSearchIntent: "reflection", seoTitleSuffix: " | Luna" },
-  sns: { enabled: true, tenantId: "luna-oracle", displayName: "Luna", defaultCta: "Lunaと静かに振り返る", hashtags: ["#Luna", "#月の便り"], publicBaseUrl: LUNA_PREVIEW_URL, defaultLocale: "ja-JP", templateDefaults: { source: "pilot" }, publishingDefaults: { externalPublish: false }, providerRefs: { instagram: "pilot-fixture" }, storageRefs: { publicBaseUrl: LUNA_PREVIEW_URL } },
-  reel: { enabled: true, tenantId: "luna-oracle", rendererProvider: "pilot-fixture", storage: { namespace: "luna-oracle-preview-media" }, backgroundLibrary: ["luna-night"], brandDefaults: { presetId: "luna-jp-preview", cta: "Lunaと静かに振り返る" }, defaultAspectRatio: "9:16", defaultDuration: 30, storageRef: "luna-oracle-preview-media", backgroundLibraryRef: "luna-preview-library", publicBaseUrl: LUNA_PREVIEW_URL, defaultLocale: "ja-JP", renderDefaults: { aspectRatio: "9:16", duration: 30 }, providerRefs: { renderer: "pilot-fixture", storage: "pilot-fixture" } },
+  analytics: { enabled: true, tenantId: "luna-oracle", provider: "pilot-fixture", referenceIds: { property: "luna-fixture" }, eventNamespace: "luna-oracle", publicUrl: LUNA_PUBLIC_URL, sources: ["pilot-fixture"] },
+  blog: { enabled: true, tenantId: "luna-oracle", defaultAuthor: "Luna", defaultCta: "Lunaと静かに振り返る", defaultTags: ["luna", "moon"], publicBaseUrl: LUNA_PUBLIC_URL, defaultCategories: ["reflection"], defaultTargetReader: "pilot reader", defaultSearchIntent: "reflection", seoTitleSuffix: " | Luna" },
+  sns: { enabled: true, tenantId: "luna-oracle", displayName: "Luna", defaultCta: "Lunaと静かに振り返る", hashtags: ["#Luna", "#月の便り"], publicBaseUrl: LUNA_PUBLIC_URL, defaultLocale: "ja-JP", templateDefaults: { source: "pilot" }, publishingDefaults: { externalPublish: false }, providerRefs: { instagram: "pilot-fixture" }, storageRefs: { publicBaseUrl: LUNA_PUBLIC_URL } },
+  reel: { enabled: true, tenantId: "luna-oracle", rendererProvider: "pilot-fixture", storage: { namespace: "luna-oracle-preview-media" }, backgroundLibrary: ["luna-night"], brandDefaults: { presetId: "luna-jp-preview", cta: "Lunaと静かに振り返る" }, defaultAspectRatio: "9:16", defaultDuration: 30, storageRef: "luna-oracle-preview-media", backgroundLibraryRef: "luna-preview-library", publicBaseUrl: LUNA_PUBLIC_URL, defaultLocale: "ja-JP", renderDefaults: { aspectRatio: "9:16", duration: 30 }, providerRefs: { renderer: "pilot-fixture", storage: "pilot-fixture" } },
   growth: { enabled: true, tenantId: "luna-oracle", kpi: ["pilot_engagement"], targetAudience: "pilot readers", automationLevel: "read-only", constraints: ["preview_only", "no_external_write"], defaultMarket: "jp", defaultLocale: "ja-JP", providerRefs: { analytics: "pilot-fixture", sns: "pilot-fixture" }, experimentPolicy: { requiresStartApproval: true, autoStart: false }, approvalPolicy: { humanApprovalRequired: true, restrictedActions: ["price", "trial", "billing", "campaign", "character", "menu", "advertising", "external_send", "sns_publish"] } },
-  storage: { provider: "pilot-fixture", mediaNamespace: "luna-oracle-preview-media", reelNamespace: "luna-oracle-preview-reels", publicBaseUrl: LUNA_PREVIEW_URL },
+  storage: { provider: "pilot-fixture", mediaNamespace: "luna-oracle-preview-media", reelNamespace: "luna-oracle-preview-reels", publicBaseUrl: LUNA_PUBLIC_URL },
   providers: { ai: ["pilot-fixture"], media: ["pilot-fixture"], video: ["pilot-fixture"], storage: ["pilot-fixture"], social: ["pilot-fixture"], analytics: ["pilot-fixture"] },
   openingCampaign: { enabled: false, campaignId: "luna-opening-not-configured", trialEnabled: false, trialLimit: 0, audience: "luna-pilot", primaryCta: "", secondaryCta: "", startAt: null, endAt: null },
 };
@@ -70,8 +70,8 @@ export const LUNA_MIGRATION_STATE: StudioOSMigrationState = { migrationState: "n
 
 export const LUNA_PILOT_REGISTRY: RegistrySet = {
   guilds: [],
-  tenants: [{ tenantId: "luna-oracle", tenantKey: "luna-oracle", guildId: "raven-guild", characterId: "luna", characterCoreId: "luna", marketPersonaId: "luna-jp", displayName: "Luna", plan: "PREMIUM", environment: "preview", status: "planned", studioOsVersion: STUDIOOS_VERSION, tenantSchemaVersion: 1, buildCommit: "pilot-fixture", migration: LUNA_MIGRATION_STATE, engineVersions: ENGINE_VERSIONS, lastDeploy: null, isFixture: true, market: "jp", country: "JP", locale: "ja-JP", timezone: "Asia/Tokyo", currency: "JPY" }],
-  workers: [{ workerId: "luna-oracle-preview", tenantId: "luna-oracle", workerName: "luna-oracle-preview", provider: "cloudflare", environment: "preview", publicUrl: LUNA_PREVIEW_URL, deployedVersion: null, buildCommit: "pilot-fixture", status: "planned", isFixture: true }],
+  tenants: [{ tenantId: "luna-oracle", tenantKey: "luna-oracle", guildId: "raven-guild", characterId: "luna", characterCoreId: "luna", marketPersonaId: "luna-jp", displayName: "Luna", plan: "PREMIUM", environment: "production", status: "active", studioOsVersion: STUDIOOS_VERSION, tenantSchemaVersion: 1, buildCommit: null, migration: LUNA_MIGRATION_STATE, engineVersions: ENGINE_VERSIONS, lastDeploy: "2026-08-31T13:24:00+09:00", isFixture: false, market: "jp", country: "JP", locale: "ja-JP", timezone: "Asia/Tokyo", currency: "JPY" }],
+  workers: [{ workerId: "luna-oracle", tenantId: "luna-oracle", workerName: "luna-oracle", provider: "cloudflare", accountRef: "cfda786a82241adf6b21f772dbc87544", environment: "production", publicUrl: LUNA_PUBLIC_URL, deployedVersion: "2fdc35dd-8edc-4d30-a03c-ae2a98a000a9", buildCommit: null, status: "healthy", isFixture: false }],
 };
 
 export const LUNA_PROVISIONING_MANIFEST = {
@@ -81,10 +81,10 @@ export const LUNA_PROVISIONING_MANIFEST = {
   market: "jp",
   plan: "PREMIUM",
   entitlements: ["analytics", "blog", "sns", "reel", "growth"],
-  worker: "luna-oracle-preview",
+  worker: "luna-oracle",
   storage: { mediaNamespace: "luna-oracle-preview-media", reelNamespace: "luna-oracle-preview-reels" },
   providers: { mode: "pilot-fixture", refs: ["pilot-fixture"] },
-  urls: { preview: LUNA_PREVIEW_URL },
+  urls: { public: LUNA_PUBLIC_URL },
   requiredSecrets: ["OPENAI_API_KEY", "INSTAGRAM_ACCESS_TOKEN"],
   requiredMigrations: [],
   readiness: "PREVIEW_READY",

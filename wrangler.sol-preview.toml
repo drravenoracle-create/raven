@@ -4,10 +4,13 @@ compatibility_date = "2026-08-26"
 compatibility_flags = ["nodejs_compat"]
 account_id = "cfda786a82241adf6b21f772dbc87544"
 workers_dev = true
+[[services]]
+binding = "GUILD_MEMBER_CORE"
+service = "guild-member-core"
 [[d1_databases]]
 binding = "DB"
-database_name = "atlas-oracle"
-database_id = "3c08bd65-cc8d-462c-abe1-c83f67d90f28"
+database_name = "sol-oracle"
+database_id = "2d1f7a52-0445-4675-91b0-b81ae2c3702e"
 [[d1_databases]]
 binding = "ANALYTICS_DB"
 database_name = "fortune-studio-analytics"
@@ -17,4 +20,4 @@ database_id = "6d60f0e0-8816-46c8-8e7b-fb05129d335d"
 STUDIOOS_TENANT_ID = "sol-oracle"
 STUDIOOS_CHARACTER_ID = "sol"
 STUDIOOS_GUILD_ID = "raven-guild"
-STUDIOOS_ENVIRONMENT = "preview"
+STUDIOOS_ENVIRONMENT = "production"

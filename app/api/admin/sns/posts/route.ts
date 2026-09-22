@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { findSnsDuplicate, fingerprintSnsContent, type SnsDuplicateCandidate } from "@/app/lib/sns-dedupe";
 import { recordCardUsage, selectCards } from "@/app/lib/card-library";
 import { RAVEN_CHARACTER_CONFIG } from "@/app/lib/character-config";
+import { resolveTenantIdFromHint, resolveTenantIdFromHost } from "@/app/lib/studioos-runtime-adapter";
 import { resolveSnsConfig } from "@/app/lib/tenant-config-resolver";
 
 const SNS_CONFIG = resolveSnsConfig();
@@ -24,9 +25,16 @@ function cleanCaption(value: unknown, maxLength: number) {
     .slice(0, maxLength);
 }
 
-function assertTenant(value: unknown) {
-  const tenantId = clean(value, 80) || TENANT_ID;
-  if (tenantId !== TENANT_ID) throw new Error("Invalid tenant_id");
+function assertTenant(request: Request, value: unknown) {
+  const hint = clean(value, 80);
+  let hostTenantId: string | undefined;
+  try {
+    hostTenantId = resolveTenantIdFromHost(new URL(request.url).hostname);
+  } catch {
+    // Local tooling may not use a production hostname; use the explicit hint there.
+  }
+  const tenantId = hostTenantId || (hint ? resolveTenantIdFromHint(hint) : TENANT_ID);
+  if (hostTenantId && hint && resolveTenantIdFromHint(hint) !== hostTenantId) throw new Error("Invalid tenant_id");
   return tenantId;
 }
 
@@ -81,7 +89,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   let tenantId = TENANT_ID;
   try {
-    tenantId = assertTenant(url.searchParams.get("tenantId"));
+    tenantId = assertTenant(request, url.searchParams.get("tenantId"));
   } catch {
     return Response.json({ error: "Invalid tenant_id" }, { status: 400 });
   }
@@ -101,7 +109,7 @@ export async function POST(request: Request) {
 
   let tenantId = TENANT_ID;
   try {
-    tenantId = assertTenant(body.tenant_id ?? body.tenantId);
+    tenantId = assertTenant(request, body.tenant_id ?? body.tenantId);
   } catch {
     return Response.json({ error: "Invalid tenant_id" }, { status: 400 });
   }

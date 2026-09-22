@@ -1,0 +1,87 @@
+{
+  "guildId": "raven-guild",
+  "sourceOfTruth": "core-tenant-registry",
+  "lastVerifiedAt": "2026-08-31",
+  "cloudflare": {
+    "zone": "fortunestudios.jp",
+    "zoneId": "65356f2d324639213440b57fbd06d1e2",
+    "accountId": "cfda786a82241adf6b21f772dbc87544",
+    "accountName": "Fortune.kanri@gmail.com's Account"
+  },
+  "tenants": [
+    {
+      "tenantId": "raven-oracle",
+      "characterId": "raven",
+      "displayName": "Raven Oracle",
+      "domain": "raven.fortunestudios.jp",
+      "worker": "raven-oracle",
+      "accountId": "c7ce2613bf30affed8d2caae0068beb5",
+      "environment": "production",
+      "d1Database": "raven-oracle",
+      "d1DatabaseId": "a8a69ddd-2d8b-4e76-81f1-29abbb619a38",
+      "status": "production",
+      "deployedVersion": "verified-existing"
+    },
+    {
+      "tenantId": "luna-oracle",
+      "characterId": "luna",
+      "displayName": "Luna Starwind",
+      "domain": "luna.fortunestudios.jp",
+      "worker": "luna-oracle",
+      "accountId": "cfda786a82241adf6b21f772dbc87544",
+      "environment": "production",
+      "d1Database": "luna-oracle",
+      "d1DatabaseId": "721248ee-92a5-4fe8-b5af-08503ece8d40",
+      "status": "production",
+      "deployedVersion": "cf74728b-4ad3-49a8-82cb-91a52efc3e87"
+    },
+    {
+      "tenantId": "scarlet-donovan",
+      "characterId": "scarlet",
+      "displayName": "Scarlet Donovan",
+      "domain": "scarlet.fortunestudios.jp",
+      "worker": "scarlet-oracle",
+      "accountId": "cfda786a82241adf6b21f772dbc87544",
+      "environment": "production",
+      "d1Database": "scarlet-oracle",
+      "d1DatabaseId": "3a003494-29c5-403f-8e36-450891968428",
+      "status": "production",
+      "deployedVersion": "30631943-f096-4cb6-980f-6f82db558c01"
+    },
+    {
+      "tenantId": "atlas-oracle",
+      "characterId": "atlas",
+      "displayName": "Atlas Smith",
+      "domain": "atlas.fortunestudios.jp",
+      "worker": "atlas-oracle",
+      "accountId": "cfda786a82241adf6b21f772dbc87544",
+      "environment": "production",
+      "d1Database": "atlas-oracle",
+      "d1DatabaseId": "3c08bd65-cc8d-462c-abe1-c83f67d90f28",
+      "status": "production",
+      "deployedVersion": "ff5adb74-772c-4597-941a-0968518f5eba"
+    },
+    {
+      "tenantId": "sol-oracle",
+      "characterId": "sol",
+      "displayName": "Sol Aurora",
+      "domain": "sol.fortunestudios.jp",
+      "worker": "sol-oracle",
+      "accountId": "cfda786a82241adf6b21f772dbc87544",
+      "environment": "production",
+      "d1Database": "sol-oracle",
+      "d1DatabaseId": "2d1f7a52-0445-4675-91b0-b81ae2c3702e",
+      "status": "production",
+      "deployedVersion": "59f7e2c1-2113-4fdd-b13d-f2ad13eb77c7"
+    }
+  ],
+  "legacyAliases": {
+    "luna-starwind": "luna-oracle",
+    "scarlet-guardian": "scarlet-donovan"
+  },
+  "verificationPolicy": {
+    "customDomainRoute": "must_be_verified_per_tenant",
+    "externalPublish": "requires_explicit_human_approval",
+    "previewFixture": "must_not_be_reported_as_production"
+  }
+}

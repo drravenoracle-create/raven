@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { publicOrigin } from "@/app/lib/google-admin-auth";
 import { saveSnsAccount } from "@/app/lib/sns-oauth";
+import { resolveRuntimeTenantId } from "@/app/lib/studioos-runtime-adapter";
 
 const STATE_COOKIE = "raven_tiktok_oauth_state";
 
@@ -20,7 +21,8 @@ export async function GET(request: Request) {
   const profileResponse = await fetch("https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,avatar_url", { headers: { Authorization: `Bearer ${token.access_token}` } });
   const profile = await profileResponse.json() as { data?: { user?: { open_id?: string; display_name?: string } }; error?: { message?: string } };
   if (!profileResponse.ok || !profile.data?.user?.open_id) return NextResponse.json({ error: profile.error?.message || "TikTok account info request failed." }, { status: 502 });
-  await saveSnsAccount({ platform: "tiktok", accountId: profile.data.user.open_id, displayName: profile.data.user.display_name || "TikTok account", scopes: (token.scope || "").split(",").filter(Boolean), accessToken: token.access_token, refreshToken: token.refresh_token, expiresIn: token.expires_in });
+  const tenantId = resolveRuntimeTenantId({ host: url.hostname });
+  await saveSnsAccount({ tenantId, platform: "tiktok", accountId: profile.data.user.open_id, displayName: profile.data.user.display_name || "TikTok account", scopes: (token.scope || "").split(",").filter(Boolean), accessToken: token.access_token, refreshToken: token.refresh_token, expiresIn: token.expires_in });
   const response = NextResponse.redirect(new URL("/admin/sns?tiktok=connected", request.url));
   response.cookies.delete(STATE_COOKIE);
   return response;

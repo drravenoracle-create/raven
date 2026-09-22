@@ -1,8 +1,6 @@
 import { env } from "cloudflare:workers";
 import { observeInstagramContainer, readInstagramMetaError, sanitizeInstagramResponse } from "@/app/lib/instagram-reel-state";
-import { resolveSnsConfig } from "@/app/lib/tenant-config-resolver";
-
-const TENANT_ID = resolveSnsConfig().tenantId;
+import { resolveTenantIdFromHint, resolveTenantIdFromHost } from "@/app/lib/studioos-runtime-adapter";
 
 function clean(value: unknown, maxLength: number) {
   return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, maxLength);
@@ -17,6 +15,19 @@ function cleanCaption(value: unknown, maxLength: number) {
     .replace(/\n{3,}/g, "\n\n")
     .trim()
     .slice(0, maxLength);
+}
+
+function requestTenantId(request: Request, requested: unknown) {
+  const hint = clean(requested, 80);
+  let hostTenantId: string | undefined;
+  try {
+    hostTenantId = resolveTenantIdFromHost(new URL(request.url).hostname);
+  } catch {
+    // Local tooling may not use a production hostname; use the explicit hint there.
+  }
+  const tenantId = hostTenantId || (hint ? resolveTenantIdFromHint(hint) : undefined);
+  if (!tenantId || (hostTenantId && hint && resolveTenantIdFromHint(hint) !== hostTenantId)) throw new Error("Invalid tenant_id");
+  return tenantId;
 }
 
 async function logFailure(input: { tenantId: string; id: string; platform: string; code: number; message: string; body?: unknown }) {
@@ -82,8 +93,12 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return Response.json({ error: "Invalid JSON body." }, { status: 400 });
 
-  const tenantId = clean(body.tenant_id ?? body.tenantId, 80) || TENANT_ID;
-  if (tenantId !== TENANT_ID) return Response.json({ error: "Invalid tenant_id" }, { status: 400 });
+  let tenantId: string;
+  try {
+    tenantId = requestTenantId(request, body.tenant_id ?? body.tenantId);
+  } catch {
+    return Response.json({ error: "Invalid tenant_id" }, { status: 400 });
+  }
 
   const id = clean(body.id, 80);
   if (!id) return Response.json({ error: "id is required" }, { status: 400 });
@@ -273,8 +288,12 @@ export async function DELETE(request: Request) {
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return Response.json({ error: "Invalid JSON body." }, { status: 400 });
 
-  const tenantId = clean(body.tenant_id ?? body.tenantId, 80) || TENANT_ID;
-  if (tenantId !== TENANT_ID) return Response.json({ error: "Invalid tenant_id" }, { status: 400 });
+  let tenantId: string;
+  try {
+    tenantId = requestTenantId(request, body.tenant_id ?? body.tenantId);
+  } catch {
+    return Response.json({ error: "Invalid tenant_id" }, { status: 400 });
+  }
 
   const id = clean(body.id, 80);
   if (!id) return Response.json({ error: "id is required" }, { status: 400 });

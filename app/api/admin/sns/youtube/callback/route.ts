@@ -1,7 +1,7 @@
-import { env } from "cloudflare:workers";
 import { NextResponse } from "next/server";
 import { publicOrigin } from "@/app/lib/google-admin-auth";
 import { saveSnsAccount } from "@/app/lib/sns-oauth";
+import { resolveRuntimeTenantId } from "@/app/lib/studioos-runtime-adapter";
 
 const STATE_COOKIE = "raven_youtube_oauth_state";
 
@@ -26,7 +26,8 @@ export async function GET(request: Request) {
   const channel = channelPayload.items?.[0];
   if (!channel?.id) return NextResponse.json({ error: channelPayload.error?.message || "No YouTube channel was found for this Google account." }, { status: 422 });
 
-  await saveSnsAccount({ platform: "youtube", accountId: channel.id, displayName: channel.snippet?.title || "YouTube channel", scopes: (token.scope || "").split(" ").filter(Boolean), accessToken: token.access_token, refreshToken: token.refresh_token, expiresIn: token.expires_in });
+  const tenantId = resolveRuntimeTenantId({ host: url.hostname });
+  await saveSnsAccount({ tenantId, platform: "youtube", accountId: channel.id, displayName: channel.snippet?.title || "YouTube channel", scopes: (token.scope || "").split(" ").filter(Boolean), accessToken: token.access_token, refreshToken: token.refresh_token, expiresIn: token.expires_in });
   const response = NextResponse.redirect(new URL("/admin/sns?youtube=connected", request.url));
   response.cookies.delete(STATE_COOKIE);
   return response;
